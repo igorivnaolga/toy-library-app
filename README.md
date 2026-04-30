@@ -1,7 +1,39 @@
 # toy-library-app
 
+## Тема дослідження (Project Theme)
+
+Розробка мобільної інформаційної системи управління бібліотекою іграшок (Toy Library) з інтеграцією методів комп'ютерного зору для автоматизації інвентаризації
+
+
+## Проблема (Problem Statement)
+Економічний аспект: Висока вартість підписки на існуючі SaaS-рішення (SETLS), що є критичним тягарем для волонтерських та community-проєктів.
+
+Операційний аспект: Фрагментованість процесів (ручне ведення каталогів, паперовий облік) призводить до помилок при поверненні іграшок (втрата деталей).
+
+Технічний аспект: Відсутність спеціалізованих мобільних рішень з підтримкою AI для швидкої перевірки комплектації іграшок "на місці".
+
+## Мета дослідження (Project Purpose)
+Розробити та впровадити архітектуру безкоштовної мобільно-орієнтованої системи управління бібліотекою іграшок, яка дозволить автоматизувати життєвий цикл оренди та підвищити точність контролю інвентарю за допомогою алгоритмів комп'ютерного зору.
+
+## Завдання дослідження (Objectives)
+
+Аналіз предметної області та реінжиніринг процесів: Проведення порівняльного аналізу існуючих рішень (зокрема SETLS) та формалізація вимог до безкоштовної альтернативи з відкритим кодом для волонтерських організацій.
+
+Проектування хмарної архітектури та бази даних: Розробка структури БД у Supabase та проектування рольової моделі доступу для забезпечення безпечної взаємодії гостей, членів бібліотеки та адміністраторів.
+
+Формування та підготовка датасету: Збір, анотування та препроцесинг набору зображень іграшок (різних категорій та станів комплектації) для подальшого навчання нейронної мережі.
+
+Розробка та навчання інтелектуального модуля: Вибір оптимальної архітектури нейромережі (YOLO) та проведення процесу fine-tuning для автоматизації детекції об'єктів та перевірки комплектації під час повернення іграшок.
+
+Реалізація серверної логіки (Backend): Розробка високопродуктивного API на базі FastAPI для обробки запитів, інтеграції з AI-моделлю та управління сховищем зображень у Supabase Storage.
+
+Розробка кросплатформенного мобільного клієнта: Реалізація користувацького інтерфейсу на Flutter з інтеграцією push-сповіщень через FCM та реалізацією логіки сканування в реальному часі.
+
+Валідація та тестування: Оцінка точності навченої моделі (метрики mAP, Precision, Recall) та проведення функціонального тестування системи в умовах, максимально наближених до реальної діяльності бібліотеки іграшок.
+
+
 ## Project Theme
-AI-assisted mobile Toy Library Management System for community libraries, designed to improve catalog access, booking and lending workflows, and inventory control through role-based user journeys and computer-vision-assisted check-in.
+AI-assisted mobile Toy Library Management System for community toy libraries, designed to improve catalog access, booking and lending workflows, and inventory control through role-based user journeys and computer-vision-assisted check-in.
 
 ## Project Purpose
 This diploma project aims to design and implement a mobile-first information system that replaces fragmented manual toy library operations with a centralized digital platform.
@@ -13,7 +45,7 @@ The system enables guests, members, and administrators to work with the toy cata
 - Step 2: Backend architecture scaffold added (`core`, `db`, `models`, `schemas`, `repositories`, `services`, `scripts`, `tests`).
 - Step 3: API endpoint stubs added and wired for `GET /toys`, `GET /toys/{toy_id}`, and `GET /categories`.
 - Step 4: Mobile Flutter scaffold added (`mobile/` structure with `core` and feature folders for `catalog`, `auth`, `bookings`, `admin`).
-- Step 5: Diploma-oriented project theme and purpose added to `README.md`.
+- Step 5: Project theme and purpose added to `README.md`.
 
 ## Next Steps
 
@@ -21,32 +53,3 @@ The system enables guests, members, and administrators to work with the toy cata
 - Implement CSV seed import from `export_imgs/toy_photo_map_by_description.csv`.
 - Replace API stubs with real search, filter, and pagination logic.
 - Connect Flutter catalog screens to backend API endpoints.
-
-Clean data workspace for the Toy Library app build.
-
-## Kept files
-
-- `export_imgs/Toys-list.csv` - main toy list (`ID`, name, status, category, age, manufacturer).
-- `export_imgs/Toys-categories.csv` - category metadata.
-- `export_imgs/Descriptions on items  Church Corner Toy Library (1).csv` - per-toy free-text description.
-- `export_imgs/export-imgs.py` - download photos from SETLS (uses `.env` cookies).
-- `export_imgs/match-setls-photos-by-description.py` - match downloaded photos to CSV toy IDs by SETLS title + description/name similarity.
-- `export_imgs/setls_photo_description_match.csv` - per-photo matching result.
-- `export_imgs/toy_photo_map_by_description.csv` - toy-centric mapping table for backend import.
-- `export_imgs/.env.example` - cookie variable template.
-- `toy_library_photos/` - downloaded source photos.
-
-## Quick workflow
-
-1. Copy `export_imgs/.env.example` to `.env` (repo root or `export_imgs/.env`) and fill:
-   - `SETLS_SESSION_COOKIE`
-   - `SETLS_REMEMBER_TOKEN`
-2. Download photos:
-   - `python export_imgs/export-imgs.py`
-3. Build mapping from photos to CSV toy IDs:
-   - `python export_imgs/match-setls-photos-by-description.py`
-
-Optional:
-
-- `python export_imgs/match-setls-photos-by-description.py --copy-matched`
-  - creates `toy_library_photos_matched/` with files renamed to matched `toy_id`.
