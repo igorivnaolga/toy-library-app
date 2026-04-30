@@ -1,4 +1,5 @@
 import csv
+from functools import lru_cache
 from pathlib import Path
 
 from app.schemas.toy import ToyOut
@@ -17,9 +18,10 @@ def _to_none(value: str | None) -> str | None:
     return value or None
 
 
-def _load_toys() -> list[ToyOut]:
+@lru_cache(maxsize=1)
+def load_all_toys() -> tuple[ToyOut, ...]:
     if not CSV_PATH.exists():
-        return []
+        return ()
 
     toys: list[ToyOut] = []
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as csv_file:
@@ -41,7 +43,7 @@ def _load_toys() -> list[ToyOut]:
                     photo_file=_to_none(row.get("photo_file_desc")),
                 )
             )
-    return toys
+    return tuple(toys)
 
 
 def list_toys(
@@ -52,7 +54,7 @@ def list_toys(
     age_range: str | None = None,
     status: str | None = None,
 ) -> tuple[list[ToyOut], int]:
-    items = _load_toys()
+    items = list(load_all_toys())
 
     if q:
         q_norm = q.strip().lower()
@@ -96,7 +98,7 @@ def get_toy_by_id(toy_id: str) -> ToyOut | None:
     if not toy_id_norm:
         return None
 
-    for toy in _load_toys():
+    for toy in load_all_toys():
         if toy.toy_id == toy_id_norm:
             return toy
     return None
