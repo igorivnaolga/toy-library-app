@@ -1,1 +1,11 @@
-# Import model modules here once models are implemented.
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+# Import models for metadata registration (Alembic / create_all).
+from app.models import category as category_model  # noqa: E402,F401
+from app.models import toy as toy_model  # noqa: E402,F401
+from app.models import toy_image as toy_image_model  # noqa: E402,F401

@@ -1,9 +1,24 @@
-from pathlib import Path
+from app.core.config import get_settings
+from app.db.base import Base
+from app.db.session import get_engine, session_scope
+from app.services.seed_from_csv import seed_catalog
 
 
 def main() -> None:
-    csv_path = Path(__file__).resolve().parents[3] / "export_imgs" / "toy_photo_map_by_description.csv"
-    print(f"Seed placeholder. Source: {csv_path}")
+    settings = get_settings()
+    if not settings.database_url:
+        raise SystemExit("DATABASE_URL is not set. Copy backend/.env.example to backend/.env.")
+
+    engine = get_engine()
+    assert engine is not None
+    Base.metadata.create_all(bind=engine)
+
+    session = session_scope()
+    try:
+        cats, toys = seed_catalog(session)
+        print(f"Seed complete. New categories: {cats}, new toys: {toys}.")
+    finally:
+        session.close()
 
 
 if __name__ == "__main__":
