@@ -1,6 +1,10 @@
 import csv
 from pathlib import Path
 
+from sqlalchemy import func, select
+
+from app.db.session import get_engine, session_scope
+from app.models.category import Category as CategoryORM
 from app.repositories.toy_repo import load_all_toys
 from app.schemas.category import CategoryOut
 from app.utils.csv_text import (
@@ -17,6 +21,40 @@ from app.utils.csv_text import (
 CATEGORIES_CSV = (
     Path(__file__).resolve().parents[3] / "export_imgs" / "Toys-categories.csv"
 )
+
+
+def _db_category_count() -> int:
+    engine = get_engine()
+    if engine is None:
+        return 0
+
+    session = session_scope()
+    try:
+        return int(session.scalar(select(func.count()).select_from(CategoryORM)) or 0)
+    finally:
+        session.close()
+
+
+def _list_categories_db() -> list[CategoryOut]:
+    session = session_scope()
+    try:
+        rows = session.scalars(
+            select(CategoryORM).order_by(func.lower(CategoryORM.label).asc())
+        ).all()
+        return [
+            CategoryOut(
+                code=c.code,
+                label=c.label,
+                max_renewals=c.max_renewals,
+                reservable=c.reservable,
+                toy_count_current=c.toy_count_current,
+                toy_count_total=c.toy_count_total,
+                pct=c.pct_label,
+            )
+            for c in rows
+        ]
+    finally:
+        session.close()
 
 
 def _load_category_metadata_rows() -> tuple[dict[str, dict[str, str]], list[dict[str, str]]]:
@@ -43,6 +81,9 @@ def _load_category_metadata_rows() -> tuple[dict[str, dict[str, str]], list[dict
 
 
 def list_categories() -> list[CategoryOut]:
+    if _db_category_count() > 0:
+        return _list_categories_db()
+
     toy_category_labels = {
         toy.category.strip()
         for toy in load_all_toys()
