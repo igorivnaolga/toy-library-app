@@ -1,30 +1,55 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import "package:flutter_test/flutter_test.dart";
+import "package:toy_library_mobile/app.dart";
+import "package:toy_library_mobile/core/api_client.dart";
 
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
-import 'package:toy_library_mobile/main.dart';
+class _FakeBackend implements BackendClient {
+  @override
+  Future<Map<String, dynamic>> getJson(String path, [Map<String, String>? query]) async {
+    if (path == "/api/v1/categories") {
+      return {
+        "data": [
+          {"code": "books", "label": "Books"},
+        ],
+      };
+    }
+    if (path.startsWith("/api/v1/toys/")) {
+      return {
+        "toy_id": "t1",
+        "name": "Robot",
+        "category": "Books",
+        "age_range": "5+",
+        "status": "available",
+        "manufacturer": "Acme",
+        "description": "A toy robot",
+        "photo_file": null,
+      };
+    }
+    if (path == "/api/v1/toys") {
+      return {
+        "data": [
+          {
+            "toy_id": "t1",
+            "name": "Robot",
+            "category": "Books",
+            "age_range": "5+",
+            "status": "available",
+            "manufacturer": null,
+            "description": null,
+            "photo_file": null,
+          },
+        ],
+        "meta": {"page": 1, "limit": 20, "total": 1, "has_next": false},
+      };
+    }
+    throw UnsupportedError(path);
+  }
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets("ToyLibraryApp loads catalog from fake API", (WidgetTester tester) async {
+    await tester.pumpWidget(ToyLibraryApp(backend: _FakeBackend()));
+    expect(find.text("Toy catalog"), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text("Robot"), findsOneWidget);
   });
 }

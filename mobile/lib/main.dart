@@ -2,6 +2,8 @@
 ///
 /// Keep this file tiny: app wiring belongs in `app.dart`, feature code lives under
 /// `features/`, and cross-cutting concerns (HTTP, auth tokens) live under `core/`.
+library;
+
 import "package:flutter/material.dart";
 
 import "app.dart";
