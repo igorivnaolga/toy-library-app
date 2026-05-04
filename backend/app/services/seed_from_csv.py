@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.category import Category
 from app.models.toy import Toy
 from app.models.toy_image import ToyImage
-from app.repositories.category_repo import list_categories as build_categories_from_csv
+from app.repositories.category_repo import list_categories_csv
 from app.repositories.toy_repo import load_all_toys
 
 
@@ -19,11 +19,15 @@ def seed_catalog(session: Session) -> tuple[int, int]:
     Returns:
         (categories_upserted, toys_upserted)
     """
-    category_rows = build_categories_from_csv()
+    # Always derive seed rows from CSV exports (even if DB already has categories).
+    category_rows = list_categories_csv()
+    # Map the human-facing category label (what toys store in `category_label`) to the
+    # UUID primary key in `categories.id` (what toys store in `category_id`).
     label_to_id: dict[str, uuid.UUID] = {}
 
     categories_upserted = 0
     for row in category_rows:
+        # Upsert categories by unique `label` (stable business key for this dataset).
         existing = session.scalar(select(Category).where(Category.label == row.label))
         if existing:
             existing.code = row.code
@@ -44,6 +48,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 pct_label=row.pct,
             )
             session.add(created)
+            # Ensure `created.id` exists before referencing it in the label map.
             session.flush()
             category_id = created.id
             categories_upserted += 1
@@ -54,6 +59,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
     for t in load_all_toys():
         category_id = None
         if t.category and t.category.strip():
+            # `t.category` is expected to match `Category.label` exactly (seed CSVs aligned).
             category_id = label_to_id.get(t.category.strip())
 
         toy_row = session.get(Toy, t.toy_id)
@@ -77,14 +83,17 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 category_label=t.category,
             )
             session.add(toy_row)
+            # Ensure PK exists before attaching dependent rows (image).
             session.flush()
             toys_upserted += 1
 
         if t.photo_file:
+            # MVP: one image row per toy (`toy_images.toy_id` is unique).
             if toy_row.image:
                 toy_row.image.filename = t.photo_file
             else:
                 session.add(ToyImage(toy_id=toy_row.toy_id, filename=t.photo_file))
 
+    # Single transaction boundary for the whole import.
     session.commit()
     return categories_upserted, toys_upserted

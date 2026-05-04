@@ -1,3 +1,17 @@
+"""
+Category listing + metadata enrichment.
+
+Two modes:
+
+1) **API runtime (DB-first)**: if `categories` table has rows, return them directly.
+2) **CSV derivation (fallback / seed input)**: build the category list from:
+   - unique `Category` strings found in the toy CSV export, merged with
+   - `export_imgs/Toys-categories.csv` metadata (renewals, reservable flags, etc.)
+
+Why split modes: seeding must always be able to rebuild from CSV even after the DB
+already contains categories, while the public API should prefer DB as source of truth.
+"""
+
 import csv
 from pathlib import Path
 
@@ -24,6 +38,7 @@ CATEGORIES_CSV = (
 
 
 def _db_category_count() -> int:
+    # If DATABASE_URL isn't configured, treat DB as unavailable.
     engine = get_engine()
     if engine is None:
         return 0
@@ -49,6 +64,7 @@ def _list_categories_db() -> list[CategoryOut]:
                 reservable=c.reservable,
                 toy_count_current=c.toy_count_current,
                 toy_count_total=c.toy_count_total,
+                # DB column is `pct_label` because `%` is awkward as a Python field name.
                 pct=c.pct_label,
             )
             for c in rows
@@ -80,10 +96,13 @@ def _load_category_metadata_rows() -> tuple[dict[str, dict[str, str]], list[dict
     return by_description, rows_raw
 
 
-def list_categories() -> list[CategoryOut]:
-    if _db_category_count() > 0:
-        return _list_categories_db()
+def list_categories_csv() -> list[CategoryOut]:
+    """
+    Build categories purely from CSV inputs.
 
+    Used by the seed importer so it always reads the same source files, even when the
+    database already contains category rows.
+    """
     toy_category_labels = {
         toy.category.strip()
         for toy in load_all_toys()
@@ -92,6 +111,7 @@ def list_categories() -> list[CategoryOut]:
 
     csv_by_desc, csv_rows_raw = _load_category_metadata_rows()
 
+    # Index metadata rows by category "Code" prefix (e.g. "Baby" in "Baby: ...").
     csv_by_code: dict[str, dict[str, str]] = {}
     for row in csv_rows_raw:
         rn = row_normalized(row)
@@ -105,6 +125,8 @@ def list_categories() -> list[CategoryOut]:
         label_norm = norm_match_key(label)
         csv_row = csv_by_desc.get(label_norm)
 
+        # Toy export uses labels like "Baby: Toys for 0-2" while Toys-categories.csv
+        # sometimes matches on Description alone OR needs prefix+suffix matching.
         if not csv_row and ":" in label:
             prefix, rest = label.split(":", 1)
             prefix_key = norm_match_key(prefix.strip())
@@ -187,6 +209,7 @@ def list_categories() -> list[CategoryOut]:
             pct=pct_raw,
         )
 
+    # Ensure stable unique `code` values for downstream DB uniqueness constraints.
     dedup_codes: dict[str, int] = {}
     finalized: list[CategoryOut] = []
     for category in sorted(categories.values(), key=lambda c: c.label.lower()):
@@ -200,3 +223,11 @@ def list_categories() -> list[CategoryOut]:
         finalized.append(category.model_copy(update={"code": code}))
 
     return finalized
+
+
+def list_categories() -> list[CategoryOut]:
+    # Public API: prefer DB if seeded, otherwise keep CSV behavior for early dev.
+    if _db_category_count() > 0:
+        return _list_categories_db()
+
+    return list_categories_csv()

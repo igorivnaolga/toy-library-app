@@ -1,3 +1,11 @@
+"""
+CLI entrypoint: import seed CSVs into Postgres.
+
+This is intentionally separate from FastAPI request handling:
+- it can be run in CI / locally without starting a web server
+- it performs DDL (`create_all`) for early development convenience
+"""
+
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_engine, session_scope
@@ -11,6 +19,7 @@ def main() -> None:
 
     engine = get_engine()
     assert engine is not None
+    # Dev convenience: create tables if missing. For production, prefer Alembic migrations.
     Base.metadata.create_all(bind=engine)
 
     session = session_scope()

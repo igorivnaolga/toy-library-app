@@ -1,3 +1,10 @@
+"""
+Toy catalog HTTP endpoints.
+
+These endpoints are intentionally thin: validation/pagination lives here, while
+data access + DB/CSV switching happens in repositories/services.
+"""
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.toy import ToyOut, ToysListMeta, ToysListResponse
@@ -15,6 +22,7 @@ def list_toys(
     age_range: str | None = None,
     status: str | None = None,
 ) -> ToysListResponse:
+    # `list_toys_service` returns (page items, total matching rows before pagination).
     items, total = list_toys_service(
         page=page,
         limit=limit,
@@ -29,6 +37,7 @@ def list_toys(
             page=page,
             limit=limit,
             total=total,
+            # Classic pagination: if we've shown `page * limit` items and there are more, there's a next page.
             has_next=page * limit < total,
         ),
     )

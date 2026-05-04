@@ -1,3 +1,10 @@
+"""
+Application configuration loaded from environment variables.
+
+We load both `./.env` and `./backend/.env` so commands work whether your CWD is repo
+root or `backend/` (common in VS Code terminals).
+"""
+
 from functools import lru_cache
 
 from pydantic import Field
@@ -16,9 +23,11 @@ class Settings(BaseSettings):
         default=None,
         description="Async/sync SQLAlchemy URL, e.g. postgresql+psycopg://...",
     )
+    # When true, `app/main.py` will `create_all()` on startup (dev convenience).
     create_tables_on_startup: bool = False
 
 
 @lru_cache
 def get_settings() -> Settings:
+    # Cached so repeated access (e.g. per request) doesn't re-parse `.env` files.
     return Settings()

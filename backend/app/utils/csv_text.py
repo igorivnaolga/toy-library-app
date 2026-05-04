@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+CSV header/value normalization helpers.
+
+Supabase/Excel exports often include punctuation, spaces, `%`, `#`, etc. DictReader
+keys vary slightly; these helpers let us read values robustly without hardcoding
+fragile exact header strings everywhere.
+"""
+
 import re
 
 
@@ -50,6 +58,7 @@ def sanitize_header(header: str) -> str:
     raw = header.strip().strip('"').strip("'")
     lowered = raw.lower()
     if lowered in {"%", "pct", "percentage"}:
+        # `%` becomes an empty string after stripping non-alphanumerics; normalize it.
         return "pct"
 
     header = lowered

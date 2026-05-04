@@ -1,3 +1,10 @@
+"""
+FastAPI application entrypoint.
+
+`lifespan` is used for startup/shutdown hooks. We keep DB DDL optional because
+production deployments should use migrations instead of `create_all`.
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +21,7 @@ async def lifespan(app: FastAPI):
     if settings.database_url and settings.create_tables_on_startup:
         engine = get_engine()
         if engine is not None:
+            # Dev-only convenience: create ORM tables if they don't exist yet.
             Base.metadata.create_all(bind=engine)
     yield
 

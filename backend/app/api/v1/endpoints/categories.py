@@ -1,3 +1,5 @@
+"""Category listing endpoint (DB-first with CSV fallback; see `category_repo`)."""
+
 from fastapi import APIRouter
 
 from app.repositories.category_repo import list_categories as list_categories_repo
