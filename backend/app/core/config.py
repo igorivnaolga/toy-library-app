@@ -30,6 +30,15 @@ class Settings(BaseSettings):
         default=None,
         description="Absolute or relative path to toy photo files on disk.",
     )
+    # Supabase Auth — Settings → API: Project URL + JWT Secret (HS256 access tokens).
+    supabase_url: str | None = Field(
+        default=None,
+        description="e.g. https://xxxx.supabase.co — used as JWT issuer base.",
+    )
+    supabase_jwt_secret: str | None = Field(
+        default=None,
+        description="Supabase JWT Secret (not the anon key). Used to verify Bearer tokens.",
+    )
 
 
 @lru_cache
