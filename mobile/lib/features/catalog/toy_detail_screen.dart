@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
+import "../../core/toy_photo_url.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 
@@ -66,16 +67,43 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
             );
           }
           final t = snapshot.data!;
+          final colors = Theme.of(context).colorScheme;
+          final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: hasPhotoName
+                      ? Image.network(
+                          toyPhotoHttpUrl(t.toyId),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => ColoredBox(
+                            color: colors.surfaceContainerHighest,
+                            child: Icon(Icons.toys, size: 64, color: colors.outline),
+                          ),
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) {
+                              return child;
+                            }
+                            return const Center(child: CircularProgressIndicator());
+                          },
+                        )
+                      : ColoredBox(
+                          color: colors.surfaceContainerHighest,
+                          child: Icon(Icons.toys, size: 64, color: colors.outline),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
               Text(t.name, style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 12),
               if (t.category != null) _line("Category", t.category!),
               if (t.ageRange != null) _line("Age range", t.ageRange!),
               if (t.status != null) _line("Status", t.status!),
               if (t.manufacturer != null && t.manufacturer!.isNotEmpty) _line("Manufacturer", t.manufacturer!),
-              if (t.photoFile != null && t.photoFile!.isNotEmpty) _line("Photo file", t.photoFile!),
               const SizedBox(height: 12),
               Text("Description", style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),

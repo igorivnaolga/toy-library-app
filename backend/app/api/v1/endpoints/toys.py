@@ -6,11 +6,22 @@ data access + DB/CSV switching happens in repositories/services.
 """
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
 from app.schemas.toy import ToyOut, ToysListMeta, ToysListResponse
+from app.services.toy_photo import guess_media_type, resolve_toy_photo_path
 from app.services.toy_service import get_toy_service, list_toys_service
 
 router = APIRouter()
+
+
+@router.get("/{toy_id}/photo")
+def get_toy_photo(toy_id: str) -> FileResponse:
+    """Serve the image file referenced by `ToyOut.photo_file` when `TOY_IMAGES_DIR` / repo folder exists."""
+    path = resolve_toy_photo_path(toy_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Toy photo not found")
+    return FileResponse(path, media_type=guess_media_type(path))
 
 
 @router.get("")
@@ -43,7 +54,7 @@ def list_toys(
     )
 
 
-@router.get("/{toy_id}")
+@router.get("/{toy_id}", response_model=ToyOut)
 def get_toy(toy_id: str) -> ToyOut:
     toy = get_toy_service(toy_id)
     if not toy:

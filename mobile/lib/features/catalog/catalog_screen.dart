@@ -5,6 +5,7 @@ import "package:provider/provider.dart";
 
 import "catalog_provider.dart";
 import "toy_detail_screen.dart";
+import "toy_photo_tile.dart";
 
 /// Catalog: loads `GET /api/v1/categories` and paged `GET /api/v1/toys` via [CatalogController].
 class CatalogScreen extends StatefulWidget {
@@ -173,6 +174,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           if (t.status != null && t.status!.isNotEmpty) t.status!,
                         ];
                         return ListTile(
+                          leading: t.photoFile != null && t.photoFile!.isNotEmpty
+                              ? ToyPhotoTile(toyId: t.toyId)
+                              : CircleAvatar(
+                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  child: Icon(Icons.toys, color: Theme.of(context).colorScheme.outline),
+                                ),
                           title: Text(t.name),
                           subtitle: parts.isEmpty ? null : Text(parts.join(" · ")),
                           onTap: () {
