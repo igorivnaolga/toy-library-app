@@ -86,11 +86,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                       child: Text(
                         c.error!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error),
                       ),
                     ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
                         const Text("Category:"),
@@ -100,7 +102,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             decoration: const InputDecoration(
                               isDense: true,
                               border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String?>(
@@ -115,14 +118,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   ...c.categories.map(
                                     (cat) => DropdownMenuItem<String?>(
                                       value: cat.label,
-                                      child: Text(cat.label, overflow: TextOverflow.ellipsis),
+                                      child: Text(cat.label,
+                                          overflow: TextOverflow.ellipsis),
                                     ),
                                   ),
                                 ],
                                 onChanged: c.loading
                                     ? null
                                     : (value) {
-                                        context.read<CatalogController>().setCategoryFilter(value);
+                                        context
+                                            .read<CatalogController>()
+                                            .setCategoryFilter(value);
                                       },
                               ),
                             ),
@@ -151,7 +157,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           Text(c.error!, textAlign: TextAlign.center),
                           const SizedBox(height: 12),
                           FilledButton.icon(
-                            onPressed: () => context.read<CatalogController>().loadInitial(),
+                            onPressed: () =>
+                                context.read<CatalogController>().loadInitial(),
                             icon: const Icon(Icons.refresh),
                             label: const Text("Retry"),
                           ),
@@ -160,7 +167,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                   );
                 }
-                final showFooter = c.hasNext || (c.loading && c.toys.isNotEmpty);
+                final showFooter =
+                    c.hasNext || (c.loading && c.toys.isNotEmpty);
                 return RefreshIndicator(
                   onRefresh: () => context.read<CatalogController>().refresh(),
                   child: ListView.builder(
@@ -170,18 +178,27 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       if (index < c.toys.length) {
                         final t = c.toys[index];
                         final parts = <String>[
-                          if (t.category != null && t.category!.isNotEmpty) t.category!,
-                          if (t.status != null && t.status!.isNotEmpty) t.status!,
+                          if (t.category != null && t.category!.isNotEmpty)
+                            t.category!,
+                          if (t.status != null && t.status!.isNotEmpty)
+                            t.status!,
                         ];
                         return ListTile(
-                          leading: t.photoFile != null && t.photoFile!.isNotEmpty
-                              ? ToyPhotoTile(toyId: t.toyId)
-                              : CircleAvatar(
-                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  child: Icon(Icons.toys, color: Theme.of(context).colorScheme.outline),
-                                ),
+                          leading:
+                              t.photoFile != null && t.photoFile!.isNotEmpty
+                                  ? ToyPhotoTile(toyId: t.toyId)
+                                  : CircleAvatar(
+                                      backgroundColor: Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                      child: Icon(Icons.toys,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outline),
+                                    ),
                           title: Text(t.name),
-                          subtitle: parts.isEmpty ? null : Text(parts.join(" · ")),
+                          subtitle:
+                              parts.isEmpty ? null : Text(parts.join(" · ")),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
@@ -202,7 +219,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           padding: const EdgeInsets.all(16),
                           child: Center(
                             child: TextButton(
-                              onPressed: c.loading ? null : () => context.read<CatalogController>().loadMore(),
+                              onPressed: c.loading
+                                  ? null
+                                  : () => context
+                                      .read<CatalogController>()
+                                      .loadMore(),
                               child: const Text("Load more"),
                             ),
                           ),
@@ -220,7 +241,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
               if (c.toys.isEmpty) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text("Showing ${c.toys.length} of ${c.total}", style: Theme.of(context).textTheme.bodySmall),
+                child: Text("Showing ${c.toys.length} of ${c.total}",
+                    style: Theme.of(context).textTheme.bodySmall),
               );
             },
           ),

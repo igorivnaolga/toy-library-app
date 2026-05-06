@@ -1,14 +1,21 @@
 /// Flutter entrypoint.
-///
-/// Keep this file tiny: app wiring belongs in `app.dart`, feature code lives under
-/// `features/`, and cross-cutting concerns (HTTP, auth tokens) live under `core/`.
 library;
 
 import "package:flutter/material.dart";
+import "package:supabase_flutter/supabase_flutter.dart";
 
 import "app.dart";
 
-void main() {
-  // `runApp` attaches the widget tree to the screen and starts the framework.
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const supabaseUrl = String.fromEnvironment("SUPABASE_URL", defaultValue: "");
+  const supabaseAnonKey =
+      String.fromEnvironment("SUPABASE_ANON_KEY", defaultValue: "");
+
+  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  }
+
   runApp(const ToyLibraryApp());
 }

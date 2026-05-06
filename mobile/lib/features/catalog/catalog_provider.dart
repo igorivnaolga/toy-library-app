@@ -123,8 +123,10 @@ class CatalogController extends ChangeNotifier {
 
     final json = await _client.getJson("/api/v1/toys", query);
     final data = json["data"] as List<dynamic>? ?? [];
-    final meta = ToysListMeta.fromJson(json["meta"] as Map<String, dynamic>? ?? {});
-    final batch = data.map((e) => ToyItem.fromJson(e as Map<String, dynamic>)).toList();
+    final meta =
+        ToysListMeta.fromJson(json["meta"] as Map<String, dynamic>? ?? {});
+    final batch =
+        data.map((e) => ToyItem.fromJson(e as Map<String, dynamic>)).toList();
     toys = reset ? batch : [...toys, ...batch];
     hasNext = meta.hasNext;
     total = meta.total;

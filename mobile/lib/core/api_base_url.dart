@@ -14,7 +14,8 @@ String resolveApiBaseUrl() {
   }
 
   // When true, Android calls 127.0.0.1:8000; with `adb reverse tcp:8000 tcp:8000` that forwards to the host.
-  const useAdbReverse = bool.fromEnvironment("USE_ADB_REVERSE", defaultValue: false);
+  const useAdbReverse =
+      bool.fromEnvironment("USE_ADB_REVERSE", defaultValue: false);
 
   if (kIsWeb) {
     return "http://localhost:8000";

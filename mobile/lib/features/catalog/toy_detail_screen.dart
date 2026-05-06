@@ -43,7 +43,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
       body: FutureBuilder<ToyItem>(
         future: _future,
         builder: (context, snapshot) {
-          if (_future == null || snapshot.connectionState == ConnectionState.waiting) {
+          if (_future == null ||
+              snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
@@ -82,18 +83,21 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => ColoredBox(
                             color: colors.surfaceContainerHighest,
-                            child: Icon(Icons.toys, size: 64, color: colors.outline),
+                            child: Icon(Icons.toys,
+                                size: 64, color: colors.outline),
                           ),
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) {
                               return child;
                             }
-                            return const Center(child: CircularProgressIndicator());
+                            return const Center(
+                                child: CircularProgressIndicator());
                           },
                         )
                       : ColoredBox(
                           color: colors.surfaceContainerHighest,
-                          child: Icon(Icons.toys, size: 64, color: colors.outline),
+                          child:
+                              Icon(Icons.toys, size: 64, color: colors.outline),
                         ),
                 ),
               ),
@@ -103,9 +107,11 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
               if (t.category != null) _line("Category", t.category!),
               if (t.ageRange != null) _line("Age range", t.ageRange!),
               if (t.status != null) _line("Status", t.status!),
-              if (t.manufacturer != null && t.manufacturer!.isNotEmpty) _line("Manufacturer", t.manufacturer!),
+              if (t.manufacturer != null && t.manufacturer!.isNotEmpty)
+                _line("Manufacturer", t.manufacturer!),
               const SizedBox(height: 12),
-              Text("Description", style: Theme.of(context).textTheme.titleMedium),
+              Text("Description",
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(t.description?.isNotEmpty == true ? t.description! : "—"),
             ],
@@ -123,7 +129,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           Expanded(child: Text(value)),
         ],

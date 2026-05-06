@@ -1,10 +1,12 @@
 import "package:flutter_test/flutter_test.dart";
 import "package:toy_library_mobile/app.dart";
 import "package:toy_library_mobile/core/api_client.dart";
+import "package:toy_library_mobile/core/auth_store.dart";
 
 class _FakeBackend implements BackendClient {
   @override
-  Future<Map<String, dynamic>> getJson(String path, [Map<String, String>? query]) async {
+  Future<Map<String, dynamic>> getJson(String path,
+      [Map<String, String>? query]) async {
     if (path == "/api/v1/categories") {
       return {
         "data": [
@@ -46,8 +48,10 @@ class _FakeBackend implements BackendClient {
 }
 
 void main() {
-  testWidgets("ToyLibraryApp loads catalog from fake API", (WidgetTester tester) async {
-    await tester.pumpWidget(ToyLibraryApp(backend: _FakeBackend()));
+  testWidgets("ToyLibraryApp loads catalog from fake API",
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+        ToyLibraryApp(backend: _FakeBackend(), authStore: AuthStore.guest()));
     expect(find.text("Toy catalog"), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text("Robot"), findsOneWidget);
