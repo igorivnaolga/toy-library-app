@@ -1,57 +1,123 @@
-# Backend
+# Toy Library — Backend (FastAPI)
 
-FastAPI backend for Toy Library app.
+REST API for the Toy Library mobile app: catalog, categories, toy photos, and Supabase-backed authentication (`/api/v1/auth/me`).
 
-## Local Run (Step 6)
+## Prerequisites
 
-From VS Code terminal in `backend/`:
+- **Python 3.11+** (3.12 works)
+- **PostgreSQL** — use [Supabase](https://supabase.com) or any Postgres instance  
+- Optional: **toy photos** on disk if you use `GET /api/v1/toys/{id}/photo`
 
-1. Create virtual environment:
-   - `python -m venv .venv`
-2. Activate:
-   - Git Bash: `source .venv/Scripts/activate`
-   - PowerShell: `.\.venv\Scripts\Activate.ps1`
-3. Install dependencies:
-   - `python -m pip install --upgrade pip`
-   - `pip install -r requirements.txt`
-4. Start API:
-   - `uvicorn app.main:app --reload`
-5. Verify:
-   - `http://127.0.0.1:8000/api/v1/health`
-   - `http://127.0.0.1:8000/docs`
+## 1. Clone and enter the backend folder
 
-## Week 1 (commit-sized chunks)
-
-### Commit W1.1 - Database foundation (this change)
-
-- Configure settings via environment variables (`.env`)
-- Add SQLAlchemy engine + `Session` dependency (`get_db`)
-- Add ORM models: `categories`, `toys`, `toy_images`
-- Optional: `CREATE_TABLES_ON_STARTUP=true` to `create_all()` in dev
-
-### Commit W1.2 - CSV → Postgres seed
-
-- Implement `python -m app.scripts.seed_from_csv` to import:
-  - `export_imgs/toy_photo_map_by_description.csv`
-  - `export_imgs/Toys-categories.csv`
-
-Run:
+From the repository root:
 
 ```bash
 cd backend
-source .venv/Scripts/activate
+```
+
+All commands below assume your current directory is **`backend/`** (so imports like `app.main:app` resolve correctly).
+
+## 2. Virtual environment
+
+Create and activate a virtual environment:
+
+**Git Bash / Linux / macOS**
+
+```bash
+python -m venv .venv
+source .venv/Scripts/activate   # Windows Git Bash
+# or: source .venv/bin/activate  # Linux / macOS
+```
+
+**PowerShell (Windows)**
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+## 3. Install dependencies
+
+```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+If `uvicorn` is not found after this, use `python -m uvicorn` instead of plain `uvicorn` (see below).
+
+## 4. Environment variables
+
+Copy the example file and edit it:
+
+```bash
+cp .env.example .env
+```
+
+Fill at least:
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://postgres.[ref]:PASSWORD@...pooler.supabase.com:6543/postgres` |
+| `CREATE_TABLES_ON_STARTUP` | Set `true` in development so tables are created on startup (use migrations in production) |
+| `SUPABASE_URL` | Project URL from Supabase → Settings → API |
+| `SUPABASE_JWT_SECRET` | **JWT Secret** from the same page (not the anon key) — required for `Authorization: Bearer` on protected routes |
+
+Optional:
+
+| Variable | Purpose |
+|----------|---------|
+| `TOY_IMAGES_DIR` | Absolute path to a folder of image files named like `photo_file` in the DB (e.g. `142928.jpg`). If unset, the API may fall back to `<repo>/toy_library_photos` when present. |
+
+Settings are loaded from **`backend/.env`** (and also **`./.env`** at repo root if present).
+
+Apply Supabase SQL for user profiles (signup → `public.profiles`) when you use Auth:
+
+- `backend/supabase/snippets/001_profiles.sql`
+
+## 5. Seed the database (optional)
+
+After `DATABASE_URL` is set in `.env`:
+
+```bash
 python -m app.scripts.seed_from_csv
 ```
 
-### Commit W1.3 - Read from DB in API
+This creates tables if needed and imports CSV seed data (paths are defined in the seed service). Requires CSV assets under the repo as expected by the script.
 
-- Update `/toys` and `/categories` to query Postgres when `DATABASE_URL` is set
-- Keep CSV path as fallback (optional) while migrating
+## 6. Run the API
 
-## Current Scope
+**Local development (reload on code changes):**
 
-- App entrypoint
-- API router
-- Health endpoint
-- Initial requirements and env template
+```bash
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+If `uvicorn` is not on your PATH:
+
+```bash
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Phone / emulator on the same LAN as your PC** — bind on all interfaces so the device can reach your machine (use your PC’s LAN IP in the app, not `127.0.0.1`):
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## 7. Verify
+
+Open in a browser:
+
+- Interactive docs (Swagger): **http://127.0.0.1:8000/docs**
+- Health check: **http://127.0.0.1:8000/api/v1/health**
+
+Protected routes need a valid Supabase **access token** in the header: `Authorization: Bearer <token>`.
+
+## Project layout (short)
+
+- `app/main.py` — FastAPI app and lifespan (optional `create_all` in dev)
+- `app/api/v1/` — HTTP routers (toys, categories, auth, health)
+- `app/core/` — settings, JWT helpers, RBAC dependencies
+- `app/models/`, `app/repositories/`, `app/schemas/` — data layer
+- `app/scripts/seed_from_csv.py` — CLI seed entrypoint

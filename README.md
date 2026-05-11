@@ -1,40 +1,31 @@
 # toy-library-app
 
-## Тема дослідження (Project Theme)
-
-Розробка мобільної інформаційної системи управління бібліотекою іграшок (Toy Library) з інтеграцією методів комп'ютерного зору для автоматизації інвентаризації
-
-
-## Проблема (Problem Statement)
-Економічний аспект: Висока вартість підписки на існуючі SaaS-рішення (SETLS), що є критичним тягарем для волонтерських та community-проєктів.
-
-Операційний аспект: Фрагментованість процесів (ручне ведення каталогів, паперовий облік) призводить до помилок при поверненні іграшок (втрата деталей).
-
-Технічний аспект: Відсутність спеціалізованих мобільних рішень з підтримкою AI для швидкої перевірки комплектації іграшок "на місці".
-
-## Мета дослідження (Project Purpose)
-Розробити та впровадити архітектуру безкоштовної мобільно-орієнтованої системи управління бібліотекою іграшок, яка дозволить автоматизувати життєвий цикл оренди та підвищити точність контролю інвентарю за допомогою алгоритмів комп'ютерного зору.
-
-## Завдання дослідження (Objectives)
-
-Аналіз предметної області та реінжиніринг процесів: Проведення порівняльного аналізу існуючих рішень (зокрема SETLS) та формалізація вимог до безкоштовної альтернативи з відкритим кодом для волонтерських організацій.
-
-Проектування хмарної архітектури та бази даних: Розробка структури БД у Supabase та проектування рольової моделі доступу для забезпечення безпечної взаємодії гостей, членів бібліотеки та адміністраторів.
-
-Формування та підготовка датасету: Збір, анотування та препроцесинг набору зображень іграшок (різних категорій та станів комплектації) для подальшого навчання нейронної мережі.
-
-Розробка та навчання інтелектуального модуля: Вибір оптимальної архітектури нейромережі (YOLO) та проведення процесу fine-tuning для автоматизації детекції об'єктів та перевірки комплектації під час повернення іграшок.
-
-Реалізація серверної логіки (Backend): Розробка високопродуктивного API на базі FastAPI для обробки запитів, інтеграції з AI-моделлю та управління сховищем зображень у Supabase Storage.
-
-Розробка кросплатформенного мобільного клієнта: Реалізація користувацького інтерфейсу на Flutter з інтеграцією push-сповіщень через FCM та реалізацією логіки сканування в реальному часі.
-
-Валідація та тестування: Оцінка точності навченої моделі (метрики mAP, Precision, Recall) та проведення функціонального тестування системи в умовах, максимально наближених до реальної діяльності бібліотеки іграшок.
-
-
 ## Project Theme
 AI-assisted mobile Toy Library Management System for community toy libraries, designed to improve catalog access, booking and lending workflows, and inventory control through role-based user journeys and computer-vision-assisted check-in.
 
 ## Project Purpose
 This diploma project aims to design and implement a mobile-first information system that replaces fragmented manual toy library operations with a centralized digital platform.
 The system enables guests, members, and administrators to work with the toy catalog and lending workflows efficiently, while adding AI-assisted inventory verification to reduce check-in errors during toy returns.
+
+## Quick start
+
+| Folder | Role |
+|--------|------|
+| [`backend/`](backend/) | FastAPI REST API, Postgres (Supabase), JWT auth |
+| [`mobile/`](mobile/) | Flutter client |
+
+**Backend — full instructions:** [`backend/README.md`](backend/README.md) (environment variables, seeding, running on `0.0.0.0` for a phone/emulator on the LAN).
+
+Minimal run from `backend/` after Python 3.11+ and a configured `.env`:
+
+```bash
+python -m venv .venv
+# activate .venv (see backend README for Windows/Git Bash)
+pip install -r requirements.txt
+cp .env.example .env   # set DATABASE_URL, Supabase settings, etc.
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Then open **http://127.0.0.1:8000/docs** (Swagger) and **http://127.0.0.1:8000/api/v1/health**.
+
+**Mobile app:** from `mobile/`, run `flutter pub get` and `flutter run`. Configure the API base URL and Supabase keys with `--dart-define` as in your setup (see `mobile/lib/core/api_base_url.dart` and `mobile/lib/main.dart`).
