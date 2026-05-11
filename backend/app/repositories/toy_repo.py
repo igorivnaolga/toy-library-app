@@ -106,6 +106,7 @@ def _list_toys_db(
     category: str | None = None,
     age_range: str | None = None,
     status: str | None = None,
+    availability: str | None = None,
 ) -> tuple[list[ToyOut], int]:
     session = session_scope()
     try:
@@ -147,6 +148,20 @@ def _list_toys_db(
             .order_by(ToyORM.toy_id.asc())
         )
 
+        if availability:
+            # Availability is currently derived from `status`, not stored as its own
+            # DB column. Filter after mapping rows so DB and CSV behavior stay aligned.
+            rows = session.scalars(stmt).unique().all()
+            items = [
+                item
+                for item in (_toy_row_to_out(t) for t in rows)
+                if item.availability == availability
+            ]
+            total = len(items)
+            start = (page - 1) * limit
+            end = start + limit
+            return items[start:end], total
+
         # Count uses the same predicates, but without ORDER/OFFSET/LIMIT.
         count_stmt = select(func.count()).select_from(ToyORM).where(*filters)
         total = int(session.scalar(count_stmt) or 0)
@@ -167,6 +182,7 @@ def list_toys(
     category: str | None = None,
     age_range: str | None = None,
     status: str | None = None,
+    availability: str | None = None,
 ) -> tuple[list[ToyOut], int]:
     # DB-first once we have any toy rows imported; otherwise keep CSV behavior.
     if _db_toy_count() > 0:
@@ -177,6 +193,7 @@ def list_toys(
             category=category,
             age_range=age_range,
             status=status,
+            availability=availability,
         )
 
     items = list(load_all_toys())
@@ -211,6 +228,9 @@ def list_toys(
         items = [
             toy for toy in items if toy.status and toy.status.lower() == status_norm
         ]
+
+    if availability:
+        items = [toy for toy in items if toy.availability == availability]
 
     total = len(items)
     start = (page - 1) * limit

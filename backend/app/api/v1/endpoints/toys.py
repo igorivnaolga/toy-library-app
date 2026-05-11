@@ -5,6 +5,8 @@ These endpoints are intentionally thin: validation/pagination lives here, while
 data access + DB/CSV switching happens in repositories/services.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
@@ -32,6 +34,10 @@ def list_toys(
     category: str | None = None,
     age_range: str | None = None,
     status: str | None = None,
+    availability: Literal[
+        "available", "on_loan", "reserved", "unavailable", "unknown"
+    ]
+    | None = None,
 ) -> ToysListResponse:
     # `list_toys_service` returns (page items, total matching rows before pagination).
     items, total = list_toys_service(
@@ -41,6 +47,7 @@ def list_toys(
         category=category,
         age_range=age_range,
         status=status,
+        availability=availability,
     )
     return ToysListResponse(
         data=items,

@@ -19,6 +19,9 @@ ON_LOAN = "on_loan"
 RESERVED = "reserved"
 UNAVAILABLE = "unavailable"
 UNKNOWN = "unknown"
+VALID_AVAILABILITY_CODES = frozenset(
+    {AVAILABLE, ON_LOAN, RESERVED, UNAVAILABLE, UNKNOWN}
+)
 
 
 def normalize_availability(raw_status: str | None) -> str:
@@ -33,6 +36,9 @@ def normalize_availability(raw_status: str | None) -> str:
     key = raw_status.strip().lower()
     if not key:
         return UNKNOWN
+
+    if key in VALID_AVAILABILITY_CODES:
+        return key
 
     # Exact-ish phrases from seed CSV (order: more specific first).
     if "overdue" in key or key == "on loan" or key.startswith("on loan"):

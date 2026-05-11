@@ -9,6 +9,7 @@ def list_toys_service(
     category: str | None = None,
     age_range: str | None = None,
     status: str | None = None,
+    availability: str | None = None,
 ) -> tuple[list[ToyOut], int]:
     return list_toys(
         page=page,
@@ -17,6 +18,7 @@ def list_toys_service(
         category=category,
         age_range=age_range,
         status=status,
+        availability=availability,
     )
 
 

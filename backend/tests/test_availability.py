@@ -34,3 +34,11 @@ def test_normalize_case_insensitive() -> None:
 def test_reserved_keywords() -> None:
     assert normalize_availability("Reserved for pickup") == RESERVED
     assert normalize_availability("On hold") == RESERVED
+
+
+def test_canonical_codes_are_accepted() -> None:
+    assert normalize_availability(AVAILABLE) == AVAILABLE
+    assert normalize_availability(ON_LOAN) == ON_LOAN
+    assert normalize_availability(RESERVED) == RESERVED
+    assert normalize_availability(UNAVAILABLE) == UNAVAILABLE
+    assert normalize_availability(UNKNOWN) == UNKNOWN
