@@ -17,6 +17,7 @@ from pathlib import Path
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import joinedload
 
+from app.core.availability import normalize_availability
 from app.db.session import get_engine, session_scope
 from app.models.toy import Toy as ToyORM
 from app.schemas.toy import ToyOut
@@ -50,13 +51,15 @@ def load_all_toys() -> tuple[ToyOut, ...]:
             name = (row.get("toy_name") or "").strip()
             if not toy_id or not name:
                 continue
+            status = _to_none(row.get("Status"))
             toys.append(
                 ToyOut(
                     toy_id=toy_id,
                     name=name,
                     category=_to_none(row.get("Category")),
                     age_range=_to_none(row.get("Age Range")),
-                    status=_to_none(row.get("Status")),
+                    status=status,
+                    availability=normalize_availability(status),
                     manufacturer=_to_none(row.get("Manufacturer")),
                     description=_to_none(row.get("description")),
                     photo_file=_to_none(row.get("photo_file_desc")),
@@ -82,12 +85,14 @@ def _toy_row_to_out(toy: ToyORM) -> ToyOut:
     # Map ORM row -> API DTO. `category` stays the human-facing label string because
     # Flutter filters currently pass the full label (same as CSV-era behavior).
     photo_file = toy.image.filename if toy.image else None
+    status = toy.status
     return ToyOut(
         toy_id=toy.toy_id,
         name=toy.name,
         category=toy.category_label,
         age_range=toy.age_range,
-        status=toy.status,
+        status=status,
+        availability=normalize_availability(status),
         manufacturer=toy.manufacturer,
         description=toy.description,
         photo_file=photo_file,
