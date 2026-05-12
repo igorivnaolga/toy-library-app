@@ -18,6 +18,7 @@ class CatalogController extends ChangeNotifier {
   String? error;
   String searchQuery = "";
   String? categoryFilterLabel;
+  String? ageRangeFilter;
   String? availabilityFilter;
   bool hasNext = false;
   int total = 0;
@@ -51,6 +52,11 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> setCategoryFilter(String? label) async {
     categoryFilterLabel = label;
+    await _reloadToysOnly();
+  }
+
+  Future<void> setAgeRangeFilter(String? value) async {
+    ageRangeFilter = value;
     await _reloadToysOnly();
   }
 
@@ -125,6 +131,10 @@ class CatalogController extends ChangeNotifier {
     final cat = categoryFilterLabel?.trim();
     if (cat != null && cat.isNotEmpty) {
       query["category"] = cat;
+    }
+    final ageRange = ageRangeFilter?.trim();
+    if (ageRange != null && ageRange.isNotEmpty) {
+      query["age_range"] = ageRange;
     }
     final availability = availabilityFilter?.trim();
     if (availability != null && availability.isNotEmpty) {

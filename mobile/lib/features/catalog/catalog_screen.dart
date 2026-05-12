@@ -17,7 +17,18 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  static const List<(String?, String)> _availabilityFilters = [
+  static const List<(String?, String)> _ageRangeFilters = [
+    (null, "All"),
+    ("12-36mths", "12-36 mths"),
+    ("18 mths +", "18 mths +"),
+    ("1-5yrs", "1-5 yrs"),
+    ("2-5 years", "2-5 years"),
+    ("3-5yrs", "3-5 yrs"),
+    ("3 years +", "3 years +"),
+    ("5 years +", "5 years +"),
+  ];
+
+  static const List<(String?, String)> _statusFilters = [
     (null, "All"),
     ("available", "Available"),
     ("on_loan", "On loan"),
@@ -27,14 +38,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
-
-  /// Avoid Dropdown assertion if a stale filter label is not in the latest category list.
-  String? _effectiveCategoryValue(CatalogController c) {
-    final f = c.categoryFilterLabel;
-    if (f == null) return null;
-    final ok = c.categories.any((e) => e.label == f);
-    return ok ? f : null;
-  }
 
   @override
   void initState() {
@@ -58,6 +61,79 @@ class _CatalogScreenState extends State<CatalogScreen> {
       if (!mounted) return;
       context.read<CatalogController>().setSearchQuery(value);
     });
+  }
+
+  String _selectedLabel(List<(String?, String)> options, String? value) {
+    for (final option in options) {
+      if (option.$1 == value) return option.$2;
+    }
+    return value == null || value.isEmpty ? "All" : value;
+  }
+
+  Future<void> _showFilterSheet({
+    required BuildContext context,
+    required String title,
+    required List<(String?, String)> options,
+    required String? selectedValue,
+    required ValueChanged<String?> onSelected,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              for (final (value, label) in options)
+                ListTile(
+                  title: Text(label),
+                  trailing: selectedValue == value
+                      ? Icon(
+                          Icons.check,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onSelected(value);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _filterButton({
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return Expanded(
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.arrow_drop_down, size: 18),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
   }
 
   @override
@@ -104,72 +180,64 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        const Text("Category:"),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String?>(
-                                isExpanded: true,
-                                value: _effectiveCategoryValue(c),
-                                hint: const Text("All"),
-                                items: [
-                                  const DropdownMenuItem<String?>(
-                                    value: null,
-                                    child: Text("All"),
-                                  ),
-                                  ...c.categories.map(
-                                    (cat) => DropdownMenuItem<String?>(
-                                      value: cat.label,
-                                      child: Text(cat.label,
-                                          overflow: TextOverflow.ellipsis),
-                                    ),
-                                  ),
-                                ],
-                                onChanged: c.loading
-                                    ? null
-                                    : (value) {
-                                        context
-                                            .read<CatalogController>()
-                                            .setCategoryFilter(value);
-                                      },
-                              ),
-                            ),
-                          ),
+                        _filterButton(
+                          label: c.categoryFilterLabel ?? "Category",
+                          onPressed: c.loading
+                              ? null
+                              : () {
+                                  final options = <(String?, String)>[
+                                    (null, "All"),
+                                    ...c.categories
+                                        .map((cat) => (cat.label, cat.label)),
+                                  ];
+                                  _showFilterSheet(
+                                    context: context,
+                                    title: "Choose category",
+                                    options: options,
+                                    selectedValue: c.categoryFilterLabel,
+                                    onSelected: context
+                                        .read<CatalogController>()
+                                        .setCategoryFilter,
+                                  );
+                                },
+                        ),
+                        const SizedBox(width: 6),
+                        _filterButton(
+                          label:
+                              "Age ${_selectedLabel(_ageRangeFilters, c.ageRangeFilter)}",
+                          onPressed: c.loading
+                              ? null
+                              : () {
+                                  _showFilterSheet(
+                                    context: context,
+                                    title: "Choose age range",
+                                    options: _ageRangeFilters,
+                                    selectedValue: c.ageRangeFilter,
+                                    onSelected: context
+                                        .read<CatalogController>()
+                                        .setAgeRangeFilter,
+                                  );
+                                },
+                        ),
+                        const SizedBox(width: 6),
+                        _filterButton(
+                          label:
+                              "Status ${_selectedLabel(_statusFilters, c.availabilityFilter)}",
+                          onPressed: c.loading
+                              ? null
+                              : () {
+                                  _showFilterSheet(
+                                    context: context,
+                                    title: "Choose status",
+                                    options: _statusFilters,
+                                    selectedValue: c.availabilityFilter,
+                                    onSelected: context
+                                        .read<CatalogController>()
+                                        .setAvailabilityFilter,
+                                  );
+                                },
                         ),
                       ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final (value, label) in _availabilityFilters)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(label),
-                                selected: c.availabilityFilter == value,
-                                onSelected: c.loading
-                                    ? null
-                                    : (selected) {
-                                        if (!selected) return;
-                                        context
-                                            .read<CatalogController>()
-                                            .setAvailabilityFilter(value);
-                                      },
-                              ),
-                            ),
-                        ],
-                      ),
                     ),
                   ),
                 ],
