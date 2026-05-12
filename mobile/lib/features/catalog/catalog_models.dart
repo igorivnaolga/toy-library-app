@@ -40,6 +40,7 @@ class ToyItem {
     this.category,
     this.ageRange,
     this.status,
+    this.availability = "unknown",
     this.manufacturer,
     this.description,
     this.photoFile,
@@ -50,6 +51,7 @@ class ToyItem {
   final String? category;
   final String? ageRange;
   final String? status;
+  final String availability;
   final String? manufacturer;
   final String? description;
   final String? photoFile;
@@ -61,6 +63,7 @@ class ToyItem {
       category: json["category"] as String?,
       ageRange: json["age_range"] as String?,
       status: json["status"] as String?,
+      availability: json["availability"] as String? ?? "unknown",
       manufacturer: json["manufacturer"] as String?,
       description: json["description"] as String?,
       photoFile: json["photo_file"] as String?,

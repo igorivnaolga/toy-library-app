@@ -5,6 +5,7 @@ import "../../core/api_exception.dart";
 import "../../core/toy_photo_url.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
+import "toy_availability_badge.dart";
 
 /// Loads a single toy from `GET /api/v1/toys/{toy_id}`.
 class ToyDetailScreen extends StatefulWidget {
@@ -103,6 +104,11 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
               ),
               const SizedBox(height: 16),
               Text(t.name, style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ToyAvailabilityBadge(availability: t.availability),
+              ),
               const SizedBox(height: 12),
               if (t.category != null) _line("Category", t.category!),
               if (t.ageRange != null) _line("Age range", t.ageRange!),

@@ -5,6 +5,7 @@ import "package:provider/provider.dart";
 
 import "catalog_provider.dart";
 import "toy_detail_screen.dart";
+import "toy_availability_badge.dart";
 import "toy_photo_tile.dart";
 
 /// Catalog: loads `GET /api/v1/categories` and paged `GET /api/v1/toys` via [CatalogController].
@@ -16,6 +17,14 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
+  static const List<(String?, String)> _availabilityFilters = [
+    (null, "All"),
+    ("available", "Available"),
+    ("on_loan", "On loan"),
+    ("reserved", "Reserved"),
+    ("unavailable", "Unavailable"),
+  ];
+
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
 
@@ -137,6 +146,32 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ],
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final (value, label) in _availabilityFilters)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(label),
+                                selected: c.availabilityFilter == value,
+                                onSelected: c.loading
+                                    ? null
+                                    : (selected) {
+                                        if (!selected) return;
+                                        context
+                                            .read<CatalogController>()
+                                            .setAvailabilityFilter(value);
+                                      },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -199,6 +234,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           title: Text(t.name),
                           subtitle:
                               parts.isEmpty ? null : Text(parts.join(" · ")),
+                          trailing: ToyAvailabilityBadge(
+                              availability: t.availability),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(

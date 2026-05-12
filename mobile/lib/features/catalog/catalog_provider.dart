@@ -18,6 +18,7 @@ class CatalogController extends ChangeNotifier {
   String? error;
   String searchQuery = "";
   String? categoryFilterLabel;
+  String? availabilityFilter;
   bool hasNext = false;
   int total = 0;
 
@@ -50,6 +51,11 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> setCategoryFilter(String? label) async {
     categoryFilterLabel = label;
+    await _reloadToysOnly();
+  }
+
+  Future<void> setAvailabilityFilter(String? value) async {
+    availabilityFilter = value;
     await _reloadToysOnly();
   }
 
@@ -119,6 +125,10 @@ class CatalogController extends ChangeNotifier {
     final cat = categoryFilterLabel?.trim();
     if (cat != null && cat.isNotEmpty) {
       query["category"] = cat;
+    }
+    final availability = availabilityFilter?.trim();
+    if (availability != null && availability.isNotEmpty) {
+      query["availability"] = availability;
     }
 
     final json = await _client.getJson("/api/v1/toys", query);
