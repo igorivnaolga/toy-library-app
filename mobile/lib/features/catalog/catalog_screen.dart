@@ -17,17 +17,6 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _CatalogScreenState extends State<CatalogScreen> {
-  static const List<(String?, String)> _ageRangeFilters = [
-    (null, "All"),
-    ("12-36mths", "12-36 mths"),
-    ("18 mths +", "18 mths +"),
-    ("1-5yrs", "1-5 yrs"),
-    ("2-5 years", "2-5 years"),
-    ("3-5yrs", "3-5 yrs"),
-    ("3 years +", "3 years +"),
-    ("5 years +", "5 years +"),
-  ];
-
   static const List<(String?, String)> _statusFilters = [
     (null, "All"),
     ("available", "Available"),
@@ -68,6 +57,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
       if (option.$1 == value) return option.$2;
     }
     return value == null || value.isEmpty ? "All" : value;
+  }
+
+  List<(String?, String)> _ageOptions(CatalogController c) {
+    return [
+      (null, "All"),
+      ...c.ageRangeOptions.map((s) => (s, s)),
+    ];
   }
 
   Future<void> _showFilterSheet({
@@ -204,14 +200,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         const SizedBox(width: 6),
                         _filterButton(
                           label:
-                              "Age ${_selectedLabel(_ageRangeFilters, c.ageRangeFilter)}",
+                              "Age ${_selectedLabel(_ageOptions(c), c.ageRangeFilter)}",
                           onPressed: c.loading
                               ? null
                               : () {
                                   _showFilterSheet(
                                     context: context,
                                     title: "Choose age range",
-                                    options: _ageRangeFilters,
+                                    options: _ageOptions(c),
                                     selectedValue: c.ageRangeFilter,
                                     onSelected: context
                                         .read<CatalogController>()

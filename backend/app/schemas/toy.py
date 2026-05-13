@@ -32,3 +32,12 @@ class ToysListMeta(BaseModel):
 class ToysListResponse(BaseModel):
     data: list[ToyOut]
     meta: ToysListMeta
+
+
+class ToysMetaOut(BaseModel):
+    """Distinct filter values derived from the current toy dataset (DB or CSV fallback)."""
+
+    age_ranges: list[str] = Field(
+        default_factory=list,
+        description="Non-empty distinct age_range labels, sorted case-insensitively.",
+    )

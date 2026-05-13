@@ -13,6 +13,7 @@ class CatalogController extends ChangeNotifier {
   static const int _pageSize = 20;
 
   List<CategoryItem> categories = [];
+  List<String> ageRangeOptions = [];
   List<ToyItem> toys = [];
   bool loading = false;
   String? error;
@@ -31,6 +32,7 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
     try {
       await _loadCategories();
+      await _loadToysMeta();
       await _fetchToyPage(reset: true);
       error = null;
     } on ApiException catch (e) {
@@ -113,6 +115,13 @@ class CatalogController extends ChangeNotifier {
         .where((c) => c.label.isNotEmpty)
         .toList()
       ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+  }
+
+  Future<void> _loadToysMeta() async {
+    final json = await _client.getJson("/api/v1/toys/meta");
+    final raw = json["age_ranges"] as List<dynamic>? ?? [];
+    ageRangeOptions =
+        raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
   }
 
   Future<void> _fetchToyPage({required bool reset}) async {

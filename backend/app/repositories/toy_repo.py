@@ -22,6 +22,8 @@ from app.db.session import get_engine, session_scope
 from app.models.toy import Toy as ToyORM
 from app.schemas.toy import ToyOut
 
+_MAX_DISTINCT_AGE_RANGES = 100
+
 # Canonical seed export used by early development + the CSV->DB import script.
 CSV_PATH = (
     Path(__file__).resolve().parents[3]
@@ -260,3 +262,45 @@ def get_toy_by_id(toy_id: str) -> ToyOut | None:
         if toy.toy_id == toy_id_norm:
             return toy
     return None
+
+
+def distinct_age_ranges() -> list[str]:
+    """
+    Distinct non-empty ``age_range`` values for filter UI.
+
+    DB path matches ``list_toys`` DB-first rule. CSV path derives from the same
+    export as ``load_all_toys``. Values are de-duplicated case-insensitively,
+    sorted case-insensitively, capped at ``_MAX_DISTINCT_AGE_RANGES``.
+    """
+
+    def _dedupe_sort(raw_values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for raw in raw_values:
+            ar = raw.strip()
+            if not ar:
+                continue
+            key = ar.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(ar)
+        out.sort(key=str.lower)
+        return out[:_MAX_DISTINCT_AGE_RANGES]
+
+    if _db_toy_count() > 0:
+        session = session_scope()
+        try:
+            stmt = (
+                select(ToyORM.age_range)
+                .where(ToyORM.age_range.is_not(None))
+                .where(ToyORM.age_range != "")
+                .distinct()
+            )
+            rows = session.scalars(stmt).all()
+            return _dedupe_sort([r for r in rows if r is not None])
+        finally:
+            session.close()
+
+    values = [t.age_range for t in load_all_toys() if t.age_range]
+    return _dedupe_sort(values)

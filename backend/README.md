@@ -111,6 +111,7 @@ Open in a browser:
 
 - Interactive docs (Swagger): **http://127.0.0.1:8000/docs**
 - Health check: **http://127.0.0.1:8000/api/v1/health**
+- Catalog filter metadata (distinct age ranges from DB or CSV fallback): **http://127.0.0.1:8000/api/v1/toys/meta**
 
 Protected routes need a valid Supabase **access token** in the header: `Authorization: Bearer <token>`.
 

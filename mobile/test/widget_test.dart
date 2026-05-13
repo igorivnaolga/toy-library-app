@@ -14,6 +14,11 @@ class _FakeBackend implements BackendClient {
         ],
       };
     }
+    if (path == "/api/v1/toys/meta") {
+      return {
+        "age_ranges": ["5+", "3-5yrs"]
+      };
+    }
     if (path.startsWith("/api/v1/toys/")) {
       return {
         "toy_id": "t1",

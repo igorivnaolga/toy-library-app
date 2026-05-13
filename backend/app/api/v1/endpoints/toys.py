@@ -10,9 +10,13 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from app.schemas.toy import ToyOut, ToysListMeta, ToysListResponse
+from app.schemas.toy import ToyOut, ToysListMeta, ToysListResponse, ToysMetaOut
 from app.services.toy_photo import guess_media_type, resolve_toy_photo_path
-from app.services.toy_service import get_toy_service, list_toys_service
+from app.services.toy_service import (
+    get_toy_service,
+    get_toys_meta_service,
+    list_toys_service,
+)
 
 router = APIRouter()
 
@@ -59,6 +63,12 @@ def list_toys(
             has_next=page * limit < total,
         ),
     )
+
+
+@router.get("/meta", response_model=ToysMetaOut)
+def toys_meta() -> ToysMetaOut:
+    """Distinct ``age_range`` values from the current dataset (Postgres or CSV fallback)."""
+    return get_toys_meta_service()
 
 
 @router.get("/{toy_id}", response_model=ToyOut)
