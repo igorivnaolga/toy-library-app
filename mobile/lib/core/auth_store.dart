@@ -57,7 +57,12 @@ class AuthStore extends ChangeNotifier {
 
   Future<void> signIn({required String email, required String password}) async {
     final supa = _supabase;
-    if (supa == null) return;
+    if (supa == null) {
+      error =
+          "Auth is not configured. Start the app with SUPABASE_URL and SUPABASE_ANON_KEY.";
+      notifyListeners();
+      return;
+    }
     loading = true;
     error = null;
     notifyListeners();
@@ -77,7 +82,12 @@ class AuthStore extends ChangeNotifier {
 
   Future<void> signUp({required String email, required String password}) async {
     final supa = _supabase;
-    if (supa == null) return;
+    if (supa == null) {
+      error =
+          "Auth is not configured. Start the app with SUPABASE_URL and SUPABASE_ANON_KEY.";
+      notifyListeners();
+      return;
+    }
     loading = true;
     error = null;
     notifyListeners();

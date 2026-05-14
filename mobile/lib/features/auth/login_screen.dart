@@ -15,6 +15,56 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
 
+  String? _validate() {
+    final email = _email.text.trim();
+    final password = _password.text;
+    if (email.isEmpty || !email.contains("@")) {
+      return "Enter a valid email.";
+    }
+    if (password.length < 6) {
+      return "Password must be at least 6 characters.";
+    }
+    return null;
+  }
+
+  Future<void> _handleSignIn() async {
+    final validationError = _validate();
+    if (validationError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
+    final auth = context.read<AuthStore>();
+    await auth.signIn(email: _email.text, password: _password.text);
+    if (!mounted) return;
+    if (auth.error == null && auth.isLoggedIn) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _handleSignUp() async {
+    final validationError = _validate();
+    if (validationError != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
+    final auth = context.read<AuthStore>();
+    await auth.signUp(email: _email.text, password: _password.text);
+    if (!mounted) return;
+    if (auth.error == null) {
+      final msg = auth.isLoggedIn
+          ? "Account created. You are signed in."
+          : "Account created. Check your email to confirm, then sign in.";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (auth.isLoggedIn) {
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -43,22 +93,12 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: auth.loading
-                ? null
-                : () => context.read<AuthStore>().signIn(
-                      email: _email.text,
-                      password: _password.text,
-                    ),
+            onPressed: auth.loading ? null : _handleSignIn,
             child: const Text("Sign in"),
           ),
           const SizedBox(height: 8),
           OutlinedButton(
-            onPressed: auth.loading
-                ? null
-                : () => context.read<AuthStore>().signUp(
-                      email: _email.text,
-                      password: _password.text,
-                    ),
+            onPressed: auth.loading ? null : _handleSignUp,
             child: const Text("Create account"),
           ),
           if (auth.loading)
