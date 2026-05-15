@@ -56,6 +56,8 @@ def get_current_principal(
         email=payload.get("email"),
         role=role,
         full_name=profile.full_name,
+        membership_tier=profile.membership_tier,
+        volunteer_confirmed=bool(profile.volunteer_confirmed),
     )
 
 
@@ -78,6 +80,8 @@ def get_optional_principal(
         email=payload.get("email"),
         role=role,
         full_name=profile.full_name,
+        membership_tier=profile.membership_tier,
+        volunteer_confirmed=bool(profile.volunteer_confirmed),
     )
 
 
@@ -102,3 +106,12 @@ def require_roles(*allowed: Role):
         return principal
 
     return _guard
+
+
+def require_admin(
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> Principal:
+    """Allow only `profiles.role = admin` (no bypass for other roles)."""
+    if principal.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin only")
+    return principal

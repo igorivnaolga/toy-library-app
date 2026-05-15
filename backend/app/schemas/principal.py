@@ -16,6 +16,8 @@ class Principal(BaseModel):
     email: str | None = None
     role: Role
     full_name: str | None = None
+    membership_tier: str | None = None
+    volunteer_confirmed: bool = False
 
     model_config = {"frozen": True}
 
@@ -25,3 +27,5 @@ class MeOut(BaseModel):
     email: str | None = None
     role: Role
     full_name: str | None = None
+    membership_tier: str | None = None
+    volunteer_confirmed: bool = False

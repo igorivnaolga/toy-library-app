@@ -6,6 +6,9 @@ create table if not exists public.profiles (
   role text not null default 'guest'
     check (role in ('guest', 'member', 'volunteer', 'admin')),
   full_name text,
+  membership_tier text
+    check (membership_tier is null or membership_tier in ('casual', 'non_duty', 'duty')),
+  volunteer_confirmed boolean not null default false,
   updated_at timestamptz default now()
 );
 

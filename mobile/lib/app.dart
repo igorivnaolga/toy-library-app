@@ -11,6 +11,7 @@ import "features/auth/login_screen.dart";
 import "features/bookings/bookings_placeholder.dart";
 import "features/catalog/catalog_provider.dart";
 import "features/catalog/catalog_screen.dart";
+import "features/membership/membership_onboarding_screen.dart";
 
 class ToyLibraryApp extends StatelessWidget {
   const ToyLibraryApp({super.key, this.backend, this.authStore});
@@ -49,9 +50,30 @@ class ToyLibraryApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
           useMaterial3: true,
         ),
-        home: const _RoleHome(),
+        home: const _AppShell(),
       ),
     );
+  }
+}
+
+class _AppShell extends StatelessWidget {
+  const _AppShell();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthStore>();
+
+    if (auth.isLoggedIn && auth.profileLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (auth.needsMembershipOnboarding) {
+      return const MembershipOnboardingScreen();
+    }
+
+    return const _RoleHome();
   }
 }
 

@@ -25,6 +25,7 @@ AppRole parseRole(String? value) {
 class AuthStore extends ChangeNotifier {
   AuthStore.supabase(this._backend, {SupabaseClient? supabase})
       : _supabase = supabase ?? Supabase.instance.client {
+    profileLoading = true;
     _wireSupabaseListener();
     unawaited(refreshProfile());
   }
@@ -32,7 +33,8 @@ class AuthStore extends ChangeNotifier {
   /// Test/preview mode with no Supabase dependency.
   AuthStore.guest()
       : _backend = null,
-        _supabase = null;
+        _supabase = null,
+        profileLoading = false;
 
   final BackendClient? _backend;
   final SupabaseClient? _supabase;
@@ -40,12 +42,16 @@ class AuthStore extends ChangeNotifier {
   StreamSubscription<AuthState>? _authSub;
 
   bool loading = false;
+  /// True until the first `/auth/me` fetch finishes after startup or sign-in.
+  bool profileLoading = false;
   String? error;
 
   String? userId;
   String? email;
   String? fullName;
   AppRole role = AppRole.guest;
+  String? membershipTier;
+  bool volunteerConfirmed = false;
 
   bool get isLoggedIn => _supabase?.auth.currentSession != null;
   String? get accessToken => _supabase?.auth.currentSession?.accessToken;
@@ -54,6 +60,13 @@ class AuthStore extends ChangeNotifier {
   bool get isMember => role == AppRole.member;
   bool get isVolunteer => role == AppRole.volunteer;
   bool get isAdmin => role == AppRole.admin;
+
+  /// Logged-in non-admin still needs onboarding when the backend has no tier yet.
+  bool get needsMembershipOnboarding {
+    if (!isLoggedIn || isAdmin) return false;
+    final t = membershipTier;
+    return error == null && (t == null || t.trim().isEmpty);
+  }
 
   Future<void> signIn({required String email, required String password}) async {
     final supa = _supabase;
@@ -69,7 +82,7 @@ class AuthStore extends ChangeNotifier {
     try {
       await supa.auth
           .signInWithPassword(email: email.trim(), password: password);
-      await refreshProfile();
+      await refreshProfile(silent: false);
     } on AuthException catch (e) {
       error = e.message;
     } catch (e) {
@@ -93,7 +106,7 @@ class AuthStore extends ChangeNotifier {
     notifyListeners();
     try {
       await supa.auth.signUp(email: email.trim(), password: password);
-      await refreshProfile();
+      await refreshProfile(silent: false);
     } on AuthException catch (e) {
       error = e.message;
     } catch (e) {
@@ -113,7 +126,7 @@ class AuthStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refreshProfile() async {
+  Future<void> refreshProfile({bool silent = false}) async {
     final supa = _supabase;
     final backend = _backend;
     if (supa == null || backend == null) return;
@@ -123,26 +136,38 @@ class AuthStore extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!silent) {
+      profileLoading = true;
+      notifyListeners();
+    }
     try {
       final me = await backend.getJson("/api/v1/auth/me");
       userId = me["user_id"]?.toString();
       email = me["email"]?.toString();
       fullName = me["full_name"]?.toString();
       role = parseRole(me["role"]?.toString());
+      membershipTier = me["membership_tier"]?.toString();
+      volunteerConfirmed = me["volunteer_confirmed"] == true;
       error = null;
     } catch (e) {
       // Keep user signed in but treat as guest if backend profile isn't ready yet.
       role = AppRole.guest;
+      membershipTier = null;
+      volunteerConfirmed = false;
       error = "Couldn't load profile role yet: $e";
+    } finally {
+      if (!silent) {
+        profileLoading = false;
+      }
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   void _wireSupabaseListener() {
     final supa = _supabase;
     if (supa == null) return;
     _authSub = supa.auth.onAuthStateChange.listen((_) {
-      unawaited(refreshProfile());
+      unawaited(refreshProfile(silent: true));
     });
   }
 
@@ -151,7 +176,10 @@ class AuthStore extends ChangeNotifier {
     email = null;
     fullName = null;
     role = AppRole.guest;
+    membershipTier = null;
+    volunteerConfirmed = false;
     error = null;
+    profileLoading = false;
   }
 
   @override

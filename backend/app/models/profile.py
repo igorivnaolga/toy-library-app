@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import String, text
+from sqlalchemy import Boolean, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,3 +25,9 @@ class Profile(Base):
         server_default=text("'guest'"),
     )
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    membership_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    volunteer_confirmed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )

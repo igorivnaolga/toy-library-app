@@ -52,6 +52,18 @@ class _FakeBackend implements BackendClient {
     }
     throw UnsupportedError(path);
   }
+
+  @override
+  Future<Map<String, dynamic>> patchJson(
+      String path, Map<String, dynamic> body) {
+    throw UnsupportedError(path);
+  }
+
+  @override
+  Future<Map<String, dynamic>> postJson(String path,
+      [Map<String, dynamic>? body]) {
+    throw UnsupportedError(path);
+  }
 }
 
 void main() {

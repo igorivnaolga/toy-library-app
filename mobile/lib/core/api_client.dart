@@ -9,6 +9,12 @@ import "api_exception.dart";
 abstract class BackendClient {
   Future<Map<String, dynamic>> getJson(String path,
       [Map<String, String>? query]);
+
+  Future<Map<String, dynamic>> patchJson(
+      String path, Map<String, dynamic> body);
+
+  Future<Map<String, dynamic>> postJson(String path,
+      [Map<String, dynamic>? body]);
 }
 
 /// Returns a Bearer token used by [ApiClient] (or null for guest requests).
@@ -47,6 +53,10 @@ class ApiClient implements BackendClient {
     final response = await _http
         .get(uri, headers: _headers())
         .timeout(const Duration(seconds: 20));
+    return _decodeObject(response);
+  }
+
+  Map<String, dynamic> _decodeObject(http.Response response) {
     final code = response.statusCode;
     if (code < 200 || code >= 300) {
       final body = response.body;
@@ -59,6 +69,40 @@ class ApiClient implements BackendClient {
           statusCode: code);
     }
     return decoded;
+  }
+
+  @override
+  Future<Map<String, dynamic>> patchJson(
+      String path, Map<String, dynamic> body) async {
+    final uri = _uri(path, null);
+    final response = await _http
+        .patch(
+          uri,
+          headers: {
+            ..._headers(),
+            "Content-Type": "application/json; charset=utf-8",
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 20));
+    return _decodeObject(response);
+  }
+
+  @override
+  Future<Map<String, dynamic>> postJson(String path,
+      [Map<String, dynamic>? body]) async {
+    final uri = _uri(path, null);
+    final response = await _http
+        .post(
+          uri,
+          headers: {
+            ..._headers(),
+            "Content-Type": "application/json; charset=utf-8",
+          },
+          body: body == null || body.isEmpty ? "{}" : jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 20));
+    return _decodeObject(response);
   }
 
   void close() {
