@@ -61,7 +61,7 @@ Fill at least:
 | `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://postgres.[ref]:PASSWORD@...pooler.supabase.com:6543/postgres` |
 | `CREATE_TABLES_ON_STARTUP` | Set `true` in development so tables are created on startup (use migrations in production) |
 | `SUPABASE_URL` | Project URL from Supabase → Settings → API |
-| `SUPABASE_JWT_SECRET` | **JWT Secret** from the same page (not the anon key) — required for `Authorization: Bearer` on protected routes |
+| `SUPABASE_JWT_SECRET` | **JWT Secret** from the same page (not the anon key) — required when Supabase signs access tokens with **HS256**. Newer projects may use **asymmetric** signing (RS256/ES256); the API then verifies using **JWKS** and only needs `SUPABASE_URL`. |
 
 Optional:
 
