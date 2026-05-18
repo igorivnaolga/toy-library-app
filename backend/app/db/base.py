@@ -6,6 +6,7 @@ class Base(DeclarativeBase):
 
 
 # Import models for metadata registration (Alembic / create_all).
+from app.models import booking as booking_model  # noqa: E402,F401
 from app.models import category as category_model  # noqa: E402,F401
 from app.models import toy as toy_model  # noqa: E402,F401
 from app.models import toy_image as toy_image_model  # noqa: E402,F401

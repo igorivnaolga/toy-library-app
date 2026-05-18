@@ -29,3 +29,4 @@ class Toy(Base):
     image: Mapped["ToyImage | None"] = relationship(
         back_populates="toy", uselist=False, cascade="all, delete-orphan"
     )
+    bookings: Mapped[list["Booking"]] = relationship(back_populates="toy")

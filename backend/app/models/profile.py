@@ -31,3 +31,5 @@ class Profile(Base):
         nullable=False,
         server_default=text("false"),
     )
+
+    bookings: Mapped[list["Booking"]] = relationship(back_populates="profile")
