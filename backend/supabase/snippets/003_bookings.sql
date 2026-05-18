@@ -28,3 +28,7 @@ create index if not exists idx_bookings_status on public.bookings (status);
 
 comment on table public.bookings is 'Member toy reservations (MVP); status pending → cancelled or completed';
 comment on column public.bookings.status is 'pending = reserved; cancelled = member cancelled; completed = picked up / loan started';
+
+-- RLS: mobile app calls FastAPI (DATABASE_URL), not PostgREST on this table.
+-- Enabling RLS blocks anon/authenticated direct API access unless you add policies.
+alter table public.bookings enable row level security;
