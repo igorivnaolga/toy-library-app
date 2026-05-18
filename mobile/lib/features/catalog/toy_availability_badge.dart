@@ -16,13 +16,13 @@ class ToyAvailabilityBadge extends StatelessWidget {
     final (label, background, foreground) = switch (availability) {
       "available" => (
           "Available",
-          colors.secondaryContainer,
-          colors.onSecondaryContainer,
+          const Color(0xFFC8E6C9),
+          const Color(0xFF2E7D32),
         ),
       "on_loan" => (
           "On loan",
-          colors.tertiaryContainer,
-          colors.onTertiaryContainer,
+          const Color(0xFFFFE0B2),
+          const Color(0xFFE65100),
         ),
       "reserved" => (
           "Reserved",

@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/auth_store.dart";
+import "auth_messages.dart";
 
 /// Login / registration UI for members/admins.
 class LoginScreen extends StatefulWidget {
@@ -39,6 +40,14 @@ class _LoginScreenState extends State<LoginScreen> {
     await auth.signIn(email: _email.text, password: _password.text);
     if (!mounted) return;
     if (auth.error == null && auth.isLoggedIn) {
+      await showAuthSuccessDialog(
+        context,
+        title: "Signed in",
+        message: signedInMessage(
+          needsMembershipOnboarding: auth.needsMembershipOnboarding,
+        ),
+      );
+      if (!mounted) return;
       Navigator.of(context).pop();
     }
   }
@@ -55,12 +64,20 @@ class _LoginScreenState extends State<LoginScreen> {
     await auth.signUp(email: _email.text, password: _password.text);
     if (!mounted) return;
     if (auth.error == null) {
-      final msg = auth.isLoggedIn
-          ? "Account created. You are signed in."
-          : "Account created. Check your email to confirm, then sign in.";
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       if (auth.isLoggedIn) {
+        await showAuthSuccessDialog(
+          context,
+          title: "Account created",
+          message: accountCreatedMessage,
+        );
+        if (!mounted) return;
         Navigator.of(context).pop();
+      } else {
+        await showAuthSuccessDialog(
+          context,
+          title: "Confirm your email",
+          message: emailConfirmationMessage,
+        );
       }
     }
   }
@@ -114,11 +131,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          const SizedBox(height: 20),
-          Text(
-            "Guest browsing is still available from the app home.",
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
         ],
       ),
     );

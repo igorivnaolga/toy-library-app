@@ -5,12 +5,16 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "core/api_client.dart";
+import "core/app_theme.dart";
 import "core/auth_store.dart";
 import "features/admin/admin_placeholder.dart";
 import "features/auth/login_screen.dart";
 import "features/bookings/bookings_placeholder.dart";
 import "features/catalog/catalog_provider.dart";
 import "features/catalog/catalog_screen.dart";
+import "features/info/contact_screen.dart";
+import "features/info/library_info_copy.dart";
+import "features/info/membership_info_screen.dart";
 import "features/membership/membership_onboarding_screen.dart";
 
 class ToyLibraryApp extends StatelessWidget {
@@ -46,10 +50,7 @@ class ToyLibraryApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: "Toy Library",
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-          useMaterial3: true,
-        ),
+        theme: buildAppTheme(),
         home: const _AppShell(),
       ),
     );
@@ -88,7 +89,10 @@ class _RoleHome extends StatelessWidget {
       length: _tabsForRole(auth.role).length,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Toy Library"),
+          title: const Text(
+            LibraryInfoCopy.libraryName,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: [
             if (!auth.isLoggedIn)
               TextButton(
@@ -107,9 +111,16 @@ class _RoleHome extends StatelessWidget {
               ),
           ],
           bottom: TabBar(
-            isScrollable: true,
+            isScrollable: false,
+            tabAlignment: TabAlignment.fill,
+            labelPadding: EdgeInsets.zero,
             tabs: _tabsForRole(auth.role)
-                .map((t) => Tab(icon: Icon(t.$2), text: t.$1))
+                .map((t) => Tab(
+                      height: 56,
+                      icon: Icon(t.$2, size: 22),
+                      text: t.$1,
+                      iconMargin: const EdgeInsets.only(bottom: 2),
+                    ))
                 .toList(),
           ),
         ),
@@ -120,22 +131,29 @@ class _RoleHome extends StatelessWidget {
     );
   }
 
+  static const _infoTabs = [
+    ("Contact", Icons.contact_page_outlined),
+    ("Membership", Icons.card_membership),
+  ];
+
+  static const _infoScreens = [
+    ContactScreen(),
+    MembershipInfoScreen(),
+  ];
+
   List<(String, IconData)> _tabsForRole(AppRole role) {
+    const catalog = ("Catalog", Icons.toys);
+    const bookings = ("Bookings", Icons.event_note);
+    const admin = ("Admin", Icons.admin_panel_settings);
+
     switch (role) {
       case AppRole.admin:
-        return const [
-          ("Catalog", Icons.toys),
-          ("Bookings", Icons.event_note),
-          ("Admin", Icons.admin_panel_settings),
-        ];
+        return const [catalog, bookings, ..._infoTabs, admin];
       case AppRole.volunteer:
       case AppRole.member:
-        return const [
-          ("Catalog", Icons.toys),
-          ("Bookings", Icons.event_note),
-        ];
+        return const [catalog, bookings, ..._infoTabs];
       case AppRole.guest:
-        return const [("Catalog", Icons.toys)];
+        return const [catalog, ..._infoTabs];
     }
   }
 
@@ -145,13 +163,18 @@ class _RoleHome extends StatelessWidget {
         return const [
           CatalogScreen(),
           BookingsPlaceholder(),
-          AdminPlaceholder()
+          ..._infoScreens,
+          AdminPlaceholder(),
         ];
       case AppRole.volunteer:
       case AppRole.member:
-        return const [CatalogScreen(), BookingsPlaceholder()];
+        return const [
+          CatalogScreen(),
+          BookingsPlaceholder(),
+          ..._infoScreens,
+        ];
       case AppRole.guest:
-        return const [CatalogScreen()];
+        return const [CatalogScreen(), ..._infoScreens];
     }
   }
 }

@@ -47,7 +47,23 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> refresh() => loadInitial();
 
+  bool get hasActiveFilters =>
+      searchQuery.trim().isNotEmpty ||
+      (categoryFilterLabel != null && categoryFilterLabel!.isNotEmpty) ||
+      (ageRangeFilter != null && ageRangeFilter!.isNotEmpty) ||
+      (availabilityFilter != null && availabilityFilter!.isNotEmpty);
+
+  Future<void> clearAllFilters() async {
+    searchQuery = "";
+    categoryFilterLabel = null;
+    ageRangeFilter = null;
+    availabilityFilter = null;
+    await _reloadToysOnly();
+  }
+
   Future<void> setSearchQuery(String value) async {
+    final next = value.trim();
+    if (next == searchQuery.trim()) return;
     searchQuery = value;
     await _reloadToysOnly();
   }

@@ -3,6 +3,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_theme.dart";
 import "catalog_provider.dart";
 import "toy_detail_screen.dart";
 import "toy_availability_badge.dart";
@@ -31,9 +32,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   void initState() {
     super.initState();
+    final catalog = context.read<CatalogController>();
+    _searchController.text = catalog.searchQuery;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<CatalogController>().loadInitial();
+      catalog.loadInitial();
     });
   }
 
@@ -46,10 +49,28 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   void _scheduleSearch(String value) {
     _searchDebounce?.cancel();
+    if (value.trim().isEmpty) {
+      context.read<CatalogController>().setSearchQuery("");
+      return;
+    }
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       context.read<CatalogController>().setSearchQuery(value);
     });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {});
+    context.read<CatalogController>().setSearchQuery("");
+  }
+
+  Future<void> _clearSearchAndFilters(CatalogController c) async {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {});
+    await c.clearAllFilters();
   }
 
   String _selectedLabel(List<(String?, String)> options, String? value) {
@@ -110,23 +131,48 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   Widget _filterButton({
+    required BuildContext context,
     required String label,
     required VoidCallback? onPressed,
+    bool isActive = false,
   }) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.arrow_drop_down, size: 18),
-        label: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    final colors = Theme.of(context).colorScheme;
+    final background = isActive ? kBrandYellow : colors.primaryContainer;
+    const foreground = kBrandOnYellow;
+    return Material(
+      color: background,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w700,
+                    color: foreground,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.arrow_drop_down,
+                size: 22,
+                color: foreground,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -143,14 +189,43 @@ class _CatalogScreenState extends State<CatalogScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              style: const TextStyle(color: kBrandOnYellow),
+              cursorColor: kBrandOnYellow,
+              decoration: InputDecoration(
                 hintText: "Search toys…",
-                prefixIcon: Icon(Icons.search),
+                hintStyle: TextStyle(
+                  color: kBrandOnYellow.withValues(alpha: 0.55),
+                ),
+                prefixIcon: const Icon(Icons.search, color: kBrandOnYellow),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, color: kBrandOnYellow),
+                        onPressed: _clearSearch,
+                        tooltip: "Clear search",
+                      ),
                 isDense: true,
-                border: OutlineInputBorder(),
                 filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: kBrandOnYellow, width: 2),
+                ),
               ),
-              onChanged: _scheduleSearch,
+              onChanged: (value) {
+                setState(() {});
+                _scheduleSearch(value);
+              },
             ),
           ),
         ),
@@ -175,64 +250,87 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _filterButton(
-                          label: c.categoryFilterLabel ?? "Category",
-                          onPressed: c.loading
-                              ? null
-                              : () {
-                                  final options = <(String?, String)>[
-                                    (null, "All"),
-                                    ...c.categories
-                                        .map((cat) => (cat.label, cat.label)),
-                                  ];
-                                  _showFilterSheet(
-                                    context: context,
-                                    title: "Choose category",
-                                    options: options,
-                                    selectedValue: c.categoryFilterLabel,
-                                    onSelected: context
-                                        .read<CatalogController>()
-                                        .setCategoryFilter,
-                                  );
-                                },
+                        Expanded(
+                          child: _filterButton(
+                            context: context,
+                            label: c.categoryFilterLabel == null
+                                ? "Category All"
+                                : c.categoryFilterLabel!,
+                            isActive: c.categoryFilterLabel != null,
+                            onPressed: c.loading
+                                ? null
+                                : () {
+                                    final options = <(String?, String)>[
+                                      (null, "All"),
+                                      ...c.categories.map(
+                                          (cat) => (cat.label, cat.label)),
+                                    ];
+                                    _showFilterSheet(
+                                      context: context,
+                                      title: "Choose category",
+                                      options: options,
+                                      selectedValue: c.categoryFilterLabel,
+                                      onSelected: context
+                                          .read<CatalogController>()
+                                          .setCategoryFilter,
+                                    );
+                                  },
+                          ),
                         ),
                         const SizedBox(width: 6),
-                        _filterButton(
-                          label:
-                              "Age ${_selectedLabel(_ageOptions(c), c.ageRangeFilter)}",
-                          onPressed: c.loading
-                              ? null
-                              : () {
-                                  _showFilterSheet(
-                                    context: context,
-                                    title: "Choose age range",
-                                    options: _ageOptions(c),
-                                    selectedValue: c.ageRangeFilter,
-                                    onSelected: context
-                                        .read<CatalogController>()
-                                        .setAgeRangeFilter,
-                                  );
-                                },
+                        Expanded(
+                          child: _filterButton(
+                            context: context,
+                            label:
+                                "Age ${_selectedLabel(_ageOptions(c), c.ageRangeFilter)}",
+                            isActive: c.ageRangeFilter != null,
+                            onPressed: c.loading
+                                ? null
+                                : () {
+                                    _showFilterSheet(
+                                      context: context,
+                                      title: "Choose age range",
+                                      options: _ageOptions(c),
+                                      selectedValue: c.ageRangeFilter,
+                                      onSelected: context
+                                          .read<CatalogController>()
+                                          .setAgeRangeFilter,
+                                    );
+                                  },
+                          ),
                         ),
                         const SizedBox(width: 6),
-                        _filterButton(
-                          label:
-                              "Status ${_selectedLabel(_statusFilters, c.availabilityFilter)}",
-                          onPressed: c.loading
-                              ? null
-                              : () {
-                                  _showFilterSheet(
-                                    context: context,
-                                    title: "Choose status",
-                                    options: _statusFilters,
-                                    selectedValue: c.availabilityFilter,
-                                    onSelected: context
-                                        .read<CatalogController>()
-                                        .setAvailabilityFilter,
-                                  );
-                                },
+                        Expanded(
+                          child: _filterButton(
+                            context: context,
+                            label:
+                                "Status ${_selectedLabel(_statusFilters, c.availabilityFilter)}",
+                            isActive: c.availabilityFilter != null,
+                            onPressed: c.loading
+                                ? null
+                                : () {
+                                    _showFilterSheet(
+                                      context: context,
+                                      title: "Choose status",
+                                      options: _statusFilters,
+                                      selectedValue: c.availabilityFilter,
+                                      onSelected: context
+                                          .read<CatalogController>()
+                                          .setAvailabilityFilter,
+                                    );
+                                  },
+                          ),
                         ),
+                        if (c.hasActiveFilters) ...[
+                          const SizedBox(width: 8),
+                          _ClearFiltersButton(
+                            onPressed: c.loading
+                                ? null
+                                : () => _clearSearchAndFilters(c),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -340,14 +438,58 @@ class _CatalogScreenState extends State<CatalogScreen> {
           Consumer<CatalogController>(
             builder: (context, c, _) {
               if (c.toys.isEmpty) return const SizedBox.shrink();
+              final q = c.searchQuery.trim();
+              final summary = q.isEmpty
+                  ? "Showing ${c.toys.length} of ${c.total}"
+                  : "Showing ${c.toys.length} of ${c.total} · search “$q”";
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text("Showing ${c.toys.length} of ${c.total}",
+                child: Text(summary,
                     style: Theme.of(context).textTheme.bodySmall),
               );
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact clear control beside filter chips (only shown when filters are active).
+class _ClearFiltersButton extends StatelessWidget {
+  const _ClearFiltersButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: "Clear search and filters",
+      child: Material(
+        color: kBrandYellow,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(10),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.filter_list_off, size: 18, color: kBrandOnYellow),
+                SizedBox(width: 4),
+                Text(
+                  "Clear",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: kBrandOnYellow,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
