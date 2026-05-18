@@ -1,0 +1,84 @@
+"""Member booking endpoints."""
+
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.core.auth_deps import require_roles
+from app.core.roles import Role
+from app.db.session import get_db
+from app.schemas.booking import (
+    BookingCreate,
+    BookingOut,
+    BookingsListResponse,
+    booking_out_from_model,
+)
+from app.schemas.principal import Principal
+from app.services.booking_service import (
+    BookingError,
+    cancel_booking_for_user,
+    create_booking_for_user,
+    list_bookings_for_user_service,
+)
+
+router = APIRouter()
+
+_require_member = require_roles(Role.MEMBER, Role.VOLUNTEER)
+
+
+def _http_error(exc: BookingError) -> HTTPException:
+    status = 400
+    if exc.code in {"toy_not_found", "booking_not_found"}:
+        status = 404
+    elif exc.code in {
+        "toy_not_available",
+        "toy_already_reserved",
+        "booking_not_cancellable",
+    }:
+        status = 409
+    return HTTPException(status_code=status, detail=exc.message)
+
+
+@router.post("", response_model=BookingOut)
+def create_booking(
+    body: BookingCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_require_member),
+) -> BookingOut:
+    """Create a pending reservation for an available toy."""
+    try:
+        booking = create_booking_for_user(db, principal.id, body.toy_id)
+    except BookingError as e:
+        raise _http_error(e) from e
+    db.commit()
+    return booking_out_from_model(booking)
+
+
+@router.get("/me", response_model=BookingsListResponse)
+def list_my_bookings(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_require_member),
+) -> BookingsListResponse:
+    """List the current user's bookings (newest first)."""
+    rows = list_bookings_for_user_service(db, principal.id)
+    return BookingsListResponse(
+        data=[booking_out_from_model(row) for row in rows],
+    )
+
+
+@router.post("/{booking_id}/cancel", response_model=BookingOut)
+def cancel_booking(
+    booking_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_require_member),
+) -> BookingOut:
+    """Cancel a pending booking and release the toy when still reserved."""
+    try:
+        booking = cancel_booking_for_user(db, principal.id, booking_id)
+    except BookingError as e:
+        raise _http_error(e) from e
+    db.commit()
+    return booking_out_from_model(booking)
