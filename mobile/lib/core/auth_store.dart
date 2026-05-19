@@ -61,6 +61,8 @@ class AuthStore extends ChangeNotifier {
   bool get isVolunteer => role == AppRole.volunteer;
   bool get isAdmin => role == AppRole.admin;
 
+  bool get canBookToys => isMember || isVolunteer || isAdmin;
+
   /// Logged-in non-admin still needs onboarding when the backend has no tier yet.
   bool get needsMembershipOnboarding {
     if (!isLoggedIn || isAdmin) return false;

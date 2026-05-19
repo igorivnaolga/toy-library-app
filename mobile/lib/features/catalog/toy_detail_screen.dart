@@ -1,8 +1,12 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/brand_chip_button.dart";
 import "../../core/api_exception.dart";
+import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
+import "../bookings/booking_models.dart";
+import "../bookings/bookings_controller.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_availability_badge.dart";
@@ -20,10 +24,20 @@ class ToyDetailScreen extends StatefulWidget {
 class _ToyDetailScreenState extends State<ToyDetailScreen> {
   Future<ToyItem>? _future;
   bool _started = false;
+  bool _bookingsRequested = false;
+  bool _bookingInProgress = false;
+  bool _cancellingInProgress = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_bookingsRequested) {
+      final auth = context.read<AuthStore>();
+      if (auth.canBookToys) {
+        _bookingsRequested = true;
+        context.read<BookingsController>().loadBookings();
+      }
+    }
     if (_started) return;
     _started = true;
     setState(() {
@@ -37,8 +51,67 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     });
   }
 
+  Future<void> _bookToy(ToyItem toy) async {
+    setState(() => _bookingInProgress = true);
+    final bookings = context.read<BookingsController>();
+    final catalog = context.read<CatalogController>();
+    try {
+      await bookings.createBooking(toy.toyId);
+      await catalog.refresh();
+      _retry();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Booking confirmed"),
+          content: Text(
+            "${toy.name} is reserved for you. "
+            "View it under the Bookings tab.",
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(bookingActionErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _bookingInProgress = false);
+    }
+  }
+
+  Future<void> _cancelBooking(BookingItem booking, ToyItem toy) async {
+    setState(() => _cancellingInProgress = true);
+    final bookings = context.read<BookingsController>();
+    final catalog = context.read<CatalogController>();
+    try {
+      await bookings.cancelBooking(booking.bookingId);
+      await catalog.refresh();
+      _retry();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Cancelled booking for ${toy.name}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(bookingActionErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _cancellingInProgress = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthStore>();
+    final bookings = context.watch<BookingsController>();
     return Scaffold(
       appBar: AppBar(title: const Text("Toy details")),
       body: FutureBuilder<ToyItem>(
@@ -71,6 +144,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
           final t = snapshot.data!;
           final colors = Theme.of(context).colorScheme;
           final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
+          final myBooking = bookings.pendingBookingForToy(t.toyId);
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -120,6 +194,31 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
               Text(t.description?.isNotEmpty == true ? t.description! : "—"),
+              if (auth.canBookToys && _bookingInProgress) ...[
+                const SizedBox(height: 24),
+                BrandChipButton(
+                  label: "Booking…",
+                  large: true,
+                  onPressed: null,
+                ),
+              ] else if (auth.canBookToys && myBooking != null) ...[
+                const SizedBox(height: 24),
+                BrandChipButton(
+                  label: _cancellingInProgress ? "Cancelling…" : "Cancel booking",
+                  large: true,
+                  variant: BrandChipButtonVariant.outlined,
+                  onPressed: _cancellingInProgress
+                      ? null
+                      : () => _cancelBooking(myBooking, t),
+                ),
+              ] else if (auth.canBookToys && t.availability == "available") ...[
+                const SizedBox(height: 24),
+                BrandChipButton(
+                  label: "Book this toy",
+                  large: true,
+                  onPressed: () => _bookToy(t),
+                ),
+              ],
             ],
           );
         },

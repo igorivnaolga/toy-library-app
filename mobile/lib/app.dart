@@ -9,7 +9,8 @@ import "core/app_theme.dart";
 import "core/auth_store.dart";
 import "features/admin/admin_placeholder.dart";
 import "features/auth/login_screen.dart";
-import "features/bookings/bookings_placeholder.dart";
+import "features/bookings/bookings_controller.dart";
+import "features/bookings/bookings_screen.dart";
 import "features/catalog/catalog_provider.dart";
 import "features/catalog/catalog_screen.dart";
 import "features/info/contact_screen.dart";
@@ -47,6 +48,7 @@ class ToyLibraryApp extends StatelessWidget {
         Provider<BackendClient>.value(value: client),
         ChangeNotifierProvider<AuthStore>.value(value: auth),
         ChangeNotifierProvider(create: (_) => CatalogController(client)),
+        ChangeNotifierProvider(create: (_) => BookingsController(client)),
       ],
       child: MaterialApp(
         title: "Toy Library",
@@ -162,7 +164,7 @@ class _RoleHome extends StatelessWidget {
       case AppRole.admin:
         return const [
           CatalogScreen(),
-          BookingsPlaceholder(),
+          BookingsScreen(),
           ..._infoScreens,
           AdminPlaceholder(),
         ];
@@ -170,7 +172,7 @@ class _RoleHome extends StatelessWidget {
       case AppRole.member:
         return const [
           CatalogScreen(),
-          BookingsPlaceholder(),
+          BookingsScreen(),
           ..._infoScreens,
         ];
       case AppRole.guest:
