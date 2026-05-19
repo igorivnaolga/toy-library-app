@@ -31,7 +31,7 @@ _require_member = require_roles(Role.MEMBER, Role.VOLUNTEER)
 
 def _http_error(exc: BookingError) -> HTTPException:
     status = 400
-    if exc.code in {"toy_not_found", "booking_not_found"}:
+    if exc.code in {"toy_not_found", "booking_not_found", "catalog_not_seeded"}:
         status = 404
     elif exc.code in {
         "toy_not_available",

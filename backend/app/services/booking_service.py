@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.availability import AVAILABLE, normalize_availability
+from app.core.availability import AVAILABLE, RESERVED, normalize_availability
 from app.models.booking import BOOKING_STATUS_PENDING, Booking
 from app.models.toy import Toy
 from app.repositories.booking_repo import (
@@ -18,7 +18,9 @@ from app.repositories.booking_repo import (
     get_pending_booking_for_toy,
     list_bookings_for_user,
     mark_booking_cancelled,
+    purge_expired_cancelled_bookings,
 )
+from app.repositories.toy_repo import _db_toy_count, get_toy_by_id
 
 # Match seed CSV labels; ``normalize_availability`` maps these to available/reserved.
 _TOY_STATUS_IN_LIBRARY = "In library"
@@ -45,8 +47,15 @@ def create_booking_for_user(
     session: Session, user_id: uuid.UUID, toy_id: str
 ) -> Booking:
     """Reserve an available toy for the member; updates toy status to reserved."""
+    purge_expired_cancelled_bookings(session)
     toy = _get_toy_row(session, toy_id)
     if toy is None:
+        if _db_toy_count() == 0 and get_toy_by_id(toy_id) is not None:
+            raise BookingError(
+                "catalog_not_seeded",
+                "Toy catalog is not loaded in the database yet. "
+                "From backend/, run: python -m app.scripts.seed_from_csv",
+            )
         raise BookingError("toy_not_found", "Toy not found.")
 
     if normalize_availability(toy.status) != AVAILABLE:
@@ -79,6 +88,7 @@ def create_booking_for_user(
 def list_bookings_for_user_service(
     session: Session, user_id: uuid.UUID
 ) -> list[Booking]:
+    purge_expired_cancelled_bookings(session)
     return list_bookings_for_user(session, user_id)
 
 
