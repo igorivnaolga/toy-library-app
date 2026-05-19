@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -12,6 +12,9 @@ from app.repositories.category_repo import list_categories_csv
 from app.repositories.toy_repo import load_all_toys
 
 
+_TOY_BATCH_SIZE = 100
+
+
 def seed_catalog(session: Session) -> tuple[int, int]:
     """
     Upsert categories + toys + primary toy image filename from seed CSVs.
@@ -19,6 +22,9 @@ def seed_catalog(session: Session) -> tuple[int, int]:
     Returns:
         (categories_upserted, toys_upserted)
     """
+    # Supabase pooler default can cancel long statements; seeding ~1k rows needs headroom.
+    session.execute(text("SET LOCAL statement_timeout = '600s'"))
+
     # Always derive seed rows from CSV exports (even if DB already has categories).
     category_rows = list_categories_csv()
     # Map the human-facing category label (what toys store in `category_label`) to the
@@ -27,8 +33,10 @@ def seed_catalog(session: Session) -> tuple[int, int]:
 
     categories_upserted = 0
     for row in category_rows:
-        # Upsert categories by unique `label` (stable business key for this dataset).
+        # Upsert by label first; fall back to unique `code` for idempotent re-runs.
         existing = session.scalar(select(Category).where(Category.label == row.label))
+        if existing is None and row.code:
+            existing = session.scalar(select(Category).where(Category.code == row.code))
         if existing:
             existing.code = row.code
             existing.max_renewals = row.max_renewals
@@ -36,7 +44,6 @@ def seed_catalog(session: Session) -> tuple[int, int]:
             existing.toy_count_current = row.toy_count_current
             existing.toy_count_total = row.toy_count_total
             existing.pct_label = row.pct
-            category_id = existing.id
         else:
             created = Category(
                 code=row.code,
@@ -48,14 +55,18 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 pct_label=row.pct,
             )
             session.add(created)
-            # Ensure `created.id` exists before referencing it in the label map.
-            session.flush()
-            category_id = created.id
             categories_upserted += 1
 
-        label_to_id[row.label] = category_id
+    session.flush()
+    for row in category_rows:
+        category = session.scalar(select(Category).where(Category.label == row.label))
+        if category is not None:
+            label_to_id[row.label] = category.id
+    session.commit()
 
     toys_upserted = 0
+    rows_in_batch = 0
+    session.execute(text("SET LOCAL statement_timeout = '600s'"))
     for t in load_all_toys():
         category_id = None
         if t.category and t.category.strip():
@@ -83,9 +94,9 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 category_label=t.category,
             )
             session.add(toy_row)
-            # Ensure PK exists before attaching dependent rows (image).
-            session.flush()
             toys_upserted += 1
+
+        rows_in_batch += 1
 
         if t.photo_file:
             # MVP: one image row per toy (`toy_images.toy_id` is unique).
@@ -94,6 +105,10 @@ def seed_catalog(session: Session) -> tuple[int, int]:
             else:
                 session.add(ToyImage(toy_id=toy_row.toy_id, filename=t.photo_file))
 
-    # Single transaction boundary for the whole import.
+        if rows_in_batch >= _TOY_BATCH_SIZE:
+            session.commit()
+            session.execute(text("SET LOCAL statement_timeout = '600s'"))
+            rows_in_batch = 0
+
     session.commit()
     return categories_upserted, toys_upserted
