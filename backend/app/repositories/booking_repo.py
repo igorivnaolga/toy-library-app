@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import case, delete, select
 from sqlalchemy.orm import Session, joinedload
@@ -32,8 +32,19 @@ def purge_expired_cancelled_bookings(session: Session) -> None:
     session.flush()
 
 
-def create_booking(session: Session, *, user_id: uuid.UUID, toy_id: str) -> Booking:
-    booking = Booking(user_id=user_id, toy_id=toy_id, status=BOOKING_STATUS_PENDING)
+def create_booking(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    toy_id: str,
+    pickup_date: date,
+) -> Booking:
+    booking = Booking(
+        user_id=user_id,
+        toy_id=toy_id,
+        pickup_date=pickup_date,
+        status=BOOKING_STATUS_PENDING,
+    )
     session.add(booking)
     session.flush()
     return booking
@@ -69,15 +80,35 @@ def list_bookings_for_user(
         (Booking.status == BOOKING_STATUS_CANCELLED, 2),
         else_=3,
     )
+    pickup_rank = case(
+        (Booking.status == BOOKING_STATUS_PENDING, Booking.pickup_date),
+        else_=None,
+    )
     stmt = (
         select(Booking)
         .options(joinedload(Booking.toy))
         .where(Booking.user_id == user_id)
-        .order_by(status_rank.asc(), Booking.created_at.desc())
+        .order_by(
+            status_rank.asc(),
+            pickup_rank.asc().nulls_last(),
+            Booking.created_at.desc(),
+        )
     )
     if status is not None:
         stmt = stmt.where(Booking.status == status)
     return list(session.scalars(stmt).unique().all())
+
+
+def list_pending_bookings_with_pickup(session: Session) -> list[Booking]:
+    """Pending bookings that have a pickup date (for missed-pickup cleanup)."""
+    return list(
+        session.scalars(
+            select(Booking).where(
+                Booking.status == BOOKING_STATUS_PENDING,
+                Booking.pickup_date.is_not(None),
+            )
+        ).all()
+    )
 
 
 def get_pending_booking_for_toy(session: Session, toy_id: str) -> Booking | None:

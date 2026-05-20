@@ -14,6 +14,8 @@ from app.schemas.booking import (
     BookingCreate,
     BookingOut,
     BookingsListResponse,
+    PickupDateOption,
+    PickupDatesResponse,
     booking_out_from_model,
 )
 from app.schemas.principal import Principal
@@ -22,6 +24,7 @@ from app.services.booking_service import (
     cancel_booking_for_user,
     create_booking_for_user,
     list_bookings_for_user_service,
+    list_pickup_date_options,
 )
 
 router = APIRouter()
@@ -39,7 +42,20 @@ def _http_error(exc: BookingError) -> HTTPException:
         "booking_not_cancellable",
     }:
         status = 409
+    elif exc.code == "invalid_pickup_date":
+        status = 422
     return HTTPException(status_code=status, detail=exc.message)
+
+
+@router.get("/pickup-dates", response_model=PickupDatesResponse)
+def list_pickup_dates(
+    _: Principal = Depends(_require_member),
+) -> PickupDatesResponse:
+    """Wed/Sat session dates available for new bookings (4-week horizon)."""
+    rows = list_pickup_date_options()
+    return PickupDatesResponse(
+        data=[PickupDateOption.model_validate(row) for row in rows],
+    )
 
 
 @router.post("", response_model=BookingOut)
@@ -50,7 +66,12 @@ def create_booking(
 ) -> BookingOut:
     """Create a pending reservation for an available toy."""
     try:
-        booking = create_booking_for_user(db, principal.id, body.toy_id)
+        booking = create_booking_for_user(
+            db,
+            principal.id,
+            body.toy_id,
+            body.pickup_date,
+        )
     except BookingError as e:
         raise _http_error(e) from e
     db.commit()
