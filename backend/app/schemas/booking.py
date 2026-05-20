@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.library_sessions import format_pickup_label
+from app.utils.text import capitalize_first_letter
 from app.models.booking import (
     BOOKING_STATUS_CANCELLED,
     BOOKING_STATUS_COMPLETED,
@@ -21,6 +22,14 @@ class BookingCreate(BaseModel):
     toy_id: str = Field(min_length=1, max_length=32, description="Catalog toy_id.")
     pickup_date: date = Field(
         description="Library session day for pickup (Wednesday or Saturday, within 4 weeks).",
+    )
+
+
+class BookingReschedule(BaseModel):
+    """Member changes pickup day on a pending booking."""
+
+    pickup_date: date = Field(
+        description="New library session day (Wednesday or Saturday, within 4 weeks).",
     )
 
 
@@ -39,6 +48,13 @@ class BookingOut(BaseModel):
     )
     created_at: datetime
     cancelled_at: datetime | None = None
+
+    @field_validator("toy_name", mode="before")
+    @classmethod
+    def _capitalize_toy_name(cls, value: str | None) -> str | None:
+        if value is None or not isinstance(value, str):
+            return value
+        return capitalize_first_letter(value)
 
 
 class BookingsListResponse(BaseModel):

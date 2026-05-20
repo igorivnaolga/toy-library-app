@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core import availability as avail
+from app.utils.text import capitalize_first_letter
 
 
 class ToyOut(BaseModel):
@@ -20,6 +21,13 @@ class ToyOut(BaseModel):
     manufacturer: str | None = None
     description: str | None = None
     photo_file: str | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _capitalize_name(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        return capitalize_first_letter(value)
 
 
 class ToysListMeta(BaseModel):

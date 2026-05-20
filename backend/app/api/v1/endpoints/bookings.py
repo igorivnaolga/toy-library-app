@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.schemas.booking import (
     BookingCreate,
     BookingOut,
+    BookingReschedule,
     BookingsListResponse,
     PickupDateOption,
     PickupDatesResponse,
@@ -25,6 +26,7 @@ from app.services.booking_service import (
     create_booking_for_user,
     list_bookings_for_user_service,
     list_pickup_date_options,
+    reschedule_booking_for_user,
 )
 
 router = APIRouter()
@@ -40,6 +42,7 @@ def _http_error(exc: BookingError) -> HTTPException:
         "toy_not_available",
         "toy_already_reserved",
         "booking_not_cancellable",
+        "booking_not_reschedulable",
     }:
         status = 409
     elif exc.code == "invalid_pickup_date":
@@ -88,6 +91,27 @@ def list_my_bookings(
     return BookingsListResponse(
         data=[booking_out_from_model(row) for row in rows],
     )
+
+
+@router.patch("/{booking_id}", response_model=BookingOut)
+def reschedule_booking(
+    booking_id: uuid.UUID,
+    body: BookingReschedule,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(_require_member),
+) -> BookingOut:
+    """Change pickup day on a pending booking."""
+    try:
+        booking = reschedule_booking_for_user(
+            db,
+            principal.id,
+            booking_id,
+            body.pickup_date,
+        )
+    except BookingError as e:
+        raise _http_error(e) from e
+    db.commit()
+    return booking_out_from_model(booking)
 
 
 @router.post("/{booking_id}/cancel", response_model=BookingOut)

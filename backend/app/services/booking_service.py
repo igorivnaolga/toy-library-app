@@ -92,15 +92,7 @@ def list_pickup_date_options() -> list[dict[str, str | date]]:
     return options
 
 
-def create_booking_for_user(
-    session: Session,
-    user_id: uuid.UUID,
-    toy_id: str,
-    pickup_date: date,
-) -> Booking:
-    """Reserve an available toy for the member; updates toy status to reserved."""
-    _run_booking_maintenance(session)
-
+def _validate_pickup_date(pickup_date: date) -> None:
     if not is_library_session_day(pickup_date):
         raise BookingError(
             "invalid_pickup_date",
@@ -111,6 +103,18 @@ def create_booking_for_user(
             "invalid_pickup_date",
             "Pickup day must be within the next 4 weeks on an open library session.",
         )
+
+
+def create_booking_for_user(
+    session: Session,
+    user_id: uuid.UUID,
+    toy_id: str,
+    pickup_date: date,
+) -> Booking:
+    """Reserve an available toy for the member; updates toy status to reserved."""
+    _run_booking_maintenance(session)
+
+    _validate_pickup_date(pickup_date)
 
     toy = _get_toy_row(session, toy_id)
     if toy is None:
@@ -178,6 +182,32 @@ def cancel_booking_for_user(
     mark_booking_cancelled(session, booking)
     _release_toy_if_reserved(session, booking.toy_id)
 
+    session.flush()
+    loaded = get_booking_by_id(session, booking.id)
+    return loaded if loaded is not None else booking
+
+
+def reschedule_booking_for_user(
+    session: Session,
+    user_id: uuid.UUID,
+    booking_id: uuid.UUID,
+    pickup_date: date,
+) -> Booking:
+    """Change pickup day on a pending booking owned by the member."""
+    _run_booking_maintenance(session)
+    _validate_pickup_date(pickup_date)
+
+    booking = get_booking_for_user(session, booking_id, user_id)
+    if booking is None:
+        raise BookingError("booking_not_found", "Booking not found.")
+
+    if booking.status != BOOKING_STATUS_PENDING:
+        raise BookingError(
+            "booking_not_reschedulable",
+            "Only pending bookings can change pickup day.",
+        )
+
+    booking.pickup_date = pickup_date
     session.flush()
     loaded = get_booking_by_id(session, booking.id)
     return loaded if loaded is not None else booking
