@@ -24,12 +24,6 @@ class BrandChipButton extends StatelessWidget {
   final BrandChipButtonVariant variant;
   final double? fixedWidth;
 
-  static const _labelStyle = TextStyle(
-    color: kBrandOnYellow,
-    fontWeight: FontWeight.w600,
-    fontSize: 12,
-  );
-
   static ButtonStyle get _largeFilledStyle => FilledButton.styleFrom(
         backgroundColor: kBrandYellow,
         foregroundColor: kBrandOnYellow,
@@ -40,27 +34,33 @@ class BrandChipButton extends StatelessWidget {
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 14,
+          decoration: TextDecoration.none,
         ),
       );
 
   static ButtonStyle get _largeOutlinedStyle => OutlinedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: kBrandOnYellow,
-        disabledBackgroundColor: Colors.white.withValues(alpha: 0.85),
+        disabledBackgroundColor: Colors.white,
         disabledForegroundColor: kBrandOnYellow.withValues(alpha: 0.45),
+        surfaceTintColor: Colors.transparent,
         side: const BorderSide(color: kBrandYellow, width: 1.5),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         minimumSize: const Size.fromHeight(48),
         textStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 14,
+          decoration: TextDecoration.none,
         ),
       );
 
   @override
   Widget build(BuildContext context) {
     if (large) {
-      final child = Text(label);
+      final child = Text(
+        label,
+        style: const TextStyle(decoration: TextDecoration.none),
+      );
       final button = variant == BrandChipButtonVariant.outlined
           ? OutlinedButton(
               onPressed: onPressed,
@@ -75,36 +75,17 @@ class BrandChipButton extends StatelessWidget {
       return SizedBox(width: double.infinity, child: button);
     }
 
-    if (fixedWidth != null) {
-      return _FixedChipButton(
-        label: label,
-        onPressed: onPressed,
-        width: fixedWidth!,
-        variant: variant,
-      );
-    }
-
-    final outlined = variant == BrandChipButtonVariant.outlined;
-    return ActionChip(
+    return _CompactChipButton(
+      label: label,
       onPressed: onPressed,
-      label: Text(label),
-      backgroundColor: outlined ? Colors.white : kBrandYellow,
-      disabledColor: outlined
-          ? Colors.white.withValues(alpha: 0.85)
-          : kBrandYellow.withValues(alpha: 0.55),
-      labelStyle: _labelStyle,
-      side: outlined
-          ? const BorderSide(color: kBrandYellow, width: 1.5)
-          : BorderSide.none,
-      visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      width: fixedWidth ?? double.infinity,
+      variant: variant,
     );
   }
 }
 
-class _FixedChipButton extends StatelessWidget {
-  const _FixedChipButton({
+class _CompactChipButton extends StatelessWidget {
+  const _CompactChipButton({
     required this.label,
     required this.onPressed,
     required this.width,
@@ -123,33 +104,44 @@ class _FixedChipButton extends StatelessWidget {
     final background = outlined
         ? Colors.white
         : (enabled ? kBrandYellow : kBrandYellow.withValues(alpha: 0.55));
+    final foreground = enabled
+        ? kBrandOnYellow
+        : kBrandOnYellow.withValues(alpha: 0.7);
 
-    return SizedBox(
-      width: width,
-      height: 32,
-      child: Material(
-        color: background,
-        shape: StadiumBorder(
-          side: outlined
-              ? const BorderSide(color: kBrandYellow, width: 1.5)
-              : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
+    final chip = Material(
+      color: background,
+      shape: StadiumBorder(
+        side: outlined
+            ? const BorderSide(color: kBrandYellow, width: 1.5)
+            : BorderSide.none,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onPressed,
+        splashColor: kBrandYellow.withValues(alpha: 0.15),
+        highlightColor: kBrandYellow.withValues(alpha: 0.08),
+        child: SizedBox(
+          height: 32,
+          width: width == double.infinity ? null : width,
           child: Center(
             child: Text(
               label,
-              style: BrandChipButton._labelStyle.copyWith(
-                color: enabled
-                    ? kBrandOnYellow
-                    : kBrandOnYellow.withValues(alpha: 0.7),
+              style: TextStyle(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                decoration: TextDecoration.none,
               ),
             ),
           ),
         ),
       ),
     );
+
+    if (width == double.infinity) {
+      return SizedBox(width: double.infinity, height: 32, child: chip);
+    }
+    return SizedBox(width: width, height: 32, child: chip);
   }
 }
 
@@ -190,6 +182,7 @@ class BookingStatusChip extends StatelessWidget {
               color: fg,
               fontWeight: FontWeight.w600,
               fontSize: 12,
+              decoration: TextDecoration.none,
             ),
           ),
         ),

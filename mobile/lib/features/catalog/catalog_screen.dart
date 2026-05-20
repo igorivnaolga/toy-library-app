@@ -5,9 +5,8 @@ import "package:provider/provider.dart";
 
 import "../../core/app_theme.dart";
 import "catalog_provider.dart";
+import "toy_catalog_list_tile.dart";
 import "toy_detail_screen.dart";
-import "toy_availability_badge.dart";
-import "toy_photo_tile.dart";
 
 /// Catalog: loads `GET /api/v1/categories` and paged `GET /api/v1/toys` via [CatalogController].
 class CatalogScreen extends StatefulWidget {
@@ -96,33 +95,86 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }) {
     return showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
+      isScrollControlled: true,
+      showDragHandle: false,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final maxListHeight = MediaQuery.of(sheetContext).size.height * 0.55;
+
         return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                decoration: const BoxDecoration(
+                  color: kBrandYellow,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: kBrandOnYellow.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: kBrandOnYellow,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
               ),
-              for (final (value, label) in options)
-                ListTile(
-                  title: Text(label),
-                  trailing: selectedValue == value
-                      ? Icon(
-                          Icons.check,
-                          color: Theme.of(context).colorScheme.primary,
-                        )
-                      : null,
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    onSelected(value);
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxListHeight),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                  itemCount: options.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 2),
+                  itemBuilder: (context, index) {
+                    final (value, label) = options[index];
+                    final isSelected = selectedValue == value;
+                    return ListTile(
+                      tileColor: isSelected
+                          ? kBrandYellow.withValues(alpha: 0.18)
+                          : Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      title: Text(
+                        label,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: kBrandOnYellow,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check, color: kBrandOnYellow)
+                          : null,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        onSelected(value);
+                      },
+                    );
                   },
                 ),
+              ),
             ],
           ),
         );
@@ -137,13 +189,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
     bool isActive = false,
   }) {
     final colors = Theme.of(context).colorScheme;
-    final background = isActive ? kBrandYellow : colors.primaryContainer;
-    const foreground = kBrandOnYellow;
+    final background =
+        isActive ? kBrandYellow : colors.surfaceContainerHighest;
+    final foreground = kBrandOnYellow;
     return Material(
       color: background,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
+        side: isActive
+            ? BorderSide.none
+            : BorderSide(color: colors.outlineVariant.withValues(alpha: 0.8)),
       ),
       child: InkWell(
         onTap: onPressed,
@@ -166,7 +222,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   ),
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.arrow_drop_down,
                 size: 22,
                 color: foreground,
@@ -180,59 +236,52 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Toy catalog"),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: kBrandOnYellow),
-              cursorColor: kBrandOnYellow,
-              decoration: InputDecoration(
-                hintText: "Search toys…",
-                hintStyle: TextStyle(
-                  color: kBrandOnYellow.withValues(alpha: 0.55),
-                ),
-                prefixIcon: const Icon(Icons.search, color: kBrandOnYellow),
-                suffixIcon: _searchController.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear, color: kBrandOnYellow),
-                        onPressed: _clearSearch,
-                        tooltip: "Clear search",
-                      ),
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: kBrandOnYellow, width: 2),
-                ),
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: TextField(
+            controller: _searchController,
+            style: TextStyle(color: colors.onSurface),
+            cursorColor: kBrandYellow,
+            decoration: InputDecoration(
+              hintText: "Search toys…",
+              prefixIcon: Icon(
+                Icons.search,
+                color: colors.onSurface.withValues(alpha: 0.55),
               ),
-              onChanged: (value) {
-                setState(() {});
-                _scheduleSearch(value);
-              },
+              suffixIcon: _searchController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        color: colors.onSurface.withValues(alpha: 0.55),
+                      ),
+                      onPressed: _clearSearch,
+                      tooltip: "Clear search",
+                    ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
+            onChanged: (value) {
+              setState(() {});
+              _scheduleSearch(value);
+            },
           ),
         ),
-      ),
-      body: Column(
-        children: [
-          Consumer<CatalogController>(
+        Consumer<CatalogController>(
             builder: (context, c, _) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -368,36 +417,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     c.hasNext || (c.loading && c.toys.isNotEmpty);
                 return RefreshIndicator(
                   onRefresh: () => context.read<CatalogController>().refresh(),
-                  child: ListView.builder(
+                  child: ListView.separated(
                     physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                     itemCount: c.toys.length + (showFooter ? 1 : 0),
+                    separatorBuilder: (context, index) {
+                      if (index >= c.toys.length - 1) {
+                        return const SizedBox.shrink();
+                      }
+                      return const SizedBox(height: 8);
+                    },
                     itemBuilder: (context, index) {
                       if (index < c.toys.length) {
                         final t = c.toys[index];
-                        final parts = <String>[
-                          if (t.category != null && t.category!.isNotEmpty)
-                            t.category!,
-                          if (t.status != null && t.status!.isNotEmpty)
-                            t.status!,
-                        ];
-                        return ListTile(
-                          leading:
-                              t.photoFile != null && t.photoFile!.isNotEmpty
-                                  ? ToyPhotoTile(toyId: t.toyId)
-                                  : CircleAvatar(
-                                      backgroundColor: Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                      child: Icon(Icons.toys,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .outline),
-                                    ),
-                          title: Text(t.name),
-                          subtitle:
-                              parts.isEmpty ? null : Text(parts.join(" · ")),
-                          trailing: ToyAvailabilityBadge(
-                              availability: t.availability),
+                        return ToyCatalogListTile(
+                          toy: t,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
@@ -444,14 +478,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   : "Showing ${c.toys.length} of ${c.total} · search “$q”";
               return Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text(summary,
-                    style: Theme.of(context).textTheme.bodySmall),
+                child: Text(
+                  summary,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.62),
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
               );
             },
           ),
         ],
-      ),
-    );
+      );
   }
 }
 

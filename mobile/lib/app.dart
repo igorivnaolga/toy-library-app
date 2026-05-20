@@ -104,11 +104,19 @@ class _RoleHome extends StatelessWidget {
                         builder: (_) => const LoginScreen()),
                   );
                 },
+                style: TextButton.styleFrom(
+                  foregroundColor: kBrandOnYellow,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 child: const Text("Sign in"),
               )
             else
               TextButton(
                 onPressed: () => context.read<AuthStore>().signOut(),
+                style: TextButton.styleFrom(
+                  foregroundColor: kBrandOnYellow,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 child: const Text("Sign out"),
               ),
           ],

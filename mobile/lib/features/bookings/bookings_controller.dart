@@ -43,10 +43,43 @@ class BookingsController extends ChangeNotifier {
     }
   }
 
-  Future<BookingItem> createBooking(String toyId) async {
-    final json = await _client.postJson("/api/v1/bookings", {"toy_id": toyId});
+  Future<List<PickupDateOption>> loadPickupDates() async {
+    final json = await _client.getJson("/api/v1/bookings/pickup-dates");
+    final raw = json["data"];
+    if (raw is! List<dynamic>) {
+      return const [];
+    }
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(PickupDateOption.fromJson)
+        .toList();
+  }
+
+  Future<BookingItem> createBooking(String toyId, DateTime pickupDate) async {
+    final json = await _client.postJson("/api/v1/bookings", {
+      "toy_id": toyId,
+      "pickup_date": formatApiDate(pickupDate),
+    });
     final item = BookingItem.fromJson(json);
     bookings = [item, ...bookings.where((b) => b.bookingId != item.bookingId)];
+    sortBookingsList(bookings);
+    notifyListeners();
+    return item;
+  }
+
+  Future<BookingItem> rescheduleBooking(
+    String bookingId,
+    DateTime pickupDate,
+  ) async {
+    final json = await _client.patchJson(
+      "/api/v1/bookings/$bookingId",
+      {"pickup_date": formatApiDate(pickupDate)},
+    );
+    final item = BookingItem.fromJson(json);
+    bookings = [
+      for (final b in bookings)
+        if (b.bookingId == item.bookingId) item else b,
+    ];
     sortBookingsList(bookings);
     notifyListeners();
     return item;
@@ -97,6 +130,9 @@ String bookingActionErrorMessage(Object error) {
     }
     if (error.statusCode == 403) {
       return "Sign in as a member to book toys.";
+    }
+    if (error.statusCode == 422) {
+      return error.message;
     }
     return error.message;
   }

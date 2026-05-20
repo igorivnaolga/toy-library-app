@@ -1,15 +1,21 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
-import "../../core/brand_chip_button.dart";
 import "../../core/api_exception.dart";
+import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
+import "../auth/login_screen.dart";
+import "../bookings/booking_confirmed_dialog.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/bookings_controller.dart";
+import "../bookings/pickup_date_flow.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_availability_badge.dart";
+import "toy_detail_action_bar.dart";
+import "toy_detail_section.dart";
+import "toy_photo_placeholder.dart";
 
 /// Loads a single toy from `GET /api/v1/toys/{toy_id}`.
 class ToyDetailScreen extends StatefulWidget {
@@ -27,6 +33,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   bool _bookingsRequested = false;
   bool _bookingInProgress = false;
   bool _cancellingInProgress = false;
+  bool _reschedulingInProgress = false;
 
   @override
   void didChangeDependencies() {
@@ -51,30 +58,22 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     });
   }
 
-  Future<void> _bookToy(ToyItem toy) async {
-    setState(() => _bookingInProgress = true);
+  Future<void> _startBookFlow(ToyItem toy) async {
     final bookings = context.read<BookingsController>();
+    final selected = await choosePickupDate(context, bookings);
+    if (selected == null || !mounted) return;
+
+    setState(() => _bookingInProgress = true);
     final catalog = context.read<CatalogController>();
     try {
-      await bookings.createBooking(toy.toyId);
+      await bookings.createBooking(toy.toyId, selected.date);
       await catalog.refresh();
       _retry();
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Booking confirmed"),
-          content: Text(
-            "${toy.name} is reserved for you. "
-            "View it under the Bookings tab.",
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text("OK"),
-            ),
-          ],
-        ),
+      await showBookingConfirmedDialog(
+        context,
+        toyName: toy.name,
+        pickupLabel: selected.label,
       );
     } catch (e) {
       if (!mounted) return;
@@ -83,6 +82,32 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
       );
     } finally {
       if (mounted) setState(() => _bookingInProgress = false);
+    }
+  }
+
+  Future<void> _changePickupDate(BookingItem booking, ToyItem toy) async {
+    final bookings = context.read<BookingsController>();
+    final selected = await choosePickupDate(
+      context,
+      bookings,
+      title: "Change pickup day",
+    );
+    if (selected == null || !mounted) return;
+
+    setState(() => _reschedulingInProgress = true);
+    try {
+      await bookings.rescheduleBooking(booking.bookingId, selected.date);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Pickup updated to ${selected.label}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(bookingActionErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _reschedulingInProgress = false);
     }
   }
 
@@ -108,23 +133,34 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     }
   }
 
+  void _signInToBook() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
     final bookings = context.watch<BookingsController>();
-    return Scaffold(
-      appBar: AppBar(title: const Text("Toy details")),
-      body: FutureBuilder<ToyItem>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (_future == null ||
-              snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            final err = snapshot.error;
-            final message = err is ApiException ? err.message : err.toString();
-            return Center(
+
+    return FutureBuilder<ToyItem>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (_future == null ||
+            snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(title: const Text("Toy details")),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          final err = snapshot.error;
+          final message = err is ApiException ? err.message : err.toString();
+          return Scaffold(
+            appBar: AppBar(title: const Text("Toy details")),
+            body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(
@@ -139,107 +175,135 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   ],
                 ),
               ),
-            );
-          }
-          final t = snapshot.data!;
-          final colors = Theme.of(context).colorScheme;
-          final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
-          final myBooking = bookings.pendingBookingForToy(t.toyId);
-          return ListView(
+            ),
+          );
+        }
+
+        final t = snapshot.data!;
+        final theme = Theme.of(context);
+        final colors = theme.colorScheme;
+        final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
+        final myBooking = bookings.pendingBookingForToy(t.toyId);
+        final description = t.description?.trim().isNotEmpty == true
+            ? t.description!.trim()
+            : null;
+
+        return Scaffold(
+          appBar: AppBar(title: const Text("Toy details")),
+          bottomNavigationBar: ToyDetailActionBar(
+            toy: t,
+            isLoggedIn: auth.isLoggedIn,
+            canBookToys: auth.canBookToys,
+            myBooking: myBooking,
+            bookingInProgress: _bookingInProgress,
+            cancellingInProgress: _cancellingInProgress,
+            reschedulingInProgress: _reschedulingInProgress,
+            onSignIn: _signInToBook,
+            onBook: () => _startBookFlow(t),
+            onChangePickupDate: myBooking == null
+                ? () {}
+                : () => _changePickupDate(myBooking, t),
+            onCancelBooking: myBooking == null
+                ? () {}
+                : () => _cancelBooking(myBooking, t),
+          ),
+          body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: AspectRatio(
-                  aspectRatio: 4 / 3,
-                  child: hasPhotoName
-                      ? Image.network(
-                          toyPhotoHttpUrl(t.toyId),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => ColoredBox(
-                            color: colors.surfaceContainerHighest,
-                            child: Icon(Icons.toys,
-                                size: 64, color: colors.outline),
+              ToyDetailSectionCard(
+                padding: EdgeInsets.zero,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 4 / 3,
+                    child: hasPhotoName
+                        ? Image.network(
+                            toyPhotoHttpUrl(t.toyId),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(
+                              expand: true,
+                              borderRadius: 12,
+                            ),
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) {
+                                return child;
+                              }
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            },
+                          )
+                        : ToyPhotoPlaceholder(
+                            expand: true,
+                            borderRadius: 12,
                           ),
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) {
-                              return child;
-                            }
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          },
-                        )
-                      : ColoredBox(
-                          color: colors.surfaceContainerHighest,
-                          child:
-                              Icon(Icons.toys, size: 64, color: colors.outline),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ToyDetailSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.name,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: kBrandOnYellow,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ToyAvailabilityBadge(availability: t.availability),
+                    if (t.category != null ||
+                        t.ageRange != null ||
+                        t.status != null ||
+                        (t.manufacturer != null &&
+                            t.manufacturer!.isNotEmpty)) ...[
+                      const SizedBox(height: 16),
+                      Divider(
+                        height: 1,
+                        color: colors.outlineVariant.withValues(alpha: 0.45),
+                      ),
+                      const SizedBox(height: 12),
+                      if (t.category != null)
+                        ToyDetailMetaRow(label: "Category", value: t.category!),
+                      if (t.ageRange != null)
+                        ToyDetailMetaRow(label: "Age range", value: t.ageRange!),
+                      if (t.status != null)
+                        ToyDetailMetaRow(label: "Status", value: t.status!),
+                      if (t.manufacturer != null && t.manufacturer!.isNotEmpty)
+                        ToyDetailMetaRow(
+                          label: "Manufacturer",
+                          value: t.manufacturer!,
                         ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(t.name, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: ToyAvailabilityBadge(availability: t.availability),
+              const SizedBox(height: 12),
+              ToyDetailSectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ToyDetailSectionTitle(title: "Description"),
+                    const SizedBox(height: 8),
+                    Text(
+                      description ?? "No description available.",
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w400,
+                        color: description != null
+                            ? colors.onSurface.withValues(alpha: 0.82)
+                            : colors.onSurface.withValues(alpha: 0.45),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              if (t.category != null) _line("Category", t.category!),
-              if (t.ageRange != null) _line("Age range", t.ageRange!),
-              if (t.status != null) _line("Status", t.status!),
-              if (t.manufacturer != null && t.manufacturer!.isNotEmpty)
-                _line("Manufacturer", t.manufacturer!),
-              const SizedBox(height: 12),
-              Text("Description",
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text(t.description?.isNotEmpty == true ? t.description! : "—"),
-              if (auth.canBookToys && _bookingInProgress) ...[
-                const SizedBox(height: 24),
-                BrandChipButton(
-                  label: "Booking…",
-                  large: true,
-                  onPressed: null,
-                ),
-              ] else if (auth.canBookToys && myBooking != null) ...[
-                const SizedBox(height: 24),
-                BrandChipButton(
-                  label: _cancellingInProgress ? "Cancelling…" : "Cancel booking",
-                  large: true,
-                  variant: BrandChipButtonVariant.outlined,
-                  onPressed: _cancellingInProgress
-                      ? null
-                      : () => _cancelBooking(myBooking, t),
-                ),
-              ] else if (auth.canBookToys && t.availability == "available") ...[
-                const SizedBox(height: 24),
-                BrandChipButton(
-                  label: "Book this toy",
-                  large: true,
-                  onPressed: () => _bookToy(t),
-                ),
-              ],
             ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _line(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(label,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-          Expanded(child: Text(value)),
-        ],
-      ),
+        );
+      },
     );
   }
 }

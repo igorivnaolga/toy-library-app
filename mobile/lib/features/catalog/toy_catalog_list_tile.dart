@@ -1,0 +1,129 @@
+import "package:flutter/material.dart";
+
+import "../../core/app_theme.dart";
+import "catalog_models.dart";
+import "toy_availability_badge.dart";
+import "toy_photo_tile.dart";
+
+/// Branded row for one toy in the catalog list.
+class ToyCatalogListTile extends StatelessWidget {
+  const ToyCatalogListTile({
+    super.key,
+    required this.toy,
+    required this.onTap,
+  });
+
+  final ToyItem toy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLowest,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ToyPhotoTile(toyId: toy.toyId, photoFile: toy.photoFile),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      toy.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: kBrandOnYellow,
+                        height: 1.2,
+                      ),
+                    ),
+                    if (_hasSubtitle) ...[
+                      const SizedBox(height: 4),
+                      _CatalogSubtitle(
+                        category: toy.category,
+                        status: toy.status,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ToyAvailabilityBadge(availability: toy.availability),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _hasSubtitle {
+    final category = toy.category?.trim();
+    final status = toy.status?.trim();
+    return (category != null && category.isNotEmpty) ||
+        (status != null && status.isNotEmpty);
+  }
+}
+
+class _CatalogSubtitle extends StatelessWidget {
+  const _CatalogSubtitle({
+    required this.category,
+    required this.status,
+  });
+
+  final String? category;
+  final String? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final categoryLabel = category?.trim();
+    final statusLabel = status?.trim();
+    final hasCategory =
+        categoryLabel != null && categoryLabel.isNotEmpty;
+    final hasStatus = statusLabel != null && statusLabel.isNotEmpty;
+
+    if (!hasCategory && !hasStatus) {
+      return const SizedBox.shrink();
+    }
+
+    final mutedStyle = theme.textTheme.bodySmall?.copyWith(
+      color: colors.onSurface.withValues(alpha: 0.62),
+      height: 1.25,
+    );
+    final categoryStyle = mutedStyle?.copyWith(fontWeight: FontWeight.w600);
+    final statusStyle = mutedStyle;
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 2,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (hasCategory) Text(categoryLabel!, style: categoryStyle),
+        if (hasCategory && hasStatus)
+          Text(
+            "·",
+            style: mutedStyle?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colors.outline,
+            ),
+          ),
+        if (hasStatus) Text(statusLabel!, style: statusStyle),
+      ],
+    );
+  }
+}

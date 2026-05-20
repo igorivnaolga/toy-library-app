@@ -1,18 +1,32 @@
 import "package:flutter/material.dart";
 
 import "../../core/toy_photo_url.dart";
+import "toy_photo_placeholder.dart";
 
-/// Loads the toy thumbnail from the backend photo endpoint; shows a neutral placeholder on failure.
+/// Loads the toy thumbnail from the backend photo endpoint; shows a branded placeholder on failure.
 class ToyPhotoTile extends StatelessWidget {
-  const ToyPhotoTile({super.key, required this.toyId, this.size = 56});
+  const ToyPhotoTile({
+    super.key,
+    required this.toyId,
+    this.size = 56,
+    this.photoFile,
+  });
 
   final String toyId;
   final double size;
+  final String? photoFile;
+
+  /// Known missing photo from catalog data (`""`). `null` means try the API (e.g. bookings).
+  bool get _knownNoPhoto =>
+      photoFile != null && photoFile!.trim().isEmpty;
 
   @override
   Widget build(BuildContext context) {
+    if (_knownNoPhoto) {
+      return ToyPhotoPlaceholder(size: size);
+    }
+
     final url = toyPhotoHttpUrl(toyId);
-    final colors = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
@@ -22,10 +36,7 @@ class ToyPhotoTile extends StatelessWidget {
           url,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => ColoredBox(
-            color: colors.surfaceContainerHighest,
-            child: Icon(Icons.toys, color: colors.outline),
-          ),
+          errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(size: size),
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) {
               return child;
