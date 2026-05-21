@@ -125,3 +125,9 @@ def mark_booking_cancelled(session: Session, booking: Booking) -> Booking:
     booking.cancelled_at = datetime.now(timezone.utc)
     session.flush()
     return booking
+
+
+def mark_booking_completed(session: Session, booking: Booking) -> Booking:
+    booking.status = BOOKING_STATUS_COMPLETED
+    session.flush()
+    return booking
