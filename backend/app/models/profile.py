@@ -33,3 +33,4 @@ class Profile(Base):
     )
 
     bookings: Mapped[list["Booking"]] = relationship(back_populates="profile")
+    loans: Mapped[list["Loan"]] = relationship(back_populates="profile")

@@ -71,3 +71,4 @@ class Booking(Base):
 
     profile: Mapped["Profile"] = relationship(back_populates="bookings")
     toy: Mapped["Toy"] = relationship(back_populates="bookings")
+    loan: Mapped["Loan | None"] = relationship(back_populates="booking", uselist=False)

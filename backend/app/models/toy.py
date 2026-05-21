@@ -30,3 +30,4 @@ class Toy(Base):
         back_populates="toy", uselist=False, cascade="all, delete-orphan"
     )
     bookings: Mapped[list["Booking"]] = relationship(back_populates="toy")
+    loans: Mapped[list["Loan"]] = relationship(back_populates="toy")
