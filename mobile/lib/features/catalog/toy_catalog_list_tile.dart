@@ -113,7 +113,7 @@ class _CatalogSubtitle extends StatelessWidget {
       runSpacing: 2,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (hasCategory) Text(categoryLabel!, style: categoryStyle),
+        if (hasCategory) Text(categoryLabel, style: categoryStyle),
         if (hasCategory && hasStatus)
           Text(
             "·",
@@ -122,7 +122,7 @@ class _CatalogSubtitle extends StatelessWidget {
               color: colors.outline,
             ),
           ),
-        if (hasStatus) Text(statusLabel!, style: statusStyle),
+        if (hasStatus) Text(statusLabel, style: statusStyle),
       ],
     );
   }
