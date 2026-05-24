@@ -25,6 +25,7 @@ from app.services.booking_service import (
     cancel_booking_for_user,
     create_booking_for_user,
     list_bookings_for_user_service,
+    list_pending_bookings_for_checkout_service,
     list_pickup_date_options,
     reschedule_booking_for_user,
 )
@@ -32,6 +33,7 @@ from app.services.booking_service import (
 router = APIRouter()
 
 _require_member = require_roles(Role.MEMBER, Role.VOLUNTEER)
+_require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
 
 
 def _http_error(exc: BookingError) -> HTTPException:
@@ -88,6 +90,18 @@ def list_my_bookings(
 ) -> BookingsListResponse:
     """List the current user's bookings (newest first)."""
     rows = list_bookings_for_user_service(db, principal.id)
+    return BookingsListResponse(
+        data=[booking_out_from_model(row) for row in rows],
+    )
+
+
+@router.get("/pending", response_model=BookingsListResponse)
+def list_pending_for_checkout(
+    db: Session = Depends(get_db),
+    _: Principal = Depends(_require_volunteer),
+) -> BookingsListResponse:
+    """Volunteer desk: pending bookings ready for check-out."""
+    rows = list_pending_bookings_for_checkout_service(db)
     return BookingsListResponse(
         data=[booking_out_from_model(row) for row in rows],
     )

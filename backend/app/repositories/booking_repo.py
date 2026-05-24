@@ -111,6 +111,28 @@ def list_pending_bookings_with_pickup(session: Session) -> list[Booking]:
     )
 
 
+def list_pending_bookings_ready_for_checkout(
+    session: Session,
+    *,
+    on_or_before: date,
+) -> list[Booking]:
+    """Pending bookings whose pickup day has arrived (volunteer desk)."""
+    return list(
+        session.scalars(
+            select(Booking)
+            .options(joinedload(Booking.toy), joinedload(Booking.profile))
+            .where(
+                Booking.status == BOOKING_STATUS_PENDING,
+                Booking.pickup_date.is_not(None),
+                Booking.pickup_date <= on_or_before,
+            )
+            .order_by(Booking.pickup_date.asc(), Booking.created_at.asc())
+        )
+        .unique()
+        .all()
+    )
+
+
 def get_pending_booking_for_toy(session: Session, toy_id: str) -> Booking | None:
     return session.scalar(
         select(Booking).where(

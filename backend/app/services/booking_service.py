@@ -26,6 +26,7 @@ from app.repositories.booking_repo import (
     get_booking_for_user,
     get_pending_booking_for_toy,
     list_bookings_for_user,
+    list_pending_bookings_ready_for_checkout,
     list_pending_bookings_with_pickup,
     mark_booking_cancelled,
     purge_expired_cancelled_bookings,
@@ -211,3 +212,10 @@ def reschedule_booking_for_user(
     session.flush()
     loaded = get_booking_by_id(session, booking.id)
     return loaded if loaded is not None else booking
+
+
+def list_pending_bookings_for_checkout_service(session: Session) -> list[Booking]:
+    """Volunteer desk: pending bookings ready for check-out today or earlier."""
+    _run_booking_maintenance(session)
+    today = library_now().date()
+    return list_pending_bookings_ready_for_checkout(session, on_or_before=today)
