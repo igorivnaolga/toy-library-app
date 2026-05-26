@@ -22,6 +22,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _kidController;
   DateTime? _kidBirthDate;
+  bool _editingChildren = false;
+  bool _editingName = false;
 
   @override
   void initState() {
@@ -78,13 +80,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final ok = await profile.save();
     if (!mounted) return;
     if (ok) {
+      setState(() {
+        _editingChildren = false;
+        _editingName = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Profile updated")),
       );
     }
   }
 
-  void _addKid(ProfileController profile) {
+  Future<void> _addKid(ProfileController profile) async {
     final name = _kidController.text.trim();
     final birthDate = _kidBirthDate;
     if (name.isEmpty || birthDate == null) {
@@ -93,9 +99,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
-    profile.addKid(name, birthDate);
-    _kidController.clear();
-    setState(() => _kidBirthDate = null);
+    final ok = await profile.addKid(name, birthDate);
+    if (!mounted) return;
+    if (ok) {
+      _kidController.clear();
+      setState(() => _kidBirthDate = null);
+    }
+  }
+
+  Future<void> _removeKid(ProfileController profile, int index) async {
+    final ok = await profile.removeKid(index);
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(profile.error ?? "Could not remove child")),
+    );
+  }
+
+  void _toggleNameEdit() {
+    setState(() {
+      if (!_editingName) {
+        _nameController.text = context.read<ProfileController>().fullName;
+      }
+      _editingName = !_editingName;
+    });
+  }
+
+  void _toggleChildrenEdit() {
+    setState(() {
+      _editingChildren = !_editingChildren;
+      if (!_editingChildren) {
+        _kidController.clear();
+        _kidBirthDate = null;
+      }
+    });
   }
 
   Future<void> _pickKidBirthDate() async {
@@ -129,17 +165,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Profile"),
+        title: const SizedBox.shrink(),
         actions: [
-          TextButton(
-            onPressed: profile.saving
-                ? null
-                : () => context.read<AuthStore>().signOut(),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.error,
-              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: OutlinedButton.icon(
+              onPressed: profile.saving
+                  ? null
+                  : () => context.read<AuthStore>().signOut(),
+              icon: const Icon(Icons.logout, size: 16),
+              label: const Text("Sign out"),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+                disabledForegroundColor:
+                    theme.colorScheme.error.withValues(alpha: 0.45),
+                side: BorderSide(
+                  color: theme.colorScheme.error.withValues(alpha: 0.45),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
             ),
-            child: const Text("Sign out"),
           ),
         ],
       ),
@@ -153,34 +204,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             email: auth.email,
             avatarPath: profile.avatarPath,
             uploadingAvatar: profile.uploadingAvatar,
+            editingName: _editingName,
+            nameController: _nameController,
             onChangePhoto: () => _pickAvatar(profile),
+            onToggleNameEdit: profile.saving ? null : _toggleNameEdit,
+            onNameChanged: profile.setFullName,
           ),
           const SizedBox(height: 28),
-          _ProfileSection(
-            title: "Personal details",
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: "Full name",
-                  filled: true,
-                  fillColor: theme.colorScheme.surface,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                ),
-                textCapitalization: TextCapitalization.words,
-                onChanged: profile.setFullName,
-              ),
-              const Divider(height: 1),
-              _ProfileReadOnlyRow(
-                icon: Icons.mail_outline,
-                label: "Email",
-                value: auth.email ?? "—",
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
           _ProfileSection(
             title: "Membership",
             children: [
@@ -219,12 +249,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 24),
           _ProfileSection(
             title: "Children",
+            trailing: IconButton(
+              tooltip: _editingChildren ? "Done editing" : "Edit children",
+              onPressed: profile.saving ? null : _toggleChildrenEdit,
+              icon: Icon(
+                _editingChildren ? Icons.close : Icons.edit_outlined,
+              ),
+            ),
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: profile.kids.isEmpty
                     ? Text(
-                        "Add children who borrow toys from the library.",
+                        _editingChildren
+                            ? "Add a child below."
+                            : "Add children who borrow toys from the library.",
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: 0.62),
@@ -235,78 +274,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         runSpacing: 8,
                         children: profile.kids.asMap().entries.map(
                           (entry) {
-                            return InputChip(
-                              label: Text(entry.value.displayLabel),
-                              deleteIcon: const Icon(Icons.close, size: 18),
-                              onDeleted: profile.saving
-                                  ? null
-                                  : () => profile.removeKid(entry.key),
-                            );
+                            if (_editingChildren) {
+                              return InputChip(
+                                label: Text(entry.value.displayLabel),
+                                deleteIcon:
+                                    const Icon(Icons.close, size: 18),
+                                onDeleted: profile.saving
+                                    ? null
+                                    : () => _removeKid(profile, entry.key),
+                              );
+                            }
+                            return Chip(label: Text(entry.value.displayLabel));
                           },
                         ).toList(),
                       ),
               ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: TextField(
-                  controller: _kidController,
-                  decoration: InputDecoration(
-                    labelText: "Child name",
-                    filled: true,
-                    fillColor: theme.colorScheme.surface,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
+              if (_editingChildren) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: TextField(
+                    controller: _kidController,
+                    decoration: InputDecoration(
+                      labelText: "Child name",
+                      filled: true,
+                      fillColor: theme.colorScheme.surface,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    onSubmitted: (_) => _addKid(profile),
                   ),
-                  textCapitalization: TextCapitalization.words,
-                  onSubmitted: (_) => _addKid(profile),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: profile.saving ? null : _pickKidBirthDate,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InputDecorator(
-                          decoration: InputDecoration(
-                            labelText: "Date of birth",
-                            filled: true,
-                            fillColor: theme.colorScheme.surface,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                          ),
-                          child: Text(
-                            _kidBirthDate == null
-                                ? "Select date"
-                                : _formatBirthDate(_kidBirthDate!),
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: _kidBirthDate == null
-                                  ? theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.45)
-                                  : null,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: profile.saving ? null : _pickKidBirthDate,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: "Date of birth",
+                              filled: true,
+                              fillColor: theme.colorScheme.surface,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                            ),
+                            child: Text(
+                              _kidBirthDate == null
+                                  ? "Select date"
+                                  : _formatBirthDate(_kidBirthDate!),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: _kidBirthDate == null
+                                    ? theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.45)
+                                    : null,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed:
-                          profile.saving ? null : () => _addKid(profile),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: kBrandYellow,
-                        foregroundColor: kBrandOnYellow,
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed:
+                            profile.saving ? null : () => _addKid(profile),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kBrandYellow,
+                          foregroundColor: kBrandOnYellow,
+                        ),
+                        child: const Text("Add"),
                       ),
-                      child: const Text("Add"),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           if (profile.error != null) ...[
@@ -316,17 +361,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
-          const SizedBox(height: 32),
-          BrandChipButton(
-            label: "Save changes",
-            large: true,
-            onPressed: profile.saving ? null : () => _save(profile),
-          ),
-          if (profile.saving)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Center(child: CircularProgressIndicator()),
+          if (profile.hasUnsavedChanges) ...[
+            const SizedBox(height: 32),
+            BrandChipButton(
+              label: "Save changes",
+              large: true,
+              onPressed: profile.saving ? null : () => _save(profile),
             ),
+            if (profile.saving)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
         ],
       ),
     );
@@ -339,14 +386,22 @@ class _ProfileHeader extends StatelessWidget {
     required this.email,
     required this.avatarPath,
     required this.uploadingAvatar,
+    required this.editingName,
+    required this.nameController,
     required this.onChangePhoto,
+    required this.onToggleNameEdit,
+    required this.onNameChanged,
   });
 
   final String fullName;
   final String? email;
   final String? avatarPath;
   final bool uploadingAvatar;
+  final bool editingName;
+  final TextEditingController nameController;
   final VoidCallback onChangePhoto;
+  final VoidCallback? onToggleNameEdit;
+  final ValueChanged<String> onNameChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -391,13 +446,57 @@ class _ProfileHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Text(
-          fullName,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
+        if (editingName)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: nameController,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      labelText: "Full name",
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: onNameChanged,
+                  ),
+                ),
+                IconButton(
+                  tooltip: "Close",
+                  onPressed: onToggleNameEdit,
+                  icon: const Icon(Icons.close, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          )
+        else
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  fullName,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: "Edit name",
+                onPressed: onToggleNameEdit,
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-        ),
         if (email != null && email!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
@@ -409,14 +508,6 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        TextButton(
-          onPressed: uploadingAvatar ? null : onChangePhoto,
-          style: TextButton.styleFrom(
-            foregroundColor: theme.colorScheme.secondary,
-            textStyle: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          child: const Text("Change photo"),
-        ),
       ],
     );
   }
@@ -426,10 +517,12 @@ class _ProfileSection extends StatelessWidget {
   const _ProfileSection({
     required this.title,
     required this.children,
+    this.trailing,
   });
 
   final String title;
   final List<Widget> children;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -440,13 +533,20 @@ class _ProfileSection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            title.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
           ),
         ),
         Material(
@@ -454,9 +554,6 @@ class _ProfileSection extends StatelessWidget {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
-            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -465,52 +562,6 @@ class _ProfileSection extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ProfileReadOnlyRow extends StatelessWidget {
-  const _ProfileReadOnlyRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 22,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: theme.textTheme.bodySmall),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
