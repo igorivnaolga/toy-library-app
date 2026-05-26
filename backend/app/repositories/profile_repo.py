@@ -3,17 +3,42 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.profile import Profile
+from app.schemas.principal import KidProfile
 
 _ALLOWED_TIERS = frozenset({"casual", "non_duty", "duty"})
 
 
 def get_profile_by_id(session: Session, user_id: uuid.UUID) -> Profile | None:
     return session.scalar(select(Profile).where(Profile.id == user_id))
+
+
+def kids_from_profile(profile: Profile) -> list[KidProfile]:
+    """Read structured kids, falling back to legacy `kids_names`."""
+    raw = profile.kids or []
+    if raw:
+        parsed: list[KidProfile] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            birth_raw = item.get("birth_date")
+            birth_date: date | None = None
+            if birth_raw:
+                try:
+                    birth_date = date.fromisoformat(str(birth_raw))
+                except ValueError:
+                    birth_date = None
+            parsed.append(KidProfile(name=name, birth_date=birth_date))
+        return parsed
+    return [KidProfile(name=name) for name in (profile.kids_names or []) if str(name).strip()]
 
 
 def apply_membership_choice(session: Session, profile: Profile, tier: str) -> None:
@@ -26,6 +51,38 @@ def apply_membership_choice(session: Session, profile: Profile, tier: str) -> No
     profile.volunteer_confirmed = False
     if profile.role != "admin":
         profile.role = "member"
+
+
+def update_profile(
+    session: Session,
+    profile: Profile,
+    *,
+    full_name: str | None = None,
+    kids: list[KidProfile] | None = None,
+    avatar_path: str | None = None,
+) -> Profile:
+    """Update editable profile fields for the current user."""
+    if full_name is not None:
+        cleaned = full_name.strip()
+        profile.full_name = cleaned or None
+    if kids is not None:
+        stored: list[dict[str, str | None]] = []
+        names: list[str] = []
+        for kid in kids:
+            name = kid.name.strip()
+            if not name:
+                continue
+            entry: dict[str, str | None] = {"name": name, "birth_date": None}
+            if kid.birth_date is not None:
+                entry["birth_date"] = kid.birth_date.isoformat()
+            stored.append(entry)
+            names.append(name)
+        profile.kids = stored
+        profile.kids_names = names
+    if avatar_path is not None:
+        cleaned_path = avatar_path.strip()
+        profile.avatar_path = cleaned_path or None
+    return profile
 
 
 def approve_duty_volunteer(session: Session, profile: Profile) -> None:

@@ -19,6 +19,9 @@ import "features/info/contact_screen.dart";
 import "features/info/library_info_copy.dart";
 import "features/info/membership_info_screen.dart";
 import "features/membership/membership_onboarding_screen.dart";
+import "features/profile/profile_avatar.dart";
+import "features/profile/profile_controller.dart";
+import "features/profile/profile_screen.dart";
 
 class ToyLibraryApp extends StatelessWidget {
   const ToyLibraryApp({super.key, this.backend, this.authStore});
@@ -52,6 +55,18 @@ class ToyLibraryApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CatalogController(client)),
         ChangeNotifierProvider(create: (_) => BookingsController(client)),
         ChangeNotifierProvider(create: (_) => LoansController(client)),
+        ChangeNotifierProxyProvider2<BackendClient, AuthStore, ProfileController>(
+          create: (context) => ProfileController(
+            context.read<BackendClient>(),
+            context.read<AuthStore>(),
+          )..syncFromAuth(),
+          update: (_, client, auth, previous) {
+            final controller =
+                previous ?? ProfileController(client, auth);
+            controller.syncFromAuth();
+            return controller;
+          },
+        ),
       ],
       child: MaterialApp(
         title: "Toy Library",
@@ -114,13 +129,21 @@ class _RoleHome extends StatelessWidget {
                 child: const Text("Sign in"),
               )
             else
-              TextButton(
-                onPressed: () => context.read<AuthStore>().signOut(),
-                style: TextButton.styleFrom(
-                  foregroundColor: kBrandOnYellow,
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ProfileAvatar(
+                  fullName: auth.fullName,
+                  avatarPath: auth.avatarPath,
+                  radius: 18,
+                  onTap: () {
+                    context.read<ProfileController>().syncFromAuth();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ProfileScreen(),
+                      ),
+                    );
+                  },
                 ),
-                child: const Text("Sign out"),
               ),
           ],
           bottom: TabBar(
@@ -157,14 +180,15 @@ class _RoleHome extends StatelessWidget {
   List<(String, IconData)> _tabsForRole(AppRole role) {
     const catalog = ("Catalog", Icons.toys);
     const bookings = ("Bookings", Icons.event_note);
+    const loans = ("Loans", Icons.autorenew);
     const admin = ("Admin", Icons.admin_panel_settings);
 
     switch (role) {
       case AppRole.admin:
-        return const [catalog, bookings, ..._infoTabs, admin];
+        return const [catalog, bookings, loans, ..._infoTabs, admin];
       case AppRole.volunteer:
       case AppRole.member:
-        return const [catalog, bookings, ..._infoTabs];
+        return const [catalog, bookings, loans, ..._infoTabs];
       case AppRole.guest:
         return const [catalog, ..._infoTabs];
     }

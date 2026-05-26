@@ -19,7 +19,7 @@ from app.core.config import get_settings
 from app.core.roles import Role, parse_role
 from app.core.supabase_jwt import decode_supabase_access_token
 from app.db.session import get_db
-from app.repositories.profile_repo import get_profile_by_id
+from app.repositories.profile_repo import get_profile_by_id, kids_from_profile
 from app.schemas.principal import Principal
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -51,6 +51,7 @@ def get_current_principal(
             detail="Profile not found for this user. Run Supabase SQL to create `profiles` + signup trigger.",
         )
     role = parse_role(profile.role)
+    kids = kids_from_profile(profile)
     return Principal(
         id=user_id,
         email=payload.get("email"),
@@ -58,6 +59,9 @@ def get_current_principal(
         full_name=profile.full_name,
         membership_tier=profile.membership_tier,
         volunteer_confirmed=bool(profile.volunteer_confirmed),
+        kids=kids,
+        kids_names=[kid.name for kid in kids],
+        avatar_path=profile.avatar_path,
     )
 
 
@@ -75,6 +79,7 @@ def get_optional_principal(
     if profile is None:
         return None
     role = parse_role(profile.role)
+    kids = kids_from_profile(profile)
     return Principal(
         id=user_id,
         email=payload.get("email"),
@@ -82,6 +87,9 @@ def get_optional_principal(
         full_name=profile.full_name,
         membership_tier=profile.membership_tier,
         volunteer_confirmed=bool(profile.volunteer_confirmed),
+        kids=kids,
+        kids_names=[kid.name for kid in kids],
+        avatar_path=profile.avatar_path,
     )
 
 

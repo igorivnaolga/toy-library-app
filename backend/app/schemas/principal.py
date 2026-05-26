@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import uuid
 
+from datetime import date
+
 from pydantic import BaseModel, Field
 
 from app.core.roles import Role
+
+
+class KidProfile(BaseModel):
+    name: str
+    birth_date: date | None = None
 
 
 class Principal(BaseModel):
@@ -18,6 +25,9 @@ class Principal(BaseModel):
     full_name: str | None = None
     membership_tier: str | None = None
     volunteer_confirmed: bool = False
+    kids: list[KidProfile] = Field(default_factory=list)
+    kids_names: list[str] = Field(default_factory=list)
+    avatar_path: str | None = None
 
     model_config = {"frozen": True}
 
@@ -29,3 +39,12 @@ class MeOut(BaseModel):
     full_name: str | None = None
     membership_tier: str | None = None
     volunteer_confirmed: bool = False
+    kids: list[KidProfile] = Field(default_factory=list)
+    kids_names: list[str] = Field(default_factory=list)
+    avatar_path: str | None = None
+
+
+class ProfileUpdateIn(BaseModel):
+    full_name: str | None = None
+    kids: list[KidProfile] | None = None
+    avatar_path: str | None = None

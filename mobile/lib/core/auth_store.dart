@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "api_client.dart";
+import "../features/profile/kid_profile.dart";
 
 /// App roles from backend `profiles.role`.
 enum AppRole { guest, member, volunteer, admin }
@@ -52,6 +53,9 @@ class AuthStore extends ChangeNotifier {
   AppRole role = AppRole.guest;
   String? membershipTier;
   bool volunteerConfirmed = false;
+  List<String> kidsNames = const [];
+  List<KidProfile> kids = const [];
+  String? avatarPath;
 
   bool get isLoggedIn => _supabase?.auth.currentSession != null;
   String? get accessToken => _supabase?.auth.currentSession?.accessToken;
@@ -150,12 +154,18 @@ class AuthStore extends ChangeNotifier {
       role = parseRole(me["role"]?.toString());
       membershipTier = me["membership_tier"]?.toString();
       volunteerConfirmed = me["volunteer_confirmed"] == true;
+      kids = _parseKids(me);
+      kidsNames = kids.map((kid) => kid.name).toList();
+      avatarPath = me["avatar_path"]?.toString();
       error = null;
     } catch (e) {
       // Keep user signed in but treat as guest if backend profile isn't ready yet.
       role = AppRole.guest;
       membershipTier = null;
       volunteerConfirmed = false;
+      kidsNames = const [];
+      kids = const [];
+      avatarPath = null;
       error = "Couldn't load profile role yet: $e";
     } finally {
       if (!silent) {
@@ -180,8 +190,27 @@ class AuthStore extends ChangeNotifier {
     role = AppRole.guest;
     membershipTier = null;
     volunteerConfirmed = false;
+    kidsNames = const [];
+    kids = const [];
+    avatarPath = null;
     error = null;
     profileLoading = false;
+  }
+
+  static List<KidProfile> _parseKids(Map<String, dynamic> me) {
+    final structured = parseKidsList(me["kids"]);
+    if (structured.isNotEmpty) return structured;
+    return _parseKidsNames(me["kids_names"])
+        .map((name) => KidProfile(name: name))
+        .toList();
+  }
+
+  static List<String> _parseKidsNames(Object? raw) {
+    if (raw is! List) return const [];
+    return raw
+        .map((item) => item?.toString().trim() ?? "")
+        .where((name) => name.isNotEmpty)
+        .toList();
   }
 
   @override
