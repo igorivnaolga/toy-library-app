@@ -15,6 +15,8 @@ import "features/catalog/catalog_provider.dart";
 import "features/loans/loans_controller.dart";
 import "features/loans/loans_screen.dart";
 import "features/catalog/catalog_screen.dart";
+import "features/duty/duty_controller.dart";
+import "features/duty/duty_screen.dart";
 import "features/info/contact_screen.dart";
 import "features/info/library_info_copy.dart";
 import "features/info/membership_info_screen.dart";
@@ -55,6 +57,7 @@ class ToyLibraryApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CatalogController(client)),
         ChangeNotifierProvider(create: (_) => BookingsController(client)),
         ChangeNotifierProvider(create: (_) => LoansController(client)),
+        ChangeNotifierProvider(create: (_) => DutyController(client)),
         ChangeNotifierProxyProvider2<BackendClient, AuthStore, ProfileController>(
           create: (context) => ProfileController(
             context.read<BackendClient>(),
@@ -181,12 +184,14 @@ class _RoleHome extends StatelessWidget {
     const catalog = ("Catalog", Icons.toys);
     const bookings = ("Bookings", Icons.event_note);
     const loans = ("Loans", Icons.autorenew);
+    const duty = ("Duty", Icons.event_available);
     const admin = ("Admin", Icons.admin_panel_settings);
 
     switch (role) {
       case AppRole.admin:
-        return const [catalog, bookings, loans, ..._infoTabs, admin];
+        return const [catalog, bookings, loans, duty, ..._infoTabs, admin];
       case AppRole.volunteer:
+        return const [catalog, bookings, loans, duty, ..._infoTabs];
       case AppRole.member:
         return const [catalog, bookings, loans, ..._infoTabs];
       case AppRole.guest:
@@ -201,10 +206,18 @@ class _RoleHome extends StatelessWidget {
           CatalogScreen(),
           BookingsScreen(),
           LoansScreen(),
+          DutyScreen(),
           ..._infoScreens,
           AdminPlaceholder(),
         ];
       case AppRole.volunteer:
+        return const [
+          CatalogScreen(),
+          BookingsScreen(),
+          LoansScreen(),
+          DutyScreen(),
+          ..._infoScreens,
+        ];
       case AppRole.member:
         return const [
           CatalogScreen(),

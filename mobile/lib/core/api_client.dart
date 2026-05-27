@@ -15,6 +15,8 @@ abstract class BackendClient {
 
   Future<Map<String, dynamic>> postJson(String path,
       [Map<String, dynamic>? body]);
+
+  Future<Map<String, dynamic>> deleteJson(String path);
 }
 
 /// Returns a Bearer token used by [ApiClient] (or null for guest requests).
@@ -101,6 +103,15 @@ class ApiClient implements BackendClient {
           },
           body: body == null || body.isEmpty ? "{}" : jsonEncode(body),
         )
+        .timeout(const Duration(seconds: 20));
+    return _decodeObject(response);
+  }
+
+  @override
+  Future<Map<String, dynamic>> deleteJson(String path) async {
+    final uri = _uri(path, null);
+    final response = await _http
+        .delete(uri, headers: _headers())
         .timeout(const Duration(seconds: 20));
     return _decodeObject(response);
   }

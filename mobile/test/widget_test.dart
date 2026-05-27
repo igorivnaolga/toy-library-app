@@ -64,6 +64,11 @@ class _FakeBackend implements BackendClient {
       [Map<String, dynamic>? body]) {
     throw UnsupportedError(path);
   }
+
+  @override
+  Future<Map<String, dynamic>> deleteJson(String path) {
+    throw UnsupportedError(path);
+  }
 }
 
 void main() {
