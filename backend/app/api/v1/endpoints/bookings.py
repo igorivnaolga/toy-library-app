@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import require_roles
+from app.core.auth_deps import require_on_duty_desk, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
 from app.schemas.booking import (
@@ -33,7 +33,7 @@ from app.services.booking_service import (
 router = APIRouter()
 
 _require_member = require_roles(Role.MEMBER, Role.VOLUNTEER)
-_require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
+_require_on_duty = require_on_duty_desk()
 
 
 def _http_error(exc: BookingError) -> HTTPException:
@@ -98,7 +98,7 @@ def list_my_bookings(
 @router.get("/pending", response_model=BookingsListResponse)
 def list_pending_for_checkout(
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
 ) -> BookingsListResponse:
     """Volunteer desk: pending bookings ready for check-out."""
     rows = list_pending_bookings_for_checkout_service(db)

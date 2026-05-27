@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import require_roles
+from app.core.auth_deps import require_on_duty_desk, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
 from app.models.category import Category
@@ -33,7 +33,7 @@ from app.services.loan_service import (
 router = APIRouter()
 
 _require_member = require_roles(Role.MEMBER, Role.VOLUNTEER, Role.ADMIN)
-_require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
+_require_on_duty = require_on_duty_desk()
 
 
 def _http_error(exc: LoanError) -> HTTPException:
@@ -83,7 +83,7 @@ def list_my_loans(
 @router.get("/active", response_model=LoansListResponse)
 def list_active_loans(
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
 ) -> LoansListResponse:
     """Volunteer desk: all toys currently on loan."""
     rows = list_active_loans_service(db)
@@ -99,7 +99,7 @@ def list_active_loans(
 def check_out_booking(
     body: LoanCheckOutFromBooking,
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
         loan = check_out_from_booking(db, uuid.UUID(body.booking_id))
@@ -115,7 +115,7 @@ def check_out_booking(
 def check_out_walk_in(
     body: LoanCheckOutWalkIn,
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
         loan = check_out_walk_in_service(
@@ -135,7 +135,7 @@ def check_out_walk_in(
 def check_in(
     loan_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
         loan = check_in_loan(db, loan_id)

@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.roles import Role, parse_role
 from app.core.supabase_jwt import decode_supabase_access_token
 from app.db.session import get_db
+from app.repositories.duty_repo import is_volunteer_on_duty_now
 from app.repositories.profile_repo import get_profile_by_id, kids_from_profile
 from app.schemas.principal import Principal
 
@@ -123,3 +124,27 @@ def require_admin(
     if principal.role != Role.ADMIN:
         raise HTTPException(status_code=403, detail="Admin only")
     return principal
+
+
+def require_on_duty_desk():
+    """
+    Volunteer desk actions: volunteer must have a booked duty slot covering now.
+    Admin bypasses the on-duty check.
+    """
+
+    _require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
+
+    def _guard(
+        db: Annotated[Session, Depends(get_db)],
+        principal: Principal = Depends(_require_volunteer),
+    ) -> Principal:
+        if principal.role == Role.ADMIN:
+            return principal
+        if not is_volunteer_on_duty_now(db, principal.id):
+            raise HTTPException(
+                status_code=403,
+                detail="You must be on duty to use the volunteer desk.",
+            )
+        return principal
+
+    return _guard
