@@ -11,6 +11,8 @@ import "../catalog/toy_detail_screen.dart";
 import "loan_list_tile.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
+import "desk_check_in_dialog.dart";
+import "desk_walk_in_panel.dart";
 
 /// Member loans list and volunteer checkout desk.
 class LoansScreen extends StatefulWidget {
@@ -91,6 +93,9 @@ class _LoansScreenState extends State<LoansScreen> {
   }
 
   Future<void> _checkIn(LoanItem loan) async {
+    final confirmed = await showDeskCheckInDialog(context, loan);
+    if (confirmed != true || !mounted) return;
+
     final controller = context.read<LoansController>();
     final catalog = context.read<CatalogController>();
     try {
@@ -108,6 +113,16 @@ class _LoansScreenState extends State<LoansScreen> {
         SnackBar(content: Text(loanActionErrorMessage(e))),
       );
     }
+  }
+
+  Future<void> _walkInCheckedOut() async {
+    final catalog = context.read<CatalogController>();
+    final messenger = ScaffoldMessenger.of(context);
+    await catalog.refresh();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Walk-in toy checked out")),
+    );
   }
 
   void _openToy(String toyId) {
@@ -169,6 +184,7 @@ class _LoansScreenState extends State<LoansScreen> {
                     onOpenToy: _openToy,
                     onRefresh: () =>
                         context.read<LoansController>().loadVolunteerDesk(),
+                    onWalkInCheckedOut: _walkInCheckedOut,
                   ),
                   _MyLoansView(
                     onRenew: _renew,
@@ -284,12 +300,14 @@ class _VolunteerDeskView extends StatelessWidget {
     required this.onCheckIn,
     required this.onOpenToy,
     required this.onRefresh,
+    required this.onWalkInCheckedOut,
   });
 
   final Future<void> Function(BookingItem booking) onCheckOut;
   final Future<void> Function(LoanItem loan) onCheckIn;
   final ValueChanged<String> onOpenToy;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onWalkInCheckedOut;
 
   @override
   Widget build(BuildContext context) {
@@ -300,17 +318,39 @@ class _VolunteerDeskView extends StatelessWidget {
             c.activeLoans.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (c.deskError != null &&
+
+        final offDuty = c.deskError != null &&
             c.pendingCheckouts.isEmpty &&
-            c.activeLoans.isEmpty) {
-          return _ErrorState(
-            message: c.deskError!,
-            loading: c.deskLoading,
-            onRetry: onRefresh,
+            c.activeLoans.isEmpty;
+
+        if (offDuty) {
+          return RefreshIndicator(
+            onRefresh: onRefresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24),
+              children: [
+                const SizedBox(height: 80),
+                Icon(
+                  Icons.event_busy,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  c.deskError!,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           );
         }
 
-        final empty = c.pendingCheckouts.isEmpty && c.activeLoans.isEmpty;
+        final today = deskTodayReservations(c.pendingCheckouts);
+        final earlier = deskEarlierReady(c.pendingCheckouts);
+        final empty = today.isEmpty &&
+            earlier.isEmpty &&
+            c.activeLoans.isEmpty;
 
         return RefreshIndicator(
           onRefresh: onRefresh,
@@ -318,28 +358,48 @@ class _VolunteerDeskView extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
+              DeskWalkInPanel(
+                loading: c.deskLoading,
+                onCheckedOut: onWalkInCheckedOut,
+              ),
+              const SizedBox(height: 16),
               if (empty) ...[
-                const SizedBox(height: 80),
                 const Center(
                   child: Text(
-                    "Nothing on the desk right now.\nPull down to refresh.",
+                    "No reservations or loans on the desk right now.",
                     textAlign: TextAlign.center,
                   ),
                 ),
+                const SizedBox(height: 16),
               ],
-              if (c.pendingCheckouts.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "Ready for checkout"),
-                for (var i = 0; i < c.pendingCheckouts.length; i++) ...[
+              if (today.isNotEmpty) ...[
+                const _LoansSectionHeader(title: "Today's reservations"),
+                for (var i = 0; i < today.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   _PendingCheckoutTile(
-                    booking: c.pendingCheckouts[i],
+                    booking: today[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(c.pendingCheckouts[i].toyId),
-                    onCheckOut: () => onCheckOut(c.pendingCheckouts[i]),
+                    onOpen: () => onOpenToy(today[i].toyId),
+                    onCheckOut: () => onCheckOut(today[i]),
                   ),
                 ],
               ],
-              if (c.pendingCheckouts.isNotEmpty && c.activeLoans.isNotEmpty)
+              if (today.isNotEmpty && earlier.isNotEmpty)
+                const SizedBox(height: 20),
+              if (earlier.isNotEmpty) ...[
+                const _LoansSectionHeader(title: "Ready for checkout"),
+                for (var i = 0; i < earlier.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _PendingCheckoutTile(
+                    booking: earlier[i],
+                    loading: c.deskLoading,
+                    onOpen: () => onOpenToy(earlier[i].toyId),
+                    onCheckOut: () => onCheckOut(earlier[i]),
+                  ),
+                ],
+              ],
+              if ((today.isNotEmpty || earlier.isNotEmpty) &&
+                  c.activeLoans.isNotEmpty)
                 const SizedBox(height: 20),
               if (c.activeLoans.isNotEmpty) ...[
                 const _LoansSectionHeader(title: "On loan"),
@@ -407,11 +467,21 @@ class _PendingCheckoutTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      booking.listSubtitle,
+                      booking.deskSubtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurface.withValues(alpha: 0.62),
                       ),
                     ),
+                    if (booking.pickupLabel != null &&
+                        booking.pickupLabel!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        booking.pickupLabel!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurface.withValues(alpha: 0.62),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -475,7 +545,7 @@ class _ActiveLoanDeskTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      loan.listSubtitle,
+                      loan.deskSubtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: loan.isOverdue
                             ? colors.error

@@ -110,3 +110,38 @@ def list_pending_duty_members(session: Session) -> list[dict[str, str]]:
     )
     rows = session.execute(stmt).mappings().all()
     return [dict(r) for r in rows]
+
+
+def search_members_for_desk(
+    session: Session,
+    query: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, str]]:
+    """Find members/volunteers by name, email, or profile id (volunteer desk walk-in)."""
+    cleaned = query.strip()
+    if len(cleaned) < 2:
+        return []
+    pattern = f"%{cleaned}%"
+    stmt = text(
+        """
+        select p.id::text as user_id,
+               coalesce(p.full_name, '') as full_name,
+               coalesce(u.email::text, '') as email
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where p.role in ('member', 'volunteer', 'admin')
+          and (
+            coalesce(p.full_name, '') ilike :pattern
+            or coalesce(u.email::text, '') ilike :pattern
+            or p.id::text ilike :pattern
+          )
+        order by p.full_name nulls last, u.email
+        limit :limit
+        """
+    )
+    rows = session.execute(
+        stmt,
+        {"pattern": pattern, "limit": limit},
+    ).mappings().all()
+    return [dict(r) for r in rows]

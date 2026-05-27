@@ -8,7 +8,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import require_admin, require_roles
+from app.core.auth_deps import require_admin, require_on_duty_desk, require_roles
 from app.core.library_sessions import library_now
 from app.core.roles import Role
 from app.db.session import get_db
@@ -21,10 +21,13 @@ from app.repositories.duty_repo import (
     get_duty_session_by_id,
     list_duty_sessions,
 )
+from app.repositories.profile_repo import search_members_for_desk
 from app.schemas.duty import (
     DutySessionCreate,
     DutySessionOut,
     DutySessionsListResponse,
+    DeskMemberOut,
+    DeskMembersResponse,
     OnDutyResponse,
     duty_session_out_from_model,
 )
@@ -33,6 +36,7 @@ from app.schemas.principal import Principal
 router = APIRouter()
 
 _require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
+_require_on_duty = require_on_duty_desk()
 
 
 @router.get("/sessions", response_model=DutySessionsListResponse)
@@ -63,6 +67,18 @@ def my_on_duty_status(
     return OnDutyResponse(
         on_duty=True,
         session=duty_session_out_from_model(active),
+    )
+
+
+@router.get("/members", response_model=DeskMembersResponse)
+def search_desk_members(
+    q: str = Query(..., min_length=2, description="Member name, email, or id."),
+    _: Principal = Depends(_require_on_duty),
+    db: Session = Depends(get_db),
+) -> DeskMembersResponse:
+    rows = search_members_for_desk(db, q)
+    return DeskMembersResponse(
+        data=[DeskMemberOut.model_validate(row) for row in rows],
     )
 
 

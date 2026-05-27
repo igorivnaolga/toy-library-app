@@ -38,6 +38,14 @@ class BookingOut(BaseModel):
     user_id: str
     toy_id: str
     toy_name: str | None = None
+    member_name: str | None = Field(
+        None,
+        description="Member full name when loaded for volunteer desk views.",
+    )
+    member_email: str | None = Field(
+        None,
+        description="Member email when loaded for volunteer desk views.",
+    )
     status: str = Field(
         description=f"One of: {BOOKING_STATUS_PENDING}, {BOOKING_STATUS_CANCELLED}, {BOOKING_STATUS_COMPLETED}.",
     )
@@ -71,9 +79,17 @@ class PickupDatesResponse(BaseModel):
     data: list[PickupDateOption]
 
 
-def booking_out_from_model(booking: Booking) -> BookingOut:
-    """Map SQLAlchemy ``Booking`` (+ optional loaded ``toy``) to API JSON."""
+def booking_out_from_model(
+    booking: Booking,
+    *,
+    member_email: str | None = None,
+) -> BookingOut:
+    """Map SQLAlchemy ``Booking`` (+ optional loaded ``toy`` / ``profile``) to API JSON."""
     toy_name = booking.toy.name if getattr(booking, "toy", None) is not None else None
+    member_name = None
+    profile = getattr(booking, "profile", None)
+    if profile is not None and profile.full_name:
+        member_name = profile.full_name
     pickup_label = (
         format_pickup_label(booking.pickup_date) if booking.pickup_date else None
     )
@@ -82,6 +98,8 @@ def booking_out_from_model(booking: Booking) -> BookingOut:
         user_id=str(booking.user_id),
         toy_id=booking.toy_id,
         toy_name=toy_name,
+        member_name=member_name,
+        member_email=member_email,
         status=booking.status,
         pickup_date=booking.pickup_date,
         pickup_label=pickup_label,

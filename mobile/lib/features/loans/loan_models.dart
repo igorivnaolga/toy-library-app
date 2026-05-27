@@ -16,6 +16,7 @@ class LoanItem {
     this.returnedAt,
     this.maxRenewals,
     this.renewalsRemaining,
+    this.memberName,
   });
 
   final String loanId;
@@ -31,6 +32,7 @@ class LoanItem {
   final int? maxRenewals;
   final bool isOverdue;
   final int? renewalsRemaining;
+  final String? memberName;
 
   bool get isActive => status.toLowerCase() == "active";
   bool get isReturned => status.toLowerCase() == "returned";
@@ -59,6 +61,7 @@ class LoanItem {
       maxRenewals: (json["max_renewals"] as num?)?.toInt(),
       isOverdue: json["is_overdue"] == true,
       renewalsRemaining: (json["renewals_remaining"] as num?)?.toInt(),
+      memberName: json["member_name"]?.toString(),
     );
   }
 
@@ -89,6 +92,15 @@ class LoanItem {
     }
     return dueText;
   }
+
+  String get memberLabel {
+    if (memberName != null && memberName!.isNotEmpty) {
+      return memberName!;
+    }
+    return "Member";
+  }
+
+  String get deskSubtitle => "$memberLabel · $listSubtitle";
 }
 
 class LoanSections {

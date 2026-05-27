@@ -44,6 +44,16 @@ class OnDutyResponse(BaseModel):
     session: DutySessionOut | None = None
 
 
+class DeskMemberOut(BaseModel):
+    user_id: str
+    full_name: str = ""
+    email: str = ""
+
+
+class DeskMembersResponse(BaseModel):
+    data: list[DeskMemberOut]
+
+
 def duty_session_out_from_model(row: DutySession) -> DutySessionOut:
     volunteer_name = None
     if row.volunteer is not None and row.volunteer.full_name:

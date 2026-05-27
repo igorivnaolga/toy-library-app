@@ -3,6 +3,8 @@ import "package:flutter/foundation.dart";
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
+import "../catalog/catalog_models.dart";
+import "desk_member.dart";
 import "loan_models.dart";
 
 /// Loads and mutates loans via `/api/v1/loans` and volunteer checkout queue.
@@ -83,6 +85,48 @@ class LoansController extends ChangeNotifier {
     return loan;
   }
 
+  Future<LoanItem> checkOutWalkIn({
+    required String userId,
+    required String toyId,
+  }) async {
+    final json = await _client.postJson("/api/v1/loans/check-out/walk-in", {
+      "user_id": userId,
+      "toy_id": toyId,
+    });
+    final loan = LoanItem.fromJson(json);
+    activeLoans = [
+      loan,
+      ...activeLoans.where((l) => l.loanId != loan.loanId),
+    ];
+    sortLoansList(activeLoans);
+    notifyListeners();
+    return loan;
+  }
+
+  Future<List<DeskMember>> searchDeskMembers(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+    final json = await _client.getJson("/api/v1/duty/members", {"q": trimmed});
+    return parseDeskMemberList(json);
+  }
+
+  Future<List<ToyItem>> searchDeskToys(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+    final json = await _client.getJson("/api/v1/toys", {
+      "q": trimmed,
+      "availability": "available",
+      "limit": "10",
+      "page": "1",
+    });
+    final raw = json["data"];
+    if (raw is! List<dynamic>) return [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(ToyItem.fromJson)
+        .toList();
+  }
+
   Future<LoanItem> checkIn(String loanId) async {
     final json = await _client.postJson("/api/v1/loans/$loanId/check-in");
     final loan = LoanItem.fromJson(json);
@@ -154,7 +198,7 @@ class LoansController extends ChangeNotifier {
       return "Please sign in again to use the volunteer desk.";
     }
     if (e.statusCode == 403) {
-      return "Volunteer access is required for checkout and check-in.";
+      return "Book a duty shift on the Duty tab, then return to the desk.";
     }
     return e.message;
   }
@@ -168,7 +212,7 @@ String loanActionErrorMessage(Object error) {
       case 404:
         return "Loan or booking not found.";
       case 403:
-        return "You do not have permission for this loan action.";
+        return "Book a duty shift on the Duty tab to use the volunteer desk.";
       case 422:
         return error.message;
       default:

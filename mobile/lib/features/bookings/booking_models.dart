@@ -10,6 +10,8 @@ class BookingItem {
     this.pickupDate,
     this.pickupLabel,
     this.cancelledAt,
+    this.memberName,
+    this.memberEmail,
   });
 
   final String bookingId;
@@ -21,6 +23,8 @@ class BookingItem {
   final String? pickupLabel;
   final DateTime createdAt;
   final DateTime? cancelledAt;
+  final String? memberName;
+  final String? memberEmail;
 
   bool get isPending => status.toLowerCase() == "pending";
   bool get isCancelled => status.toLowerCase() == "cancelled";
@@ -39,6 +43,8 @@ class BookingItem {
       cancelledAt: json["cancelled_at"] == null
           ? null
           : DateTime.tryParse(json["cancelled_at"].toString()),
+      memberName: json["member_name"]?.toString(),
+      memberEmail: json["member_email"]?.toString(),
     );
   }
 
@@ -62,6 +68,19 @@ class BookingItem {
     }
     return statusLabel;
   }
+
+  String get memberLabel {
+    if (memberName != null && memberName!.isNotEmpty) {
+      return memberName!;
+    }
+    if (memberEmail != null && memberEmail!.isNotEmpty) {
+      return memberEmail!;
+    }
+    return "Member";
+  }
+
+  /// Subtitle for volunteer desk booking rows.
+  String get deskSubtitle => memberLabel;
 }
 
 /// Upcoming (pending) vs past (completed/cancelled) for the bookings screen.
@@ -169,4 +188,31 @@ void sortBookingsList(List<BookingItem> items) {
     }
     return b.createdAt.compareTo(a.createdAt);
   });
+}
+
+bool isSameCalendarDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+DateTime calendarDay(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+List<BookingItem> deskTodayReservations(List<BookingItem> items) {
+  final today = calendarDay(DateTime.now());
+  return items
+      .where(
+        (item) =>
+            item.pickupDate != null &&
+            isSameCalendarDay(item.pickupDate!, today),
+      )
+      .toList();
+}
+
+List<BookingItem> deskEarlierReady(List<BookingItem> items) {
+  final today = calendarDay(DateTime.now());
+  return items
+      .where(
+        (item) =>
+            item.pickupDate != null && item.pickupDate!.isBefore(today),
+      )
+      .toList();
 }
