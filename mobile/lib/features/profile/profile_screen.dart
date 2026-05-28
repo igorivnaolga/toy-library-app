@@ -5,6 +5,7 @@ import "package:provider/provider.dart";
 import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
+import "../auth/login_screen.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
@@ -153,6 +154,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "${date.day} ${months[date.month - 1]} ${date.year}";
   }
 
+  Future<void> _signOut() async {
+    await context.read<AuthStore>().signOut();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    await navigator.push(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -170,9 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: OutlinedButton.icon(
-              onPressed: profile.saving
-                  ? null
-                  : () => context.read<AuthStore>().signOut(),
+              onPressed: profile.saving ? null : _signOut,
               icon: const Icon(Icons.logout, size: 16),
               label: const Text("Sign out"),
               style: OutlinedButton.styleFrom(
