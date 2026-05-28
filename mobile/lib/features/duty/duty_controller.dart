@@ -3,6 +3,7 @@ import "package:flutter/foundation.dart";
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
+import "../loans/desk_member.dart";
 import "duty_session_models.dart";
 
 /// Loads and mutates duty roster via `/api/v1/duty`.
@@ -17,7 +18,8 @@ class DutyController extends ChangeNotifier {
   bool loading = false;
   String? error;
 
-  static const _horizonDays = 28;
+  static const _pastHorizonDays = 28;
+  static const _futureHorizonDays = 28;
 
   Future<void> loadRoster() async {
     loading = true;
@@ -25,12 +27,13 @@ class DutyController extends ChangeNotifier {
     notifyListeners();
     try {
       final today = DateTime.now();
-      final end = today.add(const Duration(days: _horizonDays));
+      final from = today.subtract(const Duration(days: _pastHorizonDays));
+      final to = today.add(const Duration(days: _futureHorizonDays));
       final sessionsJson = await _client.getJson(
         "/api/v1/duty/sessions",
         {
-          "from": formatApiDate(today),
-          "to": formatApiDate(end),
+          "from": formatApiDate(from),
+          "to": formatApiDate(to),
         },
       );
       final onDutyJson = await _client.getJson("/api/v1/duty/me/on-duty");
@@ -51,6 +54,55 @@ class DutyController extends ChangeNotifier {
     }
   }
 
+  Future<List<DeskMember>> searchRosterMembers(String query) async {
+    final trimmed = query.trim();
+    final json = await _client.getJson(
+      "/api/v1/duty/members",
+      trimmed.isEmpty ? null : {"q": trimmed},
+    );
+    return parseDeskMemberList(json);
+  }
+
+  Future<DutySessionItem> assignMember(
+    String sessionId,
+    DeskMember member,
+  ) async {
+    final json = await _client.patchJson(
+      "/api/v1/duty/sessions/$sessionId/assign",
+      {"user_id": member.userId},
+    );
+    var updated = DutySessionItem.fromJson(json);
+    if (updated.isOpen ||
+        ((updated.volunteerName == null || updated.volunteerName!.isEmpty) &&
+            (updated.volunteerEmail == null || updated.volunteerEmail!.isEmpty))) {
+      updated = DutySessionItem(
+        sessionId: updated.sessionId,
+        sessionDate: updated.sessionDate,
+        startTime: updated.startTime,
+        endTime: updated.endTime,
+        createdAt: updated.createdAt,
+        volunteerId: member.userId,
+        volunteerName:
+            member.fullName.isNotEmpty ? member.fullName : null,
+        volunteerEmail: member.email.isNotEmpty ? member.email : null,
+      );
+    }
+    _replaceSession(updated);
+    onDutyStatus = await _fetchOnDutyStatus();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<DutySessionItem> clearAssignment(String sessionId) async {
+    final json =
+        await _client.deleteJson("/api/v1/duty/sessions/$sessionId/assign");
+    final updated = DutySessionItem.fromJson(json);
+    _replaceSession(updated);
+    onDutyStatus = await _fetchOnDutyStatus();
+    notifyListeners();
+    return updated;
+  }
+
   Future<DutySessionItem> bookSession(String sessionId) async {
     final json =
         await _client.postJson("/api/v1/duty/sessions/$sessionId/book");
@@ -69,29 +121,6 @@ class DutyController extends ChangeNotifier {
     onDutyStatus = await _fetchOnDutyStatus();
     notifyListeners();
     return updated;
-  }
-
-  Future<DutySessionItem> createSession({
-    required DateTime sessionDate,
-    required String startTime,
-    required String endTime,
-  }) async {
-    final json = await _client.postJson("/api/v1/duty/sessions", {
-      "session_date": formatApiDate(sessionDate),
-      "start_time": startTime,
-      "end_time": endTime,
-    });
-    final created = DutySessionItem.fromJson(json);
-    sessions = [...sessions, created];
-    sortDutySessions(sessions);
-    notifyListeners();
-    return created;
-  }
-
-  Future<void> deleteSession(String sessionId) async {
-    await _client.deleteJson("/api/v1/duty/sessions/$sessionId");
-    sessions = sessions.where((s) => s.sessionId != sessionId).toList();
-    notifyListeners();
   }
 
   void _replaceSession(DutySessionItem updated) {

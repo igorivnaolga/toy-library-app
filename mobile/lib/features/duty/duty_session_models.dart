@@ -11,6 +11,7 @@ class DutySessionItem {
     required this.createdAt,
     this.volunteerId,
     this.volunteerName,
+    this.volunteerEmail,
   });
 
   final String sessionId;
@@ -19,6 +20,7 @@ class DutySessionItem {
   final String endTime;
   final String? volunteerId;
   final String? volunteerName;
+  final String? volunteerEmail;
   final DateTime createdAt;
 
   bool get isOpen => volunteerId == null || volunteerId!.isEmpty;
@@ -36,6 +38,7 @@ class DutySessionItem {
       endTime: json["end_time"]?.toString() ?? "",
       volunteerId: json["volunteer_id"]?.toString(),
       volunteerName: json["volunteer_name"]?.toString(),
+      volunteerEmail: json["volunteer_email"]?.toString(),
       createdAt: DateTime.parse(json["created_at"] as String),
     );
   }
@@ -45,6 +48,16 @@ class DutySessionItem {
   String get timeRangeLabel =>
       "${formatApiTime(startTime)} – ${formatApiTime(endTime)}";
 
+  String get assigneeDisplayName {
+    if (volunteerName != null && volunteerName!.isNotEmpty) {
+      return volunteerName!;
+    }
+    if (volunteerEmail != null && volunteerEmail!.isNotEmpty) {
+      return volunteerEmail!;
+    }
+    return "Volunteer";
+  }
+
   String statusLabel({required String? currentUserId}) {
     if (isOpen) return "Open slot";
     if (currentUserId != null &&
@@ -52,10 +65,7 @@ class DutySessionItem {
         volunteerId == currentUserId) {
       return "Your shift";
     }
-    if (volunteerName != null && volunteerName!.isNotEmpty) {
-      return volunteerName!;
-    }
-    return "Booked";
+    return assigneeDisplayName;
   }
 }
 
@@ -92,6 +102,33 @@ class LibrarySessionTimes {
   }
 
   static bool isSessionDay(DateTime date) => forDate(date) != null;
+
+  /// Next Wed/Sat on or after [from] (for date picker initial selection).
+  static DateTime nextSessionDay({DateTime? from}) {
+    final start = from ?? DateTime.now();
+    var probe = DateTime(start.year, start.month, start.day);
+    for (var i = 0; i < 14; i++) {
+      if (isSessionDay(probe)) return probe;
+      probe = probe.add(const Duration(days: 1));
+    }
+    return probe;
+  }
+
+  static List<DateTime> upcomingSessionDays({
+    DateTime? from,
+    int withinDays = 28,
+  }) {
+    final start = from ?? DateTime.now();
+    final first = DateTime(start.year, start.month, start.day);
+    final last = first.add(Duration(days: withinDays));
+    final days = <DateTime>[];
+    var probe = first;
+    while (!probe.isAfter(last)) {
+      if (isSessionDay(probe)) days.add(probe);
+      probe = probe.add(const Duration(days: 1));
+    }
+    return days;
+  }
 }
 
 const _weekdayNames = [
@@ -154,6 +191,37 @@ void sortDutySessions(List<DutySessionItem> items) {
     if (dateOrder != 0) return dateOrder;
     return a.startTime.compareTo(b.startTime);
   });
+}
+
+class DutySessionSections {
+  const DutySessionSections({
+    required this.upcoming,
+    required this.past,
+  });
+
+  final List<DutySessionItem> upcoming;
+  final List<DutySessionItem> past;
+}
+
+DutySessionSections splitDutySessions(List<DutySessionItem> items) {
+  final today = calendarDay(DateTime.now());
+  final upcoming = <DutySessionItem>[];
+  final past = <DutySessionItem>[];
+  for (final item in items) {
+    final day = calendarDay(item.sessionDate);
+    if (day.isBefore(today)) {
+      past.add(item);
+    } else {
+      upcoming.add(item);
+    }
+  }
+  sortDutySessions(upcoming);
+  past.sort((a, b) {
+    final dateOrder = b.sessionDate.compareTo(a.sessionDate);
+    if (dateOrder != 0) return dateOrder;
+    return b.startTime.compareTo(a.startTime);
+  });
+  return DutySessionSections(upcoming: upcoming, past: past);
 }
 
 String dutyActionErrorMessage(Object error) {

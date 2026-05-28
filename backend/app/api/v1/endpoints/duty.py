@@ -21,8 +21,15 @@ from app.repositories.duty_repo import (
     get_duty_session_by_id,
     list_duty_sessions,
 )
-from app.repositories.profile_repo import search_members_for_desk
+from app.repositories.profile_repo import list_roster_members, search_members_for_desk
+from app.services.duty_service import (
+    DutyError,
+    assign_volunteer_to_session,
+    clear_session_assignment,
+    ensure_roster_sessions,
+)
 from app.schemas.duty import (
+    DutySessionAssign,
     DutySessionCreate,
     DutySessionOut,
     DutySessionsListResponse,
@@ -39,6 +46,17 @@ _require_volunteer = require_roles(Role.VOLUNTEER, Role.ADMIN)
 _require_on_duty = require_on_duty_desk()
 
 
+def _duty_http_error(exc: DutyError) -> HTTPException:
+    status = 400
+    if exc.code == "profile_not_found":
+        status = 404
+    elif exc.code == "invalid_assignee":
+        status = 422
+    elif exc.code == "slot_already_assigned":
+        status = 409
+    return HTTPException(status_code=status, detail=exc.message)
+
+
 @router.get("/sessions", response_model=DutySessionsListResponse)
 def list_sessions(
     from_date: date = Query(..., alias="from"),
@@ -48,9 +66,11 @@ def list_sessions(
 ) -> DutySessionsListResponse:
     if to_date < from_date:
         raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
+    rows = ensure_roster_sessions(db, from_date=from_date, to_date=to_date)
+    db.commit()
     rows = list_duty_sessions(db, from_date=from_date, to_date=to_date)
     return DutySessionsListResponse(
-        data=[duty_session_out_from_model(row) for row in rows],
+        data=[duty_session_out_from_model(row, db) for row in rows],
     )
 
 
@@ -66,17 +86,21 @@ def my_on_duty_status(
         return OnDutyResponse(on_duty=False, session=None)
     return OnDutyResponse(
         on_duty=True,
-        session=duty_session_out_from_model(active),
+        session=duty_session_out_from_model(active, db),
     )
 
 
 @router.get("/members", response_model=DeskMembersResponse)
 def search_desk_members(
-    q: str = Query(..., min_length=2, description="Member name, email, or id."),
-    _: Principal = Depends(_require_on_duty),
+    q: str = Query("", description="Member name, email, or id."),
+    _: Principal = Depends(_require_volunteer),
     db: Session = Depends(get_db),
 ) -> DeskMembersResponse:
-    rows = search_members_for_desk(db, q)
+    rows = (
+        search_members_for_desk(db, q)
+        if q.strip()
+        else list_roster_members(db)
+    )
     return DeskMembersResponse(
         data=[DeskMemberOut.model_validate(row) for row in rows],
     )
@@ -104,7 +128,45 @@ def create_session(
     db.commit()
     db.refresh(row)
     row = get_duty_session_by_id(db, row.id) or row
-    return duty_session_out_from_model(row)
+    return duty_session_out_from_model(row, db)
+
+
+@router.patch("/sessions/{session_id}/assign", response_model=DutySessionOut)
+def assign_session(
+    session_id: uuid.UUID,
+    body: DutySessionAssign,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> DutySessionOut:
+    row = get_duty_session_by_id(db, session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Duty session not found.")
+    try:
+        user_id = uuid.UUID(body.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail="Invalid user_id.") from e
+    try:
+        assign_volunteer_to_session(db, row, user_id)
+    except DutyError as e:
+        raise _duty_http_error(e) from e
+    db.commit()
+    row = get_duty_session_by_id(db, session_id) or row
+    return duty_session_out_from_model(row, db)
+
+
+@router.delete("/sessions/{session_id}/assign", response_model=DutySessionOut)
+def clear_session(
+    session_id: uuid.UUID,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> DutySessionOut:
+    row = get_duty_session_by_id(db, session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Duty session not found.")
+    clear_session_assignment(db, row)
+    db.commit()
+    row = get_duty_session_by_id(db, session_id) or row
+    return duty_session_out_from_model(row, db)
 
 
 @router.delete("/sessions/{session_id}")
@@ -142,7 +204,7 @@ def book_session(
     book_duty_session(db, row, principal.id)
     db.commit()
     row = get_duty_session_by_id(db, session_id) or row
-    return duty_session_out_from_model(row)
+    return duty_session_out_from_model(row, db)
 
 
 @router.delete("/sessions/{session_id}/book", response_model=DutySessionOut)
@@ -159,4 +221,4 @@ def cancel_booking(
     cancel_duty_booking(db, row)
     db.commit()
     row = get_duty_session_by_id(db, session_id) or row
-    return duty_session_out_from_model(row)
+    return duty_session_out_from_model(row, db)

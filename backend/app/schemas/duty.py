@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.orm import Session
 
 from app.models.duty_session import DutySession
 
@@ -25,6 +26,10 @@ class DutySessionCreate(BaseModel):
         return self
 
 
+class DutySessionAssign(BaseModel):
+    user_id: str = Field(min_length=1, description="Member or volunteer profile id.")
+
+
 class DutySessionOut(BaseModel):
     session_id: str
     session_date: date
@@ -32,6 +37,7 @@ class DutySessionOut(BaseModel):
     end_time: time
     volunteer_id: str | None = None
     volunteer_name: str | None = None
+    volunteer_email: str | None = None
     created_at: datetime
 
 
@@ -54,10 +60,18 @@ class DeskMembersResponse(BaseModel):
     data: list[DeskMemberOut]
 
 
-def duty_session_out_from_model(row: DutySession) -> DutySessionOut:
+def duty_session_out_from_model(row: DutySession, db: Session | None = None) -> DutySessionOut:
     volunteer_name = None
-    if row.volunteer is not None and row.volunteer.full_name:
-        volunteer_name = row.volunteer.full_name
+    volunteer_email = None
+    if row.volunteer_id is not None:
+        if row.volunteer is not None and row.volunteer.full_name:
+            cleaned = row.volunteer.full_name.strip()
+            if cleaned:
+                volunteer_name = cleaned
+        if volunteer_name is None and db is not None:
+            from app.repositories.profile_repo import get_user_email
+
+            volunteer_email = get_user_email(db, row.volunteer_id)
     return DutySessionOut(
         session_id=str(row.id),
         session_date=row.session_date,
@@ -65,5 +79,6 @@ def duty_session_out_from_model(row: DutySession) -> DutySessionOut:
         end_time=row.end_time,
         volunteer_id=str(row.volunteer_id) if row.volunteer_id else None,
         volunteer_name=volunteer_name,
+        volunteer_email=volunteer_email,
         created_at=row.created_at,
     )

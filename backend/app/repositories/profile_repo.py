@@ -18,6 +18,17 @@ def get_profile_by_id(session: Session, user_id: uuid.UUID) -> Profile | None:
     return session.scalar(select(Profile).where(Profile.id == user_id))
 
 
+def get_user_email(session: Session, user_id: uuid.UUID) -> str | None:
+    row = session.execute(
+        text("select email::text from auth.users where id = :id"),
+        {"id": user_id},
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    email = str(row).strip()
+    return email or None
+
+
 def kids_from_profile(profile: Profile) -> list[KidProfile]:
     """Read structured kids, falling back to legacy `kids_names`."""
     raw = profile.kids or []
@@ -109,6 +120,24 @@ def list_pending_duty_members(session: Session) -> list[dict[str, str]]:
         """
     )
     rows = session.execute(stmt).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def list_roster_members(session: Session, *, limit: int = 30) -> list[dict[str, str]]:
+    """Recent members/volunteers for duty roster assignment picker."""
+    stmt = text(
+        """
+        select p.id::text as user_id,
+               coalesce(p.full_name, '') as full_name,
+               coalesce(u.email::text, '') as email
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where p.role in ('member', 'volunteer', 'admin')
+        order by p.full_name nulls last, u.email
+        limit :limit
+        """
+    )
+    rows = session.execute(stmt, {"limit": limit}).mappings().all()
     return [dict(r) for r in rows]
 
 
