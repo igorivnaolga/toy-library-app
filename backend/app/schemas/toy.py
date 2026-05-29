@@ -42,6 +42,17 @@ class ToysListResponse(BaseModel):
     meta: ToysListMeta
 
 
+class ToyUpdate(BaseModel):
+    """Admin edits to catalog metadata (DB-backed toys only)."""
+
+    name: str | None = Field(default=None, min_length=1)
+    category: str | None = None
+    age_range: str | None = None
+    status: str | None = None
+    manufacturer: str | None = None
+    description: str | None = None
+
+
 class ToysMetaOut(BaseModel):
     """Distinct filter values derived from the current toy dataset (DB or CSV fallback)."""
 

@@ -1,0 +1,168 @@
+import "package:flutter/foundation.dart";
+
+import "../../core/api_client.dart";
+import "../../core/api_exception.dart";
+import "../bookings/booking_models.dart";
+import "admin_models.dart";
+
+/// Loads admin panel data from `/api/v1/admin/*`.
+class AdminController extends ChangeNotifier {
+  AdminController(this._client);
+
+  final BackendClient _client;
+
+  AdminNotifications? notifications;
+  List<PendingVolunteer> pendingVolunteers = [];
+  List<BookingItem> bookings = [];
+  List<AdminMember> members = [];
+
+  bool notificationsLoading = false;
+  bool pendingLoading = false;
+  bool bookingsLoading = false;
+  bool membersLoading = false;
+
+  String? notificationsError;
+  String? pendingError;
+  String? bookingsError;
+  String? membersError;
+
+  Future<void> loadNotifications({bool silent = false}) async {
+    if (!silent) {
+      notificationsLoading = true;
+      notifyListeners();
+    }
+    try {
+      final json = await _client.getJson("/api/v1/admin/notifications");
+      notifications = AdminNotifications.fromJson(json);
+      notificationsError = null;
+    } catch (e) {
+      notificationsError = e.toString();
+    } finally {
+      notificationsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadPendingVolunteers() async {
+    pendingLoading = true;
+    pendingError = null;
+    notifyListeners();
+    try {
+      final json =
+          await _client.getJson("/api/v1/admin/pending-duty-volunteers");
+      final raw = json["data"];
+      pendingVolunteers = raw is List<dynamic>
+          ? raw
+              .whereType<Map<String, dynamic>>()
+              .map(PendingVolunteer.fromJson)
+              .toList()
+          : [];
+      pendingError = null;
+    } catch (e) {
+      pendingError = e.toString();
+      pendingVolunteers = [];
+    } finally {
+      pendingLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> approveVolunteer(String userId) async {
+    await _client.postJson("/api/v1/admin/users/$userId/approve-volunteer");
+    pendingVolunteers =
+        pendingVolunteers.where((v) => v.userId != userId).toList();
+    await loadNotifications(silent: true);
+    notifyListeners();
+  }
+
+  Future<void> loadBookings({
+    DateTime? pickupFrom,
+    DateTime? pickupTo,
+    String? memberQuery,
+  }) async {
+    bookingsLoading = true;
+    bookingsError = null;
+    notifyListeners();
+    try {
+      final query = <String, String>{};
+      if (pickupFrom != null) {
+        query["pickup_from"] = formatApiDate(pickupFrom);
+      }
+      if (pickupTo != null) {
+        query["pickup_to"] = formatApiDate(pickupTo);
+      }
+      final q = memberQuery?.trim();
+      if (q != null && q.isNotEmpty) {
+        query["q"] = q;
+      }
+      final json = await _client.getJson("/api/v1/admin/bookings", query);
+      bookings = parseAdminBookingList(json);
+      bookingsError = null;
+    } catch (e) {
+      bookingsError = e.toString();
+      bookings = [];
+    } finally {
+      bookingsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMembers({
+    String? membershipTier,
+    DateTime? startedFrom,
+    DateTime? startedTo,
+    DateTime? endingFrom,
+    DateTime? endingTo,
+    String? queryText,
+  }) async {
+    membersLoading = true;
+    membersError = null;
+    notifyListeners();
+    try {
+      final query = <String, String>{};
+      if (membershipTier != null && membershipTier.isNotEmpty) {
+        query["membership_tier"] = membershipTier;
+      }
+      if (startedFrom != null) {
+        query["started_from"] = formatApiDate(startedFrom);
+      }
+      if (startedTo != null) {
+        query["started_to"] = formatApiDate(startedTo);
+      }
+      if (endingFrom != null) {
+        query["ending_from"] = formatApiDate(endingFrom);
+      }
+      if (endingTo != null) {
+        query["ending_to"] = formatApiDate(endingTo);
+      }
+      final q = queryText?.trim();
+      if (q != null && q.isNotEmpty) {
+        query["q"] = q;
+      }
+      final json = await _client.getJson("/api/v1/admin/members", query);
+      members = parseAdminMemberList(json);
+      membersError = null;
+    } catch (e) {
+      membersError = e.toString();
+      members = [];
+    } finally {
+      membersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<AdminMember>> searchMembers(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return [];
+    final json = await _client.getJson("/api/v1/admin/members", {
+      "q": trimmed,
+      "limit": "20",
+    });
+    return parseAdminMemberList(json);
+  }
+}
+
+String adminActionErrorMessage(Object error) {
+  if (error is ApiException) return error.message;
+  return error.toString();
+}

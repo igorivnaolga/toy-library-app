@@ -106,6 +106,34 @@ class CatalogController extends ChangeNotifier {
     return ToyItem.fromJson(json);
   }
 
+  Future<ToyItem> updateToy(
+    String toyId, {
+    required String name,
+    String? category,
+    String? ageRange,
+    String? status,
+    String? manufacturer,
+    String? description,
+  }) async {
+    final body = <String, dynamic>{
+      "name": name,
+      if (category != null) "category": category,
+      if (ageRange != null) "age_range": ageRange,
+      if (status != null) "status": status,
+      if (manufacturer != null) "manufacturer": manufacturer,
+      if (description != null) "description": description,
+    };
+    final json =
+        await _client.patchJson("/api/v1/admin/toys/$toyId", body);
+    final updated = ToyItem.fromJson(json);
+    toys = [
+      for (final item in toys)
+        if (item.toyId == toyId) updated else item,
+    ];
+    notifyListeners();
+    return updated;
+  }
+
   Future<void> _reloadToysOnly() async {
     loading = true;
     error = null;

@@ -3,13 +3,13 @@ import "dart:async";
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/catalog_models.dart";
 import "desk_member.dart";
 import "loans_controller.dart";
 
-/// Walk-in checkout: search toy + member, then check out for 2 weeks.
+/// Walk-in checkout: pick a member, then add one or more toys to check out.
 class DeskWalkInPanel extends StatefulWidget {
   const DeskWalkInPanel({
     super.key,
@@ -30,14 +30,16 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
   Timer? _toyDebounce;
   Timer? _memberDebounce;
 
-  ToyItem? _selectedToy;
   DeskMember? _selectedMember;
+  final List<ToyItem> _selectedToys = [];
   List<ToyItem> _toyResults = [];
   List<DeskMember> _memberResults = [];
   bool _searchingToys = false;
   bool _searchingMembers = false;
   bool _submitting = false;
   String? _error;
+
+  bool get _hasMember => _selectedMember != null;
 
   @override
   void dispose() {
@@ -48,11 +50,50 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
     super.dispose();
   }
 
+  void _clearMember() {
+    setState(() {
+      _selectedMember = null;
+      _selectedToys.clear();
+      _memberQuery.clear();
+      _memberResults = [];
+      _toyQuery.clear();
+      _toyResults = [];
+      _error = null;
+    });
+  }
+
+  void _selectMember(DeskMember member) {
+    setState(() {
+      _selectedMember = member;
+      _memberQuery.clear();
+      _memberResults = [];
+      _error = null;
+    });
+  }
+
+  void _addToy(ToyItem toy) {
+    if (_selectedToys.any((item) => item.toyId == toy.toyId)) return;
+    setState(() {
+      _selectedToys.add(toy);
+      _toyQuery.clear();
+      _toyResults = [];
+      _error = null;
+    });
+  }
+
+  void _removeToy(String toyId) {
+    setState(() {
+      _selectedToys.removeWhere((item) => item.toyId == toyId);
+      _error = null;
+    });
+  }
+
   void _scheduleToySearch() {
+    if (!_hasMember) return;
     _toyDebounce?.cancel();
     _toyDebounce = Timer(const Duration(milliseconds: 350), () async {
       final query = _toyQuery.text.trim();
-      if (query.length < 2) {
+      if (!_isSearchableToyQuery(query)) {
         if (!mounted) return;
         setState(() {
           _toyResults = [];
@@ -68,8 +109,10 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         final results =
             await context.read<LoansController>().searchDeskToys(query);
         if (!mounted) return;
+        final selectedIds = _selectedToys.map((t) => t.toyId).toSet();
         setState(() {
-          _toyResults = results;
+          _toyResults =
+              results.where((toy) => !selectedIds.contains(toy.toyId)).toList();
           _searchingToys = false;
         });
       } catch (e) {
@@ -119,24 +162,26 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
   }
 
   Future<void> _submit() async {
-    final toy = _selectedToy;
     final member = _selectedMember;
-    if (toy == null || member == null) return;
+    if (member == null || _selectedToys.isEmpty) return;
 
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
-      await context.read<LoansController>().checkOutWalkIn(
-            userId: member.userId,
-            toyId: toy.toyId,
-          );
+      final controller = context.read<LoansController>();
+      for (final toy in _selectedToys) {
+        await controller.checkOutWalkIn(
+          userId: member.userId,
+          toyId: toy.toyId,
+        );
+      }
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _selectedToy = null;
         _selectedMember = null;
+        _selectedToys.clear();
         _toyQuery.clear();
         _memberQuery.clear();
         _toyResults = [];
@@ -152,11 +197,17 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
     }
   }
 
+  String get _checkoutLabel {
+    final count = _selectedToys.length;
+    if (count <= 1) return "Check out";
+    return "Check out ($count)";
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final busy = widget.loading || _submitting;
-    final canSubmit = _selectedToy != null && _selectedMember != null && !busy;
+    final canSubmit = _hasMember && _selectedToys.isNotEmpty && !busy;
 
     return Material(
       color: theme.colorScheme.surfaceContainerLowest,
@@ -168,114 +219,119 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
           children: [
             Text(
               "Walk-in checkout",
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: kBrandOnYellow,
-              ),
+              style: context.panelTitle,
             ),
             const SizedBox(height: 10),
-            TextField(
-              controller: _toyQuery,
-              enabled: !busy,
-              decoration: InputDecoration(
-                labelText: "Toy id or name",
-                suffixIcon: _searchingToys
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-              onChanged: (_) {
-                setState(() => _selectedToy = null);
-                _scheduleToySearch();
-              },
+            Text(
+              "Member",
+              style: context.groupLabel,
             ),
-            if (_selectedToy != null) ...[
-              const SizedBox(height: 8),
-              _SelectionChip(
-                label: "${_selectedToy!.name} (${_selectedToy!.toyId})",
-                onClear: busy
-                    ? null
-                    : () => setState(() {
-                          _selectedToy = null;
-                          _toyQuery.clear();
-                          _toyResults = [];
-                        }),
-              ),
-            ] else if (_toyResults.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ..._toyResults.map(
-                (toy) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(toy.name),
-                  subtitle: Text(toy.toyId),
-                  onTap: busy
-                      ? null
-                      : () => setState(() {
-                            _selectedToy = toy;
-                            _toyQuery.text = toy.name;
-                            _toyResults = [];
-                          }),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: _memberQuery,
-              enabled: !busy,
-              decoration: InputDecoration(
-                labelText: "Member name or email",
-                suffixIcon: _searchingMembers
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-              onChanged: (_) {
-                setState(() => _selectedMember = null);
-                _scheduleMemberSearch();
-              },
-            ),
-            if (_selectedMember != null) ...[
-              const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            if (_hasMember)
               _SelectionChip(
                 label: _selectedMember!.displayLabel,
-                onClear: busy
-                    ? null
-                    : () => setState(() {
-                          _selectedMember = null;
-                          _memberQuery.clear();
-                          _memberResults = [];
-                        }),
+                onClear: busy ? null : _clearMember,
+              )
+            else ...[
+              TextField(
+                controller: _memberQuery,
+                enabled: !busy,
+                decoration: InputDecoration(
+                  hintText: "Search name or email",
+                  suffixIcon: _searchingMembers
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                ),
+                onChanged: (_) => _scheduleMemberSearch(),
               ),
-            ] else if (_memberResults.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              ..._memberResults.map(
-                (member) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(member.displayLabel),
-                  onTap: busy
-                      ? null
-                      : () => setState(() {
-                            _selectedMember = member;
-                            _memberQuery.text = member.displayLabel;
-                            _memberResults = [];
-                          }),
+              if (_memberResults.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ..._memberResults.map(
+                  (member) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(member.displayLabel),
+                    onTap: busy ? null : () => _selectMember(member),
+                  ),
+                ),
+              ],
+            ],
+            if (_hasMember) ...[
+              const SizedBox(height: 16),
+              Text(
+                "Toys",
+                style: context.groupLabel,
+              ),
+              const SizedBox(height: 6),
+              if (_selectedToys.isNotEmpty) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedToys
+                      .map(
+                        (toy) => _SelectionChip(
+                          label: "${toy.name} (${toy.toyId})",
+                          onClear:
+                              busy ? null : () => _removeToy(toy.toyId),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 8),
+              ],
+              TextField(
+                controller: _toyQuery,
+                enabled: !busy,
+                decoration: InputDecoration(
+                  hintText: "Search toy id or name to add",
+                  suffixIcon: _searchingToys
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                ),
+                onChanged: (_) => _scheduleToySearch(),
+              ),
+              if (_toyResults.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ..._toyResults.map(
+                  (toy) => ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(toy.name),
+                    subtitle: Text(toy.toyId),
+                    onTap: busy ? null : () => _addToy(toy),
+                  ),
+                ),
+              ] else if (_selectedToys.isEmpty &&
+                  !_isSearchableToyQuery(_toyQuery.text))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    "Add one or more toys for this member.",
+                    style: context.listSubtitle,
+                  ),
+                ),
+            ] else
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  "Select a member first, then add toys.",
+                  style: context.listSubtitle,
                 ),
               ),
-            ],
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -289,8 +345,8 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
             Align(
               alignment: Alignment.centerRight,
               child: BrandChipButton(
-                label: "Check out",
-                fixedWidth: 120,
+                label: _checkoutLabel,
+                fixedWidth: 140,
                 onPressed: canSubmit ? _submit : null,
               ),
             ),
@@ -314,4 +370,11 @@ class _SelectionChip extends StatelessWidget {
       onDeleted: onClear,
     );
   }
+}
+
+bool _isSearchableToyQuery(String query) {
+  final q = query.trim();
+  if (q.isEmpty) return false;
+  if (q.length >= 2) return true;
+  return RegExp(r"^\d+$").hasMatch(q);
 }

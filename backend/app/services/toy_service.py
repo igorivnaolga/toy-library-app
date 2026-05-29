@@ -28,3 +28,26 @@ def get_toy_service(toy_id: str) -> ToyOut | None:
 
 def get_toys_meta_service() -> ToysMetaOut:
     return ToysMetaOut(age_ranges=distinct_age_ranges())
+
+
+def update_toy_service(
+    toy_id: str,
+    *,
+    name: str | None = None,
+    category: str | None = None,
+    age_range: str | None = None,
+    status: str | None = None,
+    manufacturer: str | None = None,
+    description: str | None = None,
+) -> ToyOut | None:
+    from app.repositories.toy_repo import update_toy_in_db
+
+    return update_toy_in_db(
+        toy_id,
+        name=name,
+        category_label=category,
+        age_range=age_range,
+        status=status,
+        manufacturer=manufacturer,
+        description=description,
+    )

@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/toy_photo_tile.dart";
 import "booking_models.dart";
@@ -19,18 +19,14 @@ class BookingListTile extends StatelessWidget {
   final BookingItem item;
   final bool loading;
   final VoidCallback onOpen;
-  final VoidCallback onChangeDate;
-  final VoidCallback onCancel;
+  final VoidCallback? onChangeDate;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
-      color: colors.onSurface.withValues(alpha: 0.62),
-      height: 1.25,
-      fontWeight: FontWeight.w500,
-    );
+    final subtitleStyle = context.listSubtitle;
 
     return Opacity(
       opacity: item.isCancelled ? 0.72 : 1,
@@ -61,11 +57,7 @@ class BookingListTile extends StatelessWidget {
                           item.toyName ?? item.toyId,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: kBrandOnYellow,
-                            height: 1.2,
-                          ),
+                          style: context.cardTitle,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -81,24 +73,28 @@ class BookingListTile extends StatelessWidget {
                   ],
                 ],
               ),
-              if (item.isPending) ...[
+              if (item.isPending &&
+                  (onChangeDate != null || onCancel != null)) ...[
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(
-                      child: BrandChipButton(
-                        label: "Change",
-                        onPressed: loading ? null : onChangeDate,
+                    if (onChangeDate != null)
+                      Expanded(
+                        child: BrandChipButton(
+                          label: "Change",
+                          onPressed: loading ? null : onChangeDate,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: BrandChipButton(
-                        label: "Cancel",
-                        variant: BrandChipButtonVariant.outlined,
-                        onPressed: loading ? null : onCancel,
+                    if (onChangeDate != null && onCancel != null)
+                      const SizedBox(width: 8),
+                    if (onCancel != null)
+                      Expanded(
+                        child: BrandChipButton(
+                          label: "Cancel",
+                          variant: BrandChipButtonVariant.outlined,
+                          onPressed: loading ? null : onCancel,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],

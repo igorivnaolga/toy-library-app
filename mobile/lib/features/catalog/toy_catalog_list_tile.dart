@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "catalog_models.dart";
 import "toy_availability_badge.dart";
 import "toy_photo_tile.dart";
@@ -45,11 +45,7 @@ class ToyCatalogListTile extends StatelessWidget {
                       toy.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: kBrandOnYellow,
-                        height: 1.2,
-                      ),
+                      style: context.cardTitle,
                     ),
                     if (_hasSubtitle) ...[
                       const SizedBox(height: 4),
@@ -101,11 +97,8 @@ class _CatalogSubtitle extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final mutedStyle = theme.textTheme.bodySmall?.copyWith(
-      color: colors.onSurface.withValues(alpha: 0.62),
-      height: 1.25,
-    );
-    final categoryStyle = mutedStyle?.copyWith(fontWeight: FontWeight.w600);
+    final mutedStyle = context.listSubtitle;
+    final categoryStyle = mutedStyle.copyWith(fontWeight: FontWeight.w600);
     final statusStyle = mutedStyle;
 
     return Wrap(
@@ -117,7 +110,7 @@ class _CatalogSubtitle extends StatelessWidget {
         if (hasCategory && hasStatus)
           Text(
             "·",
-            style: mutedStyle?.copyWith(
+            style: mutedStyle.copyWith(
               fontWeight: FontWeight.w700,
               color: colors.outline,
             ),

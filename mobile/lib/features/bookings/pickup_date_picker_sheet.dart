@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "booking_models.dart";
 
@@ -12,7 +13,7 @@ Future<PickupDateOption?> showPickupDatePickerSheet(
   return showModalBottomSheet<PickupDateOption>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    backgroundColor: kModalSurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -42,10 +43,7 @@ Future<PickupDateOption?> showPickupDatePickerSheet(
                   ),
                   Text(
                     title,
-                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                          color: kBrandOnYellow,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: ctx.modalTitleOnYellow,
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -73,14 +71,10 @@ Future<PickupDateOption?> showPickupDatePickerSheet(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: OutlinedButton(
                 onPressed: () => Navigator.of(ctx).pop(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: kBrandOnYellow,
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: kBrandYellow, width: 1.5),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    decoration: TextDecoration.none,
+                style: brandOutlinedButtonStyle().copyWith(
+                  minimumSize: const WidgetStatePropertyAll(Size.fromHeight(48)),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
                 child: const Text("Cancel"),
@@ -139,18 +133,14 @@ class _PickupDateOptionTile extends StatelessWidget {
                   children: [
                     Text(
                       option.label,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: kBrandOnYellow,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: context.modalOptionTitle,
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _sessionHours(option.weekday),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: kBrandOnYellow.withValues(alpha: 0.75),
-                            fontWeight: FontWeight.w500,
-                          ),
+                      style: context.captionOnYellow.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),

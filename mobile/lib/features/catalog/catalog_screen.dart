@@ -3,6 +3,7 @@ import "dart:async";
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "catalog_provider.dart";
 import "toy_catalog_list_tile.dart";
@@ -97,12 +98,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
-      backgroundColor: Colors.white,
+      backgroundColor: kModalSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
         final maxListHeight = MediaQuery.of(sheetContext).size.height * 0.55;
 
         return SafeArea(
@@ -130,10 +130,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                     Text(
                       title,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: kBrandOnYellow,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: sheetContext.modalTitleOnYellow,
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -158,10 +155,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                       title: Text(
                         label,
-                        style: theme.textTheme.titleMedium?.copyWith(
+                        style: sheetContext.modalOptionTitle.copyWith(
                           fontWeight:
                               isSelected ? FontWeight.w700 : FontWeight.w500,
-                          color: kBrandOnYellow,
                         ),
                       ),
                       trailing: isSelected
@@ -214,12 +210,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isActive ? FontWeight.w800 : FontWeight.w700,
-                    color: foreground,
-                    height: 1.1,
-                  ),
+                  style: context.filterChipLabel(active: isActive),
                 ),
               ),
               Icon(
@@ -512,20 +503,16 @@ class _ClearFiltersButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(10),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.filter_list_off, size: 18, color: kBrandOnYellow),
-                SizedBox(width: 4),
+                const Icon(Icons.filter_list_off, size: 18, color: kBrandOnYellow),
+                const SizedBox(width: 4),
                 Text(
                   "Clear",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: kBrandOnYellow,
-                  ),
+                  style: context.filterActionLabel,
                 ),
               ],
             ),

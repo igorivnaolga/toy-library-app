@@ -104,6 +104,87 @@ def approve_duty_volunteer(session: Session, profile: Profile) -> None:
     profile.role = "volunteer"
 
 
+def count_pending_duty_members(session: Session) -> int:
+    stmt = text(
+        """
+        select count(*)::int
+        from public.profiles p
+        where p.membership_tier = 'duty'
+          and coalesce(p.volunteer_confirmed, false) = false
+          and p.role = 'member'
+        """
+    )
+    return int(session.execute(stmt).scalar_one() or 0)
+
+
+def list_members_for_admin(
+    session: Session,
+    *,
+    membership_tier: str | None = None,
+    started_from: date | None = None,
+    started_to: date | None = None,
+    ending_from: date | None = None,
+    ending_to: date | None = None,
+    q: str | None = None,
+    limit: int = 200,
+) -> list[dict[str, str | bool | None]]:
+    """Members/volunteers for admin panel with optional filters."""
+    filters = ["p.role in ('member', 'volunteer')"]
+    params: dict[str, object] = {"limit": limit}
+
+    if membership_tier:
+        filters.append("p.membership_tier = :membership_tier")
+        params["membership_tier"] = membership_tier.strip()
+
+    if started_from is not None:
+        filters.append("u.created_at::date >= :started_from")
+        params["started_from"] = started_from
+
+    if started_to is not None:
+        filters.append("u.created_at::date <= :started_to")
+        params["started_to"] = started_to
+
+    if ending_from is not None:
+        filters.append("(u.created_at + interval '1 year')::date >= :ending_from")
+        params["ending_from"] = ending_from
+
+    if ending_to is not None:
+        filters.append("(u.created_at + interval '1 year')::date <= :ending_to")
+        params["ending_to"] = ending_to
+
+    if q:
+        pattern = f"%{q.strip()}%"
+        filters.append(
+            """(
+              coalesce(p.full_name, '') ilike :pattern
+              or coalesce(u.email::text, '') ilike :pattern
+              or p.id::text ilike :pattern
+            )"""
+        )
+        params["pattern"] = pattern
+
+    where_clause = " and ".join(filters)
+    stmt = text(
+        f"""
+        select p.id::text as user_id,
+               coalesce(u.email::text, '') as email,
+               coalesce(p.full_name, '') as full_name,
+               p.role,
+               p.membership_tier,
+               coalesce(p.volunteer_confirmed, false) as volunteer_confirmed,
+               u.created_at as membership_started_at,
+               (u.created_at + interval '1 year') as membership_ends_at
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where {where_clause}
+        order by u.created_at desc nulls last
+        limit :limit
+        """
+    )
+    rows = session.execute(stmt, params).mappings().all()
+    return [dict(r) for r in rows]
+
+
 def list_pending_duty_members(session: Session) -> list[dict[str, str]]:
     """Duty-tier users who are still `member` and not volunteer-confirmed (join `auth.users` for email)."""
     stmt = text(

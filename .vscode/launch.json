@@ -9,6 +9,11 @@
       "cwd": "mobile",
       "args": [
         "--dart-define-from-file=env/dev.json"
+      ],
+      "toolArgs": [
+        "--no-dds",
+        "--host-vmservice-port=58162",
+        "--device-timeout=120"
       ]
     },
     {
@@ -19,6 +24,11 @@
       "cwd": "mobile",
       "args": [
         "--dart-define=USE_ADB_REVERSE=true"
+      ],
+      "toolArgs": [
+        "--no-dds",
+        "--host-vmservice-port=58162",
+        "--device-timeout=120"
       ]
     }
   ]

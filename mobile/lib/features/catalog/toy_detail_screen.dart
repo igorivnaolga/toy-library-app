@@ -2,7 +2,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
 import "../auth/login_screen.dart";
@@ -12,6 +12,7 @@ import "../bookings/bookings_controller.dart";
 import "../bookings/pickup_date_flow.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
+import "toy_edit_sheet.dart";
 import "toy_availability_badge.dart";
 import "toy_detail_action_bar.dart";
 import "toy_detail_section.dart";
@@ -189,8 +190,27 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
             : null;
 
         return Scaffold(
-          appBar: AppBar(title: const Text("Toy details")),
-          bottomNavigationBar: ToyDetailActionBar(
+          appBar: AppBar(
+            title: const Text("Toy details"),
+            actions: [
+              if (auth.isAdmin)
+                IconButton(
+                  tooltip: "Edit toy",
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () async {
+                    final updated = await showToyEditSheet(context, toy: t);
+                    if (!context.mounted) return;
+                    if (updated != null) {
+                      await context.read<CatalogController>().refresh();
+                      _retry();
+                    }
+                  },
+                ),
+            ],
+          ),
+          bottomNavigationBar: auth.isAdmin
+              ? null
+              : ToyDetailActionBar(
             toy: t,
             isLoggedIn: auth.isLoggedIn,
             canBookToys: auth.canBookToys,
@@ -246,11 +266,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   children: [
                     Text(
                       t.name,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: kBrandOnYellow,
-                        height: 1.2,
-                      ),
+                      style: context.detailTitle,
                     ),
                     const SizedBox(height: 10),
                     ToyAvailabilityBadge(availability: t.availability),
@@ -289,13 +305,9 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                     const SizedBox(height: 8),
                     Text(
                       description ?? "No description available.",
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w400,
-                        color: description != null
-                            ? colors.onSurface.withValues(alpha: 0.82)
-                            : colors.onSurface.withValues(alpha: 0.45),
-                        height: 1.45,
-                      ),
+                      style: description != null
+                          ? context.bodyText
+                          : context.bodyPlaceholder,
                     ),
                   ],
                 ),

@@ -1,20 +1,84 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
+import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
-import "../bookings/booking_models.dart";
 import "duty_assign_sheet.dart";
 import "duty_controller.dart";
 import "duty_session_models.dart";
 
 /// Volunteer duty roster: Wed/Sat slots, book shifts, admin assign members.
 class DutyScreen extends StatefulWidget {
-  const DutyScreen({super.key});
+  const DutyScreen({super.key, this.useTabs = false});
+
+  /// When true, upcoming and past slots appear in separate tabs (admin sheet).
+  final bool useTabs;
 
   @override
   State<DutyScreen> createState() => _DutyScreenState();
+}
+
+/// Admin app-bar action: duty slots in a sheet matching other modals.
+Future<void> showDutyRosterSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: kModalSurface,
+    barrierColor: Colors.black54,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (sheetContext) {
+      final height = MediaQuery.sizeOf(sheetContext).height * 0.85;
+      return SizedBox(
+        height: height,
+        child: const _DutyRosterSheet(),
+      );
+    },
+  );
+}
+
+/// Duty roster content for the admin bottom sheet (light background, no on-duty banner).
+class _DutyRosterSheet extends StatelessWidget {
+  const _DutyRosterSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.white,
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Text(
+                "Duty roster",
+                style: context.screenTitle,
+              ),
+            ),
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: const TabBar(
+                tabs: [
+                  Tab(text: "Upcoming slots"),
+                  Tab(text: "Past slots"),
+                ],
+              ),
+            ),
+            const Expanded(
+              child: DutyScreen(useTabs: true),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DutyScreenState extends State<DutyScreen> {
@@ -93,6 +157,37 @@ class _DutyScreenState extends State<DutyScreen> {
 
     return Consumer<DutyController>(
       builder: (context, controller, _) {
+        if (widget.useTabs) {
+          return TabBarView(
+            children: [
+              RefreshIndicator(
+                onRefresh: controller.loadRoster,
+                child: _DutyBody(
+                  auth: auth,
+                  controller: controller,
+                  sessions: splitDutySessions(controller.sessions).upcoming,
+                  isPast: false,
+                  onBook: _book,
+                  onCancel: _cancel,
+                  onAssign: auth.isAdmin ? _openAssign : null,
+                ),
+              ),
+              RefreshIndicator(
+                onRefresh: controller.loadRoster,
+                child: _DutyBody(
+                  auth: auth,
+                  controller: controller,
+                  sessions: splitDutySessions(controller.sessions).past,
+                  isPast: true,
+                  onBook: _book,
+                  onCancel: _cancel,
+                  onAssign: auth.isAdmin ? _openAssign : null,
+                ),
+              ),
+            ],
+          );
+        }
+
         return RefreshIndicator(
           onRefresh: controller.loadRoster,
           child: _DutyBody(
@@ -114,6 +209,8 @@ class _DutyBody extends StatelessWidget {
     required this.controller,
     required this.onBook,
     required this.onCancel,
+    this.sessions,
+    this.isPast = false,
     this.onAssign,
   });
 
@@ -122,6 +219,8 @@ class _DutyBody extends StatelessWidget {
   final Future<void> Function(DutySessionItem session) onBook;
   final Future<void> Function(DutySessionItem session) onCancel;
   final Future<void> Function(DutySessionItem session)? onAssign;
+  final List<DutySessionItem>? sessions;
+  final bool isPast;
 
   @override
   Widget build(BuildContext context) {
@@ -153,139 +252,79 @@ class _DutyBody extends StatelessWidget {
       );
     }
 
+    if (sessions != null) {
+      return _buildSlotList(context, sessions!, isPast: isPast);
+    }
+
     final sections = splitDutySessions(controller.sessions);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       children: [
-        _OnDutyBanner(
-          status: controller.onDutyStatus,
-          isAdmin: auth.isAdmin,
-        ),
-        const SizedBox(height: 12),
         if (sections.upcoming.isNotEmpty) ...[
-          const _SectionHeader(title: "Upcoming slots"),
-          for (var i = 0; i < sections.upcoming.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8),
-            _DutySessionTile(
-              session: sections.upcoming[i],
-              currentUserId: auth.userId,
-              isAdmin: auth.isAdmin,
-              isPast: false,
-              loading: controller.loading,
-              onBook: () => onBook(sections.upcoming[i]),
-              onCancel: () => onCancel(sections.upcoming[i]),
-              onTap: onAssign == null
-                  ? null
-                  : () => onAssign!(sections.upcoming[i]),
-            ),
-          ],
+          const SectionHeader("Upcoming slots"),
+          ..._slotTiles(context, sections.upcoming, isPast: false),
         ],
         if (sections.upcoming.isNotEmpty && sections.past.isNotEmpty)
           const SizedBox(height: 20),
         if (sections.past.isNotEmpty) ...[
-          const _SectionHeader(title: "Past slots"),
-          for (var i = 0; i < sections.past.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8),
-            _DutySessionTile(
-              session: sections.past[i],
-              currentUserId: auth.userId,
-              isAdmin: auth.isAdmin,
-              isPast: true,
-              loading: controller.loading,
-              onBook: () => onBook(sections.past[i]),
-              onCancel: () => onCancel(sections.past[i]),
-              onTap: onAssign == null
-                  ? null
-                  : () => onAssign!(sections.past[i]),
-            ),
-          ],
+          const SectionHeader("Past slots"),
+          ..._slotTiles(context, sections.past, isPast: true),
         ],
       ],
     );
   }
-}
 
-class _OnDutyBanner extends StatelessWidget {
-  const _OnDutyBanner({required this.status, required this.isAdmin});
-
-  final OnDutyStatus status;
-  final bool isAdmin;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final onDuty = status.onDuty;
-    final session = status.session;
-
-    return Material(
-      color: onDuty
-          ? kBrandYellow.withValues(alpha: 0.18)
-          : theme.colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Icon(
-              onDuty ? Icons.check_circle : Icons.schedule,
-              color: onDuty ? kBrandOnYellow : theme.colorScheme.onSurfaceVariant,
+  Widget _buildSlotList(
+    BuildContext context,
+    List<DutySessionItem> items, {
+    required bool isPast,
+  }) {
+    if (items.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 80),
+          Center(
+            child: Text(
+              isPast ? "No past duty slots." : "No upcoming duty slots.",
+              textAlign: TextAlign.center,
+              style: context.emptyState,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    onDuty ? "You are on duty now" : "You are not on duty",
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: onDuty ? kBrandOnYellow : null,
-                    ),
-                  ),
-                  if (session != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      "${session.timeRangeLabel} today",
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ] else if (!onDuty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      isAdmin
-                          ? "Tap a slot to assign a volunteer."
-                          : "Book an upcoming shift to use the volunteer desk.",
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      children: _slotTiles(context, items, isPast: isPast),
     );
   }
-}
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: kBrandOnYellow,
-            ),
-      ),
-    );
+  List<Widget> _slotTiles(
+    BuildContext context,
+    List<DutySessionItem> items, {
+    required bool isPast,
+  }) {
+    return [
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) const SizedBox(height: 8),
+        _DutySessionTile(
+          session: items[i],
+          currentUserId: auth.userId,
+          isAdmin: auth.isAdmin,
+          isPast: isPast,
+          loading: controller.loading,
+          onBook: () => onBook(items[i]),
+          onCancel: () => onCancel(items[i]),
+          onTap: onAssign == null ? null : () => onAssign!(items[i]),
+        ),
+      ],
+    ];
   }
 }
 
@@ -350,21 +389,12 @@ class _DutySessionTile extends StatelessWidget {
               children: [
                 Text(
                   session.dateLabel,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: isPast
-                        ? colors.onSurface.withValues(alpha: 0.55)
-                        : kBrandOnYellow,
-                  ),
+                  style: isPast ? context.cardTitleMuted : context.cardTitle,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   session.timeRangeLabel,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isPast
-                        ? colors.onSurface.withValues(alpha: 0.55)
-                        : null,
-                  ),
+                  style: context.listSecondary(muted: isPast),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -372,7 +402,7 @@ class _DutySessionTile extends StatelessWidget {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: _isMine
                         ? colors.primary
-                        : colors.onSurface.withValues(alpha: 0.62),
+                        : colors.onSurface.withValues(alpha: kTextMutedAlpha),
                   ),
                 ),
               ],

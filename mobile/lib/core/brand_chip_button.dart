@@ -38,19 +38,18 @@ class BrandChipButton extends StatelessWidget {
         ),
       );
 
-  static ButtonStyle get _largeOutlinedStyle => OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: kBrandOnYellow,
-        disabledBackgroundColor: Colors.white,
-        disabledForegroundColor: kBrandOnYellow.withValues(alpha: 0.45),
-        surfaceTintColor: Colors.transparent,
-        side: const BorderSide(color: kBrandYellow, width: 1.5),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        minimumSize: const Size.fromHeight(48),
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-          decoration: TextDecoration.none,
+  static ButtonStyle get _largeOutlinedStyle =>
+      brandOutlinedButtonStyle().copyWith(
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        ),
+        minimumSize: const WidgetStatePropertyAll(Size.fromHeight(48)),
+        textStyle: const WidgetStatePropertyAll(
+          TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            decoration: TextDecoration.none,
+          ),
         ),
       );
 
@@ -102,7 +101,7 @@ class _CompactChipButton extends StatelessWidget {
     final outlined = variant == BrandChipButtonVariant.outlined;
     final enabled = onPressed != null;
     final background = outlined
-        ? Colors.white
+        ? kModalSurface
         : (enabled ? kBrandYellow : kBrandYellow.withValues(alpha: 0.55));
     final foreground = enabled
         ? kBrandOnYellow

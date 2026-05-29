@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 
 /// Branded container for toy detail sections.
 class ToyDetailSectionCard extends StatelessWidget {
@@ -41,8 +41,6 @@ class ToyDetailMetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -52,21 +50,13 @@ class ToyDetailMetaRow extends StatelessWidget {
             width: 112,
             child: Text(
               label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colors.onSurface.withValues(alpha: 0.55),
-                height: 1.35,
-              ),
+              style: context.metaLabel.copyWith(height: 1.35),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: kBrandOnYellow,
-                height: 1.35,
-              ),
+              style: context.metaValue.copyWith(height: 1.35),
             ),
           ),
         ],
@@ -83,13 +73,6 @@ class ToyDetailSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: kBrandOnYellow,
-            height: 1.2,
-          ),
-    );
+    return Text(title, style: context.sectionHeader.copyWith(height: 1.2));
   }
 }

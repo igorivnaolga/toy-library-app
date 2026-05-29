@@ -120,6 +120,7 @@ def _list_toys_db(
             q_norm = f"%{q.strip().lower()}%"
             filters.append(
                 or_(
+                    func.lower(ToyORM.toy_id).like(q_norm),
                     # Case-insensitive substring search on name.
                     func.lower(ToyORM.name).like(q_norm),
                     and_(
@@ -205,7 +206,8 @@ def list_toys(
         items = [
             toy
             for toy in items
-            if q_norm in toy.name.lower()
+            if q_norm in toy.toy_id.lower()
+            or q_norm in toy.name.lower()
             or (toy.description and q_norm in toy.description.lower())
         ]
 
@@ -238,6 +240,51 @@ def list_toys(
     start = (page - 1) * limit
     end = start + limit
     return items[start:end], total
+
+
+def update_toy_in_db(
+    toy_id: str,
+    *,
+    name: str | None = None,
+    category_label: str | None = None,
+    age_range: str | None = None,
+    status: str | None = None,
+    manufacturer: str | None = None,
+    description: str | None = None,
+) -> ToyOut | None:
+    """Update a DB-backed toy row; returns None when catalog is CSV-only or toy missing."""
+    if _db_toy_count() == 0:
+        return None
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
+    session = session_scope()
+    try:
+        toy = session.scalar(
+            select(ToyORM)
+            .options(joinedload(ToyORM.image))
+            .where(ToyORM.toy_id == toy_id_norm)
+        )
+        if toy is None:
+            return None
+        if name is not None:
+            cleaned = name.strip()
+            if cleaned:
+                toy.name = cleaned
+        if category_label is not None:
+            toy.category_label = category_label.strip() or None
+        if age_range is not None:
+            toy.age_range = age_range.strip() or None
+        if status is not None:
+            toy.status = status.strip() or None
+        if manufacturer is not None:
+            toy.manufacturer = manufacturer.strip() or None
+        if description is not None:
+            toy.description = description.strip() or None
+        session.commit()
+        return _toy_row_to_out(toy)
+    finally:
+        session.close()
 
 
 def get_toy_by_id(toy_id: str) -> ToyOut | None:

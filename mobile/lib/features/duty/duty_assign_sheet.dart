@@ -4,6 +4,8 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../loans/desk_member.dart";
+import "../../core/app_text_styles.dart";
+import "../../core/app_theme.dart";
 import "duty_controller.dart";
 import "duty_session_models.dart";
 
@@ -15,6 +17,10 @@ Future<void> showDutyAssignSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    backgroundColor: kModalSurface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
     builder: (context) => _DutyAssignSheet(sessionId: sessionId),
   );
 }
@@ -163,18 +169,14 @@ class _DutyAssignSheetState extends State<_DutyAssignSheet> {
             children: [
               Text(
                 session.dateLabel,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: context.cardTitle,
               ),
               Text(session.timeRangeLabel),
               if (assigned) ...[
                 const SizedBox(height: 8),
                 Text(
                   "Assigned to ${session.assigneeDisplayName}",
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: context.listSecondaryEmphasis,
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton(

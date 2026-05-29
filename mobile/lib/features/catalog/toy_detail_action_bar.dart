@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/pickup_date_banner.dart";
@@ -53,7 +53,6 @@ class ToyDetailActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
 
     return Material(
       elevation: 8,
@@ -77,10 +76,7 @@ class ToyDetailActionBar extends StatelessWidget {
                 Text(
                   "Complete membership setup to book toys from the catalog.",
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: kBrandOnYellow.withValues(alpha: 0.72),
-                    height: 1.35,
-                  ),
+                  style: context.bodyOnYellow,
                 )
               else ...[
                 if (myBooking?.pickupLabel != null) ...[
@@ -124,10 +120,7 @@ class ToyDetailActionBar extends StatelessWidget {
                   Text(
                     _unavailableMessage,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: kBrandOnYellow.withValues(alpha: 0.72),
-                      height: 1.35,
-                    ),
+                    style: context.bodyOnYellow,
                   ),
               ],
             ],

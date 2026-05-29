@@ -7,7 +7,11 @@ import "package:provider/provider.dart";
 import "core/api_client.dart";
 import "core/app_theme.dart";
 import "core/auth_store.dart";
-import "features/admin/admin_placeholder.dart";
+import "features/admin/admin_bookings_screen.dart";
+import "features/admin/admin_controller.dart";
+import "features/admin/admin_loans_screen.dart";
+import "features/admin/admin_members_screen.dart";
+import "features/admin/admin_notifications_sheet.dart";
 import "features/auth/login_screen.dart";
 import "features/bookings/bookings_controller.dart";
 import "features/bookings/bookings_screen.dart";
@@ -58,6 +62,7 @@ class ToyLibraryApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BookingsController(client)),
         ChangeNotifierProvider(create: (_) => LoansController(client)),
         ChangeNotifierProvider(create: (_) => DutyController(client)),
+        ChangeNotifierProvider(create: (_) => AdminController(client)),
         ChangeNotifierProxyProvider2<BackendClient, AuthStore, ProfileController>(
           create: (context) => ProfileController(
             context.read<BackendClient>(),
@@ -101,15 +106,45 @@ class _AppShell extends StatelessWidget {
   }
 }
 
-class _RoleHome extends StatelessWidget {
+class _RoleHome extends StatefulWidget {
   const _RoleHome();
+
+  @override
+  State<_RoleHome> createState() => _RoleHomeState();
+}
+
+class _RoleHomeState extends State<_RoleHome> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncAdminNotifications());
+  }
+
+  @override
+  void didUpdateWidget(covariant _RoleHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAdminNotifications();
+  }
+
+  void _syncAdminNotifications() {
+    if (!mounted) return;
+    final auth = context.read<AuthStore>();
+    if (auth.isAdmin) {
+      context.read<AdminController>().loadNotifications(silent: true);
+    }
+  }
+
+  void _openDuty(BuildContext context) {
+    showDutyRosterSheet(context);
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
+    final tabs = _tabsForRole(auth.role);
 
     return DefaultTabController(
-      length: _tabsForRole(auth.role).length,
+      length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
@@ -117,6 +152,14 @@ class _RoleHome extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           actions: [
+            if (auth.isAdmin) ...[
+              const AdminNotificationBell(),
+              IconButton(
+                tooltip: "Duty roster",
+                icon: const Icon(Icons.event_available_outlined),
+                onPressed: () => _openDuty(context),
+              ),
+            ],
             if (!auth.isLoggedIn)
               TextButton(
                 onPressed: () {
@@ -153,7 +196,7 @@ class _RoleHome extends StatelessWidget {
             isScrollable: false,
             tabAlignment: TabAlignment.fill,
             labelPadding: EdgeInsets.zero,
-            tabs: _tabsForRole(auth.role)
+            tabs: tabs
                 .map((t) => Tab(
                       height: 56,
                       icon: Icon(t.$2, size: 22),
@@ -183,13 +226,13 @@ class _RoleHome extends StatelessWidget {
   List<(String, IconData)> _tabsForRole(AppRole role) {
     const catalog = ("Catalog", Icons.toys);
     const bookings = ("Bookings", Icons.event_note);
+    const members = ("Members", Icons.people_outline);
     const loans = ("Loans", Icons.autorenew);
     const duty = ("Duty", Icons.event_available);
-    const admin = ("Admin", Icons.admin_panel_settings);
 
     switch (role) {
       case AppRole.admin:
-        return const [catalog, bookings, loans, duty, ..._infoTabs, admin];
+        return const [catalog, bookings, members, loans];
       case AppRole.volunteer:
         return const [catalog, bookings, loans, duty, ..._infoTabs];
       case AppRole.member:
@@ -204,11 +247,9 @@ class _RoleHome extends StatelessWidget {
       case AppRole.admin:
         return const [
           CatalogScreen(),
-          BookingsScreen(),
-          LoansScreen(),
-          DutyScreen(),
-          ..._infoScreens,
-          AdminPlaceholder(),
+          AdminBookingsScreen(),
+          AdminMembersScreen(),
+          AdminLoansScreen(),
         ];
       case AppRole.volunteer:
         return const [

@@ -48,15 +48,10 @@ class DutySessionItem {
   String get timeRangeLabel =>
       "${formatApiTime(startTime)} – ${formatApiTime(endTime)}";
 
-  String get assigneeDisplayName {
-    if (volunteerName != null && volunteerName!.isNotEmpty) {
-      return volunteerName!;
-    }
-    if (volunteerEmail != null && volunteerEmail!.isNotEmpty) {
-      return volunteerEmail!;
-    }
-    return "Volunteer";
-  }
+  String get assigneeDisplayName => visibleMemberName(
+        fullName: volunteerName,
+        email: volunteerEmail,
+      );
 
   String statusLabel({required String? currentUserId}) {
     if (isOpen) return "Open slot";
@@ -67,6 +62,17 @@ class DutySessionItem {
     }
     return assigneeDisplayName;
   }
+}
+
+/// Prefer full name; otherwise show the full email address.
+String visibleMemberName({String? fullName, String? email}) {
+  final name = fullName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+
+  final mail = email?.trim();
+  if (mail != null && mail.isNotEmpty) return mail;
+
+  return "Volunteer";
 }
 
 class OnDutyStatus {

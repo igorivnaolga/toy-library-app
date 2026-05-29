@@ -126,6 +126,22 @@ def require_admin(
     return principal
 
 
+def require_booking_member():
+    """Members and volunteers may book toys; admins are explicitly blocked."""
+
+    def _guard(principal: Principal = Depends(get_current_principal)) -> Principal:
+        if principal.role == Role.ADMIN:
+            raise HTTPException(
+                status_code=403,
+                detail="Admins cannot book toys for themselves.",
+            )
+        if principal.role not in {Role.MEMBER, Role.VOLUNTEER}:
+            raise HTTPException(status_code=403, detail="Insufficient role")
+        return principal
+
+    return _guard
+
+
 def require_on_duty_desk():
     """
     Volunteer desk actions: volunteer must have a booked duty slot covering now.

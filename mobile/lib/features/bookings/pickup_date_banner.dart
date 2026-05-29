@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 
 /// Pickup day callout for a pending booking on the toy detail screen.
@@ -30,19 +31,12 @@ class PickupDateBanner extends StatelessWidget {
             children: [
               Text(
                 "Pick up",
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: kBrandOnYellow.withValues(alpha: 0.75),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
+                style: context.captionOnYellow.copyWith(letterSpacing: 0.2),
               ),
               const SizedBox(height: 2),
               Text(
                 pickupLabel,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: kBrandOnYellow,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: context.modalOptionTitle,
               ),
             ],
           ),

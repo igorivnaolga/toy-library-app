@@ -3,13 +3,13 @@ import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
 import "../auth/login_screen.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
-import "kid_profile.dart";
 
 /// Editable user profile opened from the AppBar avatar button.
 class ProfileScreen extends StatefulWidget {
@@ -54,7 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
               child: Text(
                 "Change profile photo",
-                style: Theme.of(context).textTheme.titleMedium,
+                style: context.screenTitle,
               ),
             ),
             ListTile(
@@ -243,10 +243,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             )
                           : Text(
                               "Your current membership",
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.62),
-                              ),
+                              style: context.profileSecondary,
                             ),
                     ),
                     _MembershipBadge(label: membershipStatus),
@@ -273,10 +270,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _editingChildren
                             ? "Add a child below."
                             : "Add children who borrow toys from the library.",
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.62),
-                        ),
+                        style: context.profileSecondary,
                       )
                     : Wrap(
                         spacing: 8,
@@ -493,9 +487,7 @@ class _ProfileHeader extends StatelessWidget {
                 child: Text(
                   fullName,
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: context.detailTitle,
                 ),
               ),
               IconButton(
@@ -511,9 +503,7 @@ class _ProfileHeader extends StatelessWidget {
           Text(
             email!,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
-            ),
+            style: context.profileSecondary,
           ),
         ],
         const SizedBox(height: 8),
@@ -547,11 +537,7 @@ class _ProfileSection extends StatelessWidget {
               Expanded(
                 child: Text(
                   title.toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  ),
+                  style: context.formSectionLabel,
                 ),
               ),
               if (trailing != null) trailing!,

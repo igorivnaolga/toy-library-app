@@ -1,5 +1,7 @@
 import "package:flutter/material.dart";
 
+import "../../core/app_text_styles.dart";
+import "../../core/modal_action_buttons.dart";
 import "../catalog/toy_photo_tile.dart";
 import "loan_models.dart";
 
@@ -17,7 +19,7 @@ Future<bool> showDeskCheckInDialog(
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,9 +32,7 @@ Future<bool> showDeskCheckInDialog(
                       children: [
                         Text(
                           loan.toyName ?? loan.toyId,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: context.cardTitle,
                         ),
                         const SizedBox(height: 4),
                         Text("Toy id: ${loan.toyId}"),
@@ -50,19 +50,16 @@ Future<bool> showDeskCheckInDialog(
                 "Confirm the toy matches what is being returned, then check it in.",
                 style: theme.textTheme.bodySmall,
               ),
+              const SizedBox(height: 20),
+              ModalEqualWidthButtonRow(
+                secondaryLabel: "Cancel",
+                primaryLabel: "Check in",
+                onSecondary: () => Navigator.pop(context, false),
+                onPrimary: () => Navigator.pop(context, true),
+              ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Check in"),
-          ),
-        ],
       );
     },
   );

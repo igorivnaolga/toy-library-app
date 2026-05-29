@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.models.duty_session import DutySession
+from app.utils.text import visible_member_name
 
 
 class DutySessionCreate(BaseModel):
@@ -64,14 +65,14 @@ def duty_session_out_from_model(row: DutySession, db: Session | None = None) -> 
     volunteer_name = None
     volunteer_email = None
     if row.volunteer_id is not None:
+        profile_name = None
         if row.volunteer is not None and row.volunteer.full_name:
-            cleaned = row.volunteer.full_name.strip()
-            if cleaned:
-                volunteer_name = cleaned
-        if volunteer_name is None and db is not None:
+            profile_name = row.volunteer.full_name.strip() or None
+        if db is not None:
             from app.repositories.profile_repo import get_user_email
 
             volunteer_email = get_user_email(db, row.volunteer_id)
+        volunteer_name = visible_member_name(profile_name, volunteer_email)
     return DutySessionOut(
         session_id=str(row.id),
         session_date=row.session_date,

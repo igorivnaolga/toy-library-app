@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/brand_chip_button.dart";
 
@@ -13,9 +14,8 @@ Future<void> showBookingConfirmedDialog(
     context: context,
     barrierDismissible: false,
     builder: (ctx) {
-      final theme = Theme.of(ctx);
       return Dialog(
-        backgroundColor: Colors.white,
+        backgroundColor: kModalSurface,
         insetPadding: const EdgeInsets.symmetric(horizontal: 28),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
@@ -46,10 +46,7 @@ Future<void> showBookingConfirmedDialog(
                   const SizedBox(height: 12),
                   Text(
                     "Booking confirmed",
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: kBrandOnYellow,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: ctx.modalTitleOnYellow,
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -62,10 +59,7 @@ Future<void> showBookingConfirmedDialog(
                 children: [
                   Text(
                     toyName,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: kBrandOnYellow,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: ctx.modalOptionTitle,
                   ),
                   const SizedBox(height: 10),
                   Container(
@@ -92,17 +86,13 @@ Future<void> showBookingConfirmedDialog(
                             children: [
                               Text(
                                 "Pick up",
-                                style: theme.textTheme.labelMedium?.copyWith(
+                                style: ctx.captionOnYellow.copyWith(
                                   color: kBrandOnYellow.withValues(alpha: 0.65),
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               Text(
                                 pickupLabel,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: kBrandOnYellow,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                style: ctx.modalOptionTitle,
                               ),
                             ],
                           ),
@@ -113,10 +103,7 @@ Future<void> showBookingConfirmedDialog(
                   const SizedBox(height: 12),
                   Text(
                     "View your booking anytime under the Bookings tab.",
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: kBrandOnYellow.withValues(alpha: 0.72),
-                      height: 1.4,
-                    ),
+                    style: ctx.bodyOnYellow.copyWith(height: 1.4),
                   ),
                 ],
               ),

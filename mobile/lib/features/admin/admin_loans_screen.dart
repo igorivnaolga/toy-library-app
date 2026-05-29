@@ -1,0 +1,393 @@
+import "package:flutter/material.dart";
+import "package:provider/provider.dart";
+
+import "../../core/app_text_styles.dart";
+import "../../core/section_header.dart";
+import "../../core/brand_chip_button.dart";
+import "../bookings/booking_models.dart";
+import "../catalog/catalog_provider.dart";
+import "../catalog/toy_detail_screen.dart";
+import "../catalog/toy_photo_tile.dart";
+import "../loans/desk_check_in_dialog.dart";
+import "../loans/desk_walk_in_panel.dart";
+import "../loans/loan_models.dart";
+import "../loans/loans_controller.dart";
+import "admin_cv_scan_panel.dart";
+
+/// Admin desk: separate check-out and check-in flows (CV-ready check-in).
+class AdminLoansScreen extends StatefulWidget {
+  const AdminLoansScreen({super.key});
+
+  @override
+  State<AdminLoansScreen> createState() => _AdminLoansScreenState();
+}
+
+class _AdminLoansScreenState extends State<AdminLoansScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<LoansController>().loadVolunteerDesk();
+    });
+  }
+
+  Future<void> _checkOut(BookingItem booking) async {
+    final controller = context.read<LoansController>();
+    final catalog = context.read<CatalogController>();
+    try {
+      await controller.checkOutFromBooking(booking.bookingId);
+      await catalog.refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Checked out ${booking.toyName ?? booking.toyId}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loanActionErrorMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _checkIn(LoanItem loan) async {
+    final confirmed = await showDeskCheckInDialog(context, loan);
+    if (confirmed != true || !mounted) return;
+
+    final controller = context.read<LoansController>();
+    final catalog = context.read<CatalogController>();
+    try {
+      await controller.checkIn(loan.loanId);
+      await catalog.refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Checked in ${loan.toyName ?? loan.toyId}")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loanActionErrorMessage(e))),
+      );
+    }
+  }
+
+  void _openToy(String toyId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ToyDetailScreen(toyId: toyId),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surface,
+            child: const TabBar(
+              tabs: [
+                Tab(text: "Check out"),
+                Tab(text: "Check in"),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _CheckOutTab(
+                  onCheckOut: _checkOut,
+                  onOpenToy: _openToy,
+                  onRefresh: () =>
+                      context.read<LoansController>().loadVolunteerDesk(),
+                ),
+                _CheckInTab(
+                  onCheckIn: _checkIn,
+                  onOpenToy: _openToy,
+                  onRefresh: () =>
+                      context.read<LoansController>().loadVolunteerDesk(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckOutTab extends StatelessWidget {
+  const _CheckOutTab({
+    required this.onCheckOut,
+    required this.onOpenToy,
+    required this.onRefresh,
+  });
+
+  final Future<void> Function(BookingItem booking) onCheckOut;
+  final ValueChanged<String> onOpenToy;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<LoansController>(
+      builder: (context, c, _) {
+        if (c.deskLoading && c.pendingCheckouts.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final today = deskTodayReservations(c.pendingCheckouts);
+        final earlier = deskEarlierReady(c.pendingCheckouts);
+
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            children: [
+              DeskWalkInPanel(
+                loading: c.deskLoading,
+                onCheckedOut: () async {
+                  await context.read<CatalogController>().refresh();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Walk-in toy checked out")),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              if (today.isEmpty && earlier.isEmpty) ...[
+                const Center(
+                  child: Text(
+                    "No reservations ready for checkout.",
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (today.isNotEmpty) ...[
+                const SectionHeader("Today's reservations"),
+                for (var i = 0; i < today.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _CheckoutTile(
+                    booking: today[i],
+                    loading: c.deskLoading,
+                    onOpen: () => onOpenToy(today[i].toyId),
+                    onCheckOut: () => onCheckOut(today[i]),
+                  ),
+                ],
+              ],
+              if (today.isNotEmpty && earlier.isNotEmpty)
+                const SizedBox(height: 20),
+              if (earlier.isNotEmpty) ...[
+                const SectionHeader("Ready for checkout"),
+                for (var i = 0; i < earlier.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _CheckoutTile(
+                    booking: earlier[i],
+                    loading: c.deskLoading,
+                    onOpen: () => onOpenToy(earlier[i].toyId),
+                    onCheckOut: () => onCheckOut(earlier[i]),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CheckInTab extends StatelessWidget {
+  const _CheckInTab({
+    required this.onCheckIn,
+    required this.onOpenToy,
+    required this.onRefresh,
+  });
+
+  final Future<void> Function(LoanItem loan) onCheckIn;
+  final ValueChanged<String> onOpenToy;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<LoansController>(
+      builder: (context, c, _) {
+        if (c.deskLoading && c.activeLoans.isEmpty) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            children: [
+              const AdminCvScanPanel(),
+              const SizedBox(height: 16),
+              if (c.activeLoans.isEmpty)
+                const Center(
+                  child: Text(
+                    "No toys currently on loan.",
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else ...[
+                const SectionHeader("On loan"),
+                for (var i = 0; i < c.activeLoans.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _CheckInTile(
+                    loan: c.activeLoans[i],
+                    loading: c.deskLoading,
+                    onOpen: () => onOpenToy(c.activeLoans[i].toyId),
+                    onCheckIn: () => onCheckIn(c.activeLoans[i]),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CheckoutTile extends StatelessWidget {
+  const _CheckoutTile({
+    required this.booking,
+    required this.loading,
+    required this.onOpen,
+    required this.onCheckOut,
+  });
+
+  final BookingItem booking;
+  final bool loading;
+  final VoidCallback onOpen;
+  final VoidCallback onCheckOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ToyPhotoTile(toyId: booking.toyId),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      booking.toyName ?? booking.toyId,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.cardTitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      booking.deskSubtitle,
+                      style: context.listSubtitle,
+                    ),
+                    if (booking.pickupLabel != null &&
+                        booking.pickupLabel!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        booking.pickupLabel!,
+                        style: context.listSubtitle,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              BrandChipButton(
+                label: "Check out",
+                fixedWidth: 100,
+                onPressed: loading ? null : onCheckOut,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckInTile extends StatelessWidget {
+  const _CheckInTile({
+    required this.loan,
+    required this.loading,
+    required this.onOpen,
+    required this.onCheckIn,
+  });
+
+  final LoanItem loan;
+  final bool loading;
+  final VoidCallback onOpen;
+  final VoidCallback onCheckIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: colors.surfaceContainerLowest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ToyPhotoTile(toyId: loan.toyId),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      loan.toyName ?? loan.toyId,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.cardTitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      loan.deskSubtitle,
+                      style: context.listSubtitle.copyWith(
+                        color: loan.isOverdue
+                            ? colors.error
+                            : context.listSubtitle.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              BrandChipButton(
+                label: "Check in",
+                variant: BrandChipButtonVariant.outlined,
+                fixedWidth: 100,
+                onPressed: loading ? null : onCheckIn,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

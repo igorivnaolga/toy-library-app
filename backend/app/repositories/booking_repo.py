@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import case, delete, select
+from sqlalchemy import case, delete, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.booking import (
@@ -14,6 +14,8 @@ from app.models.booking import (
     BOOKING_STATUS_PENDING,
     Booking,
 )
+from app.models.profile import Profile
+from app.models.toy import Toy
 
 # Cancelled rows stay visible briefly, then are removed by ``purge_expired_cancelled_bookings``.
 CANCELLED_BOOKING_RETENTION = timedelta(minutes=10)
@@ -153,3 +155,70 @@ def mark_booking_completed(session: Session, booking: Booking) -> Booking:
     booking.status = BOOKING_STATUS_COMPLETED
     session.flush()
     return booking
+
+
+def list_bookings_for_admin(
+    session: Session,
+    *,
+    pickup_from: date | None = None,
+    pickup_to: date | None = None,
+    user_id: uuid.UUID | None = None,
+    q: str | None = None,
+    limit: int = 200,
+) -> list[tuple[Booking, str | None]]:
+    """All bookings for admin views, optionally filtered; returns (booking, member_email)."""
+    status_rank = case(
+        (Booking.status == BOOKING_STATUS_PENDING, 0),
+        (Booking.status == BOOKING_STATUS_COMPLETED, 1),
+        (Booking.status == BOOKING_STATUS_CANCELLED, 2),
+        else_=3,
+    )
+    stmt = (
+        select(Booking)
+        .options(joinedload(Booking.toy), joinedload(Booking.profile))
+        .order_by(
+            status_rank.asc(),
+            Booking.pickup_date.asc().nulls_last(),
+            Booking.created_at.desc(),
+        )
+    )
+    if pickup_from is not None:
+        stmt = stmt.where(Booking.pickup_date >= pickup_from)
+    if pickup_to is not None:
+        stmt = stmt.where(Booking.pickup_date <= pickup_to)
+    if user_id is not None:
+        stmt = stmt.where(Booking.user_id == user_id)
+    if q:
+        pattern = f"%{q.strip().lower()}%"
+        email_subq = text(
+            """
+            exists (
+              select 1 from auth.users u
+              where u.id = bookings.user_id
+                and lower(coalesce(u.email::text, '')) like :pattern
+            )
+            """
+        ).bindparams(pattern=pattern)
+        stmt = (
+            stmt.join(Booking.toy, isouter=True)
+            .join(Booking.profile, isouter=True)
+            .where(
+                or_(
+                    func.lower(Toy.name).like(pattern),
+                    func.lower(Booking.toy_id).like(pattern),
+                    func.lower(Profile.full_name).like(pattern),
+                    email_subq,
+                )
+            )
+        )
+    stmt = stmt.limit(limit)
+    rows = session.scalars(stmt).unique().all()
+    out: list[tuple[Booking, str | None]] = []
+    for booking in rows:
+        email_row = session.execute(
+            text("select email::text from auth.users where id = :id"),
+            {"id": booking.user_id},
+        ).scalar_one_or_none()
+        email = str(email_row).strip() if email_row else None
+        out.append((booking, email or None))
+    return out

@@ -1,0 +1,13 @@
+{
+  "dart.flutterRunAdditionalArgs": [
+    "--no-dds",
+    "--host-vmservice-port=58162",
+    "--device-timeout=120"
+  ],
+  "dart.flutterAttachAdditionalArgs": [
+    "--no-dds",
+    "--host-vmservice-port=58162",
+    "--device-timeout=120"
+  ],
+  "dart.vmServiceConnectTimeout": 120000
+}

@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_text_styles.dart";
 import "../../core/api_client.dart";
 import "../../core/auth_store.dart";
 
@@ -59,7 +60,7 @@ class _MembershipOnboardingScreenState
           Text(
             "Pick how you would like to take part. You can change fees or "
             "renewals later; this step only records your tier.",
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: context.bodyText,
           ),
           const SizedBox(height: 24),
           if (_error != null)
@@ -123,9 +124,9 @@ class _TierCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
+              Text(title, style: context.cardTitle),
               const SizedBox(height: 8),
-              Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              Text(subtitle, style: context.listSubtitle),
             ],
           ),
         ),

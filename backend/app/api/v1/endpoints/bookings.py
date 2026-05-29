@@ -7,8 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import require_on_duty_desk, require_roles
-from app.core.roles import Role
+from app.core.auth_deps import require_booking_member, require_on_duty_desk
 from app.db.session import get_db
 from app.schemas.booking import (
     BookingCreate,
@@ -32,7 +31,7 @@ from app.services.booking_service import (
 
 router = APIRouter()
 
-_require_member = require_roles(Role.MEMBER, Role.VOLUNTEER)
+_require_member = require_booking_member()
 _require_on_duty = require_on_duty_desk()
 
 

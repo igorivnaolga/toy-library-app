@@ -1,7 +1,8 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_text_styles.dart";
+import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
 import "../bookings/booking_models.dart";
@@ -260,7 +261,7 @@ class _MyLoansView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
               if (sections.active.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "Active"),
+                const SectionHeader("Active"),
                 for (var i = 0; i < sections.active.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   LoanListTile(
@@ -276,7 +277,7 @@ class _MyLoansView extends StatelessWidget {
               if (sections.active.isNotEmpty && sections.returned.isNotEmpty)
                 const SizedBox(height: 20),
               if (sections.returned.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "Returned"),
+                const SectionHeader("Returned"),
                 for (var i = 0; i < sections.returned.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   LoanListTile(
@@ -373,7 +374,7 @@ class _VolunteerDeskView extends StatelessWidget {
                 const SizedBox(height: 16),
               ],
               if (today.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "Today's reservations"),
+                const SectionHeader("Today's reservations"),
                 for (var i = 0; i < today.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   _PendingCheckoutTile(
@@ -387,7 +388,7 @@ class _VolunteerDeskView extends StatelessWidget {
               if (today.isNotEmpty && earlier.isNotEmpty)
                 const SizedBox(height: 20),
               if (earlier.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "Ready for checkout"),
+                const SectionHeader("Ready for checkout"),
                 for (var i = 0; i < earlier.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   _PendingCheckoutTile(
@@ -402,7 +403,7 @@ class _VolunteerDeskView extends StatelessWidget {
                   c.activeLoans.isNotEmpty)
                 const SizedBox(height: 20),
               if (c.activeLoans.isNotEmpty) ...[
-                const _LoansSectionHeader(title: "On loan"),
+                const SectionHeader("On loan"),
                 for (var i = 0; i < c.activeLoans.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   _ActiveLoanDeskTile(
@@ -460,26 +461,19 @@ class _PendingCheckoutTile extends StatelessWidget {
                       booking.toyName ?? booking.toyId,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: kBrandOnYellow,
-                      ),
+                      style: context.cardTitle,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       booking.deskSubtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurface.withValues(alpha: 0.62),
-                      ),
+                      style: context.listSubtitle,
                     ),
                     if (booking.pickupLabel != null &&
                         booking.pickupLabel!.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
                         booking.pickupLabel!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurface.withValues(alpha: 0.62),
-                        ),
+                        style: context.listSubtitle,
                       ),
                     ],
                   ],
@@ -538,18 +532,15 @@ class _ActiveLoanDeskTile extends StatelessWidget {
                       loan.toyName ?? loan.toyId,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: kBrandOnYellow,
-                      ),
+                      style: context.cardTitle,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       loan.deskSubtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
+                      style: context.listSubtitle.copyWith(
                         color: loan.isOverdue
                             ? colors.error
-                            : colors.onSurface.withValues(alpha: 0.62),
+                            : context.listSubtitle.color,
                       ),
                     ),
                   ],
@@ -565,26 +556,6 @@ class _ActiveLoanDeskTile extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LoansSectionHeader extends StatelessWidget {
-  const _LoansSectionHeader({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: kBrandOnYellow,
-            ),
       ),
     );
   }
