@@ -114,6 +114,8 @@ class CatalogController extends ChangeNotifier {
     String? status,
     String? manufacturer,
     String? description,
+    int? totalPieces,
+    int? missingPieces,
   }) async {
     final body = <String, dynamic>{
       "name": name,
@@ -122,6 +124,8 @@ class CatalogController extends ChangeNotifier {
       if (status != null) "status": status,
       if (manufacturer != null) "manufacturer": manufacturer,
       if (description != null) "description": description,
+      if (totalPieces != null) "total_pieces": totalPieces,
+      if (missingPieces != null) "missing_pieces": missingPieces,
     };
     final json =
         await _client.patchJson("/api/v1/admin/toys/$toyId", body);

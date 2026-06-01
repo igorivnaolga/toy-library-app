@@ -209,7 +209,10 @@ class DutySessionSections {
   final List<DutySessionItem> past;
 }
 
-DutySessionSections splitDutySessions(List<DutySessionItem> items) {
+DutySessionSections splitDutySessions(
+  List<DutySessionItem> items, {
+  String? pastForVolunteerId,
+}) {
   final today = calendarDay(DateTime.now());
   final upcoming = <DutySessionItem>[];
   final past = <DutySessionItem>[];
@@ -220,6 +223,9 @@ DutySessionSections splitDutySessions(List<DutySessionItem> items) {
     } else {
       upcoming.add(item);
     }
+  }
+  if (pastForVolunteerId != null && pastForVolunteerId.isNotEmpty) {
+    past.retainWhere((item) => item.volunteerId == pastForVolunteerId);
   }
   sortDutySessions(upcoming);
   past.sort((a, b) {

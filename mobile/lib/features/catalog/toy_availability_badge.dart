@@ -1,5 +1,7 @@
 import "package:flutter/material.dart";
 
+import "../../core/app_theme.dart";
+
 /// Compact label for the backend `ToyOut.availability` code.
 class ToyAvailabilityBadge extends StatelessWidget {
   const ToyAvailabilityBadge({
@@ -21,8 +23,8 @@ class ToyAvailabilityBadge extends StatelessWidget {
         ),
       "on_loan" => (
           "On loan",
-          const Color(0xFFFFE0B2),
-          const Color(0xFFE65100),
+          kStatusOnLoanBg,
+          kStatusOnLoanFg,
         ),
       "reserved" => (
           "Reserved",

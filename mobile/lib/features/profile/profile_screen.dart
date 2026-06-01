@@ -6,7 +6,6 @@ import "../../core/app_theme.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
-import "../auth/login_screen.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
@@ -157,11 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _signOut() async {
     await context.read<AuthStore>().signOut();
     if (!mounted) return;
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    await navigator.push(
-      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-    );
+    Navigator.of(context).pop();
   }
 
   @override
@@ -177,29 +172,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const SizedBox.shrink(),
+        actionsPadding: const EdgeInsets.only(right: 20),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: OutlinedButton.icon(
-              onPressed: profile.saving ? null : _signOut,
-              icon: const Icon(Icons.logout, size: 16),
-              label: const Text("Sign out"),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-                disabledForegroundColor:
-                    theme.colorScheme.error.withValues(alpha: 0.45),
-                side: BorderSide(
-                  color: theme.colorScheme.error.withValues(alpha: 0.45),
-                ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                textStyle: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
+          _ProfileSignOutAction(
+            onPressed: profile.saving ? null : _signOut,
           ),
         ],
       ),
@@ -581,6 +557,56 @@ class _MembershipBadge extends StatelessWidget {
         style: theme.textTheme.labelMedium?.copyWith(
           color: theme.colorScheme.onPrimaryContainer,
           fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+/// Red sign-out control for the profile app bar (kept clear of the DEBUG banner).
+class _ProfileSignOutAction extends StatelessWidget {
+  const _ProfileSignOutAction({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+    final enabled = onPressed != null;
+    final color = enabled ? error : error.withValues(alpha: 0.45);
+    final borderColor = enabled
+        ? error.withValues(alpha: 0.55)
+        : error.withValues(alpha: 0.35);
+
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const StadiumBorder(),
+          child: Ink(
+            decoration: ShapeDecoration(
+              shape: StadiumBorder(
+                side: BorderSide(color: borderColor, width: 1.5),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.logout, size: 16, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  "Sign out",
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

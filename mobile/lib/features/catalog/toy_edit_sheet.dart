@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
@@ -36,6 +37,8 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
   late final TextEditingController _status;
   late final TextEditingController _manufacturer;
   late final TextEditingController _description;
+  late final TextEditingController _totalPieces;
+  late final TextEditingController _missingPieces;
   bool _saving = false;
 
   @override
@@ -48,6 +51,12 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
     _status = TextEditingController(text: t.status ?? "");
     _manufacturer = TextEditingController(text: t.manufacturer ?? "");
     _description = TextEditingController(text: t.description ?? "");
+    _totalPieces = TextEditingController(
+      text: t.totalPieces?.toString() ?? "",
+    );
+    _missingPieces = TextEditingController(
+      text: t.missingPieces?.toString() ?? "",
+    );
   }
 
   @override
@@ -58,13 +67,44 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
     _status.dispose();
     _manufacturer.dispose();
     _description.dispose();
+    _totalPieces.dispose();
+    _missingPieces.dispose();
     super.dispose();
+  }
+
+  int? _parseOptionalCount(TextEditingController controller, String label) {
+    final raw = controller.text.trim();
+    if (raw.isEmpty) return null;
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("$label must be a whole number.")),
+      );
+      return -1;
+    }
+    return parsed;
   }
 
   Future<void> _save() async {
     if (_name.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Name is required.")),
+      );
+      return;
+    }
+
+    final totalPieces = _parseOptionalCount(_totalPieces, "Total pieces");
+    if (totalPieces == -1) return;
+    final missingPieces =
+        _parseOptionalCount(_missingPieces, "Missing pieces");
+    if (missingPieces == -1) return;
+    if (totalPieces != null &&
+        missingPieces != null &&
+        missingPieces > totalPieces) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Missing pieces cannot exceed total pieces."),
+        ),
       );
       return;
     }
@@ -80,6 +120,8 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
         status: _status.text.trim(),
         manufacturer: _manufacturer.text.trim(),
         description: _description.text.trim(),
+        totalPieces: totalPieces,
+        missingPieces: missingPieces,
       );
       if (!mounted) return;
       Navigator.pop(context, updated);
@@ -148,6 +190,26 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
               decoration: const InputDecoration(labelText: "Description"),
               minLines: 3,
               maxLines: 6,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _totalPieces,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: "Total pieces",
+                helperText: "Leave blank if unknown",
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _missingPieces,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: "Missing pieces",
+                helperText: "Leave blank if none or unknown",
+              ),
             ),
             const SizedBox(height: 20),
             BrandChipButton(

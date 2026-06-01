@@ -162,6 +162,8 @@ def update_toy(
         status=payload.get("status"),
         manufacturer=payload.get("manufacturer"),
         description=payload.get("description"),
+        total_pieces=payload.get("total_pieces"),
+        missing_pieces=payload.get("missing_pieces"),
     )
     if updated is None:
         raise HTTPException(

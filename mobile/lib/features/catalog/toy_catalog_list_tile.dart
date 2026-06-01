@@ -52,6 +52,7 @@ class ToyCatalogListTile extends StatelessWidget {
                       _CatalogSubtitle(
                         category: toy.category,
                         status: toy.status,
+                        piecesSummary: toy.piecesSummary,
                       ),
                     ],
                   ],
@@ -70,7 +71,8 @@ class ToyCatalogListTile extends StatelessWidget {
     final category = toy.category?.trim();
     final status = toy.status?.trim();
     return (category != null && category.isNotEmpty) ||
-        (status != null && status.isNotEmpty);
+        (status != null && status.isNotEmpty) ||
+        toy.piecesSummary.isNotEmpty;
   }
 }
 
@@ -78,10 +80,12 @@ class _CatalogSubtitle extends StatelessWidget {
   const _CatalogSubtitle({
     required this.category,
     required this.status,
+    required this.piecesSummary,
   });
 
   final String? category;
   final String? status;
+  final String piecesSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -92,8 +96,9 @@ class _CatalogSubtitle extends StatelessWidget {
     final hasCategory =
         categoryLabel != null && categoryLabel.isNotEmpty;
     final hasStatus = statusLabel != null && statusLabel.isNotEmpty;
+    final hasPieces = piecesSummary.isNotEmpty;
 
-    if (!hasCategory && !hasStatus) {
+    if (!hasCategory && !hasStatus && !hasPieces) {
       return const SizedBox.shrink();
     }
 
@@ -116,6 +121,15 @@ class _CatalogSubtitle extends StatelessWidget {
             ),
           ),
         if (hasStatus) Text(statusLabel, style: statusStyle),
+        if ((hasCategory || hasStatus) && hasPieces)
+          Text(
+            "·",
+            style: mutedStyle.copyWith(
+              fontWeight: FontWeight.w700,
+              color: colors.outline,
+            ),
+          ),
+        if (hasPieces) Text(piecesSummary, style: statusStyle),
       ],
     );
   }

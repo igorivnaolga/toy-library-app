@@ -162,7 +162,12 @@ def check_out_walk_in(
     return loaded if loaded is not None else loan
 
 
-def check_in_loan(session: Session, loan_id: uuid.UUID) -> Loan:
+def check_in_loan(
+    session: Session,
+    loan_id: uuid.UUID,
+    *,
+    missing_pieces: int | None = None,
+) -> Loan:
     """Volunteer check-in: return toy and close the loan."""
     loan = get_loan_by_id(session, loan_id)
     if loan is None:
@@ -175,6 +180,13 @@ def check_in_loan(session: Session, loan_id: uuid.UUID) -> Loan:
         )
 
     toy = loan.toy or _get_toy_row(session, loan.toy_id)
+    if missing_pieces is not None and toy is not None:
+        if toy.total_pieces is not None and missing_pieces > toy.total_pieces:
+            raise LoanError(
+                "invalid_missing_pieces",
+                "Missing pieces cannot exceed total pieces.",
+            )
+        toy.missing_pieces = missing_pieces
     mark_loan_returned(session, loan)
     if toy is not None:
         toy.status = _TOY_STATUS_IN_LIBRARY

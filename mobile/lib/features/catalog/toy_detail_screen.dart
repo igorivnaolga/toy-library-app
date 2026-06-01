@@ -5,6 +5,7 @@ import "../../core/api_exception.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
+import "../../core/toy_pieces.dart";
 import "../auth/login_screen.dart";
 import "../bookings/booking_confirmed_dialog.dart";
 import "../bookings/booking_models.dart";
@@ -273,6 +274,10 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                     if (t.category != null ||
                         t.ageRange != null ||
                         t.status != null ||
+                        hasToyPiecesInfo(
+                          totalPieces: t.totalPieces,
+                          missingPieces: t.missingPieces,
+                        ) ||
                         (t.manufacturer != null &&
                             t.manufacturer!.isNotEmpty)) ...[
                       const SizedBox(height: 16),
@@ -287,6 +292,16 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                         ToyDetailMetaRow(label: "Age range", value: t.ageRange!),
                       if (t.status != null)
                         ToyDetailMetaRow(label: "Status", value: t.status!),
+                      if (hasToyPiecesInfo(
+                        totalPieces: t.totalPieces,
+                        missingPieces: t.missingPieces,
+                      ))
+                        ToyDetailMetaRow(
+                          label: "Pieces",
+                          value: t.piecesSummary.isNotEmpty
+                              ? t.piecesSummary
+                              : "Not recorded",
+                        ),
                       if (t.manufacturer != null && t.manufacturer!.isNotEmpty)
                         ToyDetailMetaRow(
                           label: "Manufacturer",

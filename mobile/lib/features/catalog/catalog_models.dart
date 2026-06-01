@@ -1,5 +1,6 @@
-/// DTOs aligned with FastAPI `ToyOut` / `CategoryOut` (snake_case JSON keys).
 library;
+
+import "../../core/toy_pieces.dart";
 
 class CategoryItem {
   const CategoryItem({
@@ -44,6 +45,8 @@ class ToyItem {
     this.manufacturer,
     this.description,
     this.photoFile,
+    this.totalPieces,
+    this.missingPieces,
   });
 
   final String toyId;
@@ -55,6 +58,13 @@ class ToyItem {
   final String? manufacturer;
   final String? description;
   final String? photoFile;
+  final int? totalPieces;
+  final int? missingPieces;
+
+  String get piecesSummary => formatToyPiecesSummary(
+        totalPieces: totalPieces,
+        missingPieces: missingPieces,
+      );
 
   factory ToyItem.fromJson(Map<String, dynamic> json) {
     return ToyItem(
@@ -67,6 +77,8 @@ class ToyItem {
       manufacturer: json["manufacturer"] as String?,
       description: json["description"] as String?,
       photoFile: json["photo_file"] as String?,
+      totalPieces: (json["total_pieces"] as num?)?.toInt(),
+      missingPieces: (json["missing_pieces"] as num?)?.toInt(),
     );
   }
 }

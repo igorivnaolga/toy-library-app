@@ -21,6 +21,7 @@ from app.core.availability import normalize_availability
 from app.db.session import get_engine, session_scope
 from app.models.toy import Toy as ToyORM
 from app.schemas.toy import ToyOut
+from app.services.pieces_from_setls import load_pieces_summary
 
 _MAX_DISTINCT_AGE_RANGES = 100
 
@@ -46,6 +47,7 @@ def load_all_toys() -> tuple[ToyOut, ...]:
         return ()
 
     toys: list[ToyOut] = []
+    pieces_by_toy = load_pieces_summary()
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
@@ -54,6 +56,11 @@ def load_all_toys() -> tuple[ToyOut, ...]:
             if not toy_id or not name:
                 continue
             status = _to_none(row.get("Status"))
+            piece_data = pieces_by_toy.get(toy_id)
+            total_pieces = piece_data[0] if piece_data else None
+            missing_pieces = None
+            if piece_data and piece_data[1] > 0:
+                missing_pieces = piece_data[1]
             toys.append(
                 ToyOut(
                     toy_id=toy_id,
@@ -65,6 +72,8 @@ def load_all_toys() -> tuple[ToyOut, ...]:
                     manufacturer=_to_none(row.get("Manufacturer")),
                     description=_to_none(row.get("description")),
                     photo_file=_to_none(row.get("photo_file_desc")),
+                    total_pieces=total_pieces,
+                    missing_pieces=missing_pieces,
                 )
             )
     return tuple(toys)
@@ -98,6 +107,8 @@ def _toy_row_to_out(toy: ToyORM) -> ToyOut:
         manufacturer=toy.manufacturer,
         description=toy.description,
         photo_file=photo_file,
+        total_pieces=toy.total_pieces,
+        missing_pieces=toy.missing_pieces,
     )
 
 
@@ -251,6 +262,8 @@ def update_toy_in_db(
     status: str | None = None,
     manufacturer: str | None = None,
     description: str | None = None,
+    total_pieces: int | None = None,
+    missing_pieces: int | None = None,
 ) -> ToyOut | None:
     """Update a DB-backed toy row; returns None when catalog is CSV-only or toy missing."""
     if _db_toy_count() == 0:
@@ -281,10 +294,34 @@ def update_toy_in_db(
             toy.manufacturer = manufacturer.strip() or None
         if description is not None:
             toy.description = description.strip() or None
+        if total_pieces is not None:
+            toy.total_pieces = total_pieces
+        if missing_pieces is not None:
+            toy.missing_pieces = missing_pieces
+        _validate_toy_pieces(toy.total_pieces, toy.missing_pieces)
         session.commit()
         return _toy_row_to_out(toy)
     finally:
         session.close()
+
+
+def _validate_toy_pieces(total: int | None, missing: int | None) -> None:
+    if total is not None and missing is not None and missing > total:
+        raise ValueError("missing_pieces cannot exceed total_pieces.")
+
+
+def update_toy_pieces_in_db(
+    toy_id: str,
+    *,
+    total_pieces: int | None = None,
+    missing_pieces: int | None = None,
+) -> ToyOut | None:
+    """Update piece counts only."""
+    return update_toy_in_db(
+        toy_id,
+        total_pieces=total_pieces,
+        missing_pieces=missing_pieces,
+    )
 
 
 def get_toy_by_id(toy_id: str) -> ToyOut | None:

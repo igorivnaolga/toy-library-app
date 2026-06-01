@@ -8,6 +8,7 @@ import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
 import "duty_assign_sheet.dart";
 import "duty_controller.dart";
+import "duty_date_finder.dart";
 import "duty_session_models.dart";
 
 /// Volunteer duty roster: Wed/Sat slots, book shifts, admin assign members.
@@ -82,6 +83,11 @@ class _DutyRosterSheet extends StatelessWidget {
 }
 
 class _DutyScreenState extends State<DutyScreen> {
+  final Map<String, GlobalKey> _tileKeys = {};
+
+  GlobalKey _keyForSession(String sessionId) =>
+      _tileKeys.putIfAbsent(sessionId, GlobalKey.new);
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +95,22 @@ class _DutyScreenState extends State<DutyScreen> {
       if (!mounted) return;
       context.read<DutyController>().loadRoster();
     });
+  }
+
+  void _scrollToSession(BuildContext context, DutyController controller) {
+    final sessionId = controller.scrollToSessionId;
+    if (sessionId == null) return;
+    final key = _tileKeys[sessionId];
+    final target = key?.currentContext;
+    if (target != null) {
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+        alignment: 0.15,
+      );
+    }
+    controller.clearScrollRequest();
   }
 
   Future<void> _book(DutySessionItem session) async {
@@ -157,6 +179,13 @@ class _DutyScreenState extends State<DutyScreen> {
 
     return Consumer<DutyController>(
       builder: (context, controller, _) {
+        if (controller.scrollToSessionId != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _scrollToSession(context, controller);
+          });
+        }
+
         if (widget.useTabs) {
           return TabBarView(
             children: [
@@ -167,9 +196,11 @@ class _DutyScreenState extends State<DutyScreen> {
                   controller: controller,
                   sessions: splitDutySessions(controller.sessions).upcoming,
                   isPast: false,
+                  showFindDate: true,
                   onBook: _book,
                   onCancel: _cancel,
                   onAssign: auth.isAdmin ? _openAssign : null,
+                  sessionKeyFor: _keyForSession,
                 ),
               ),
               RefreshIndicator(
@@ -179,9 +210,11 @@ class _DutyScreenState extends State<DutyScreen> {
                   controller: controller,
                   sessions: splitDutySessions(controller.sessions).past,
                   isPast: true,
+                  pastSectionTitle: "Past slots",
                   onBook: _book,
                   onCancel: _cancel,
                   onAssign: auth.isAdmin ? _openAssign : null,
+                  sessionKeyFor: _keyForSession,
                 ),
               ),
             ],
@@ -196,6 +229,7 @@ class _DutyScreenState extends State<DutyScreen> {
             onBook: _book,
             onCancel: _cancel,
             onAssign: auth.isAdmin ? _openAssign : null,
+            sessionKeyFor: _keyForSession,
           ),
         );
       },
@@ -211,7 +245,10 @@ class _DutyBody extends StatelessWidget {
     required this.onCancel,
     this.sessions,
     this.isPast = false,
+    this.showFindDate = false,
+    this.pastSectionTitle,
     this.onAssign,
+    this.sessionKeyFor,
   });
 
   final AuthStore auth;
@@ -221,6 +258,14 @@ class _DutyBody extends StatelessWidget {
   final Future<void> Function(DutySessionItem session)? onAssign;
   final List<DutySessionItem>? sessions;
   final bool isPast;
+  final bool showFindDate;
+  final String? pastSectionTitle;
+  final GlobalKey Function(String sessionId)? sessionKeyFor;
+
+  DutySessionSections _sections() => splitDutySessions(
+        controller.sessions,
+        pastForVolunteerId: auth.isAdmin ? null : auth.userId,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -253,19 +298,35 @@ class _DutyBody extends StatelessWidget {
     }
 
     if (sessions != null) {
-      return _buildSlotList(context, sessions!, isPast: isPast);
+      return _buildSlotList(
+        context,
+        sessions!,
+        isPast: isPast,
+        showFindDate: showFindDate,
+        pastSectionTitle: pastSectionTitle,
+      );
     }
 
-    final sections = splitDutySessions(controller.sessions);
+    final sections = _sections();
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       children: [
-        if (sections.upcoming.isNotEmpty) ...[
-          const SectionHeader("Upcoming slots"),
+        _DutySlotsSectionHeader(
+          title: "Upcoming slots",
+          onFindDate: () => findDutyDate(context),
+        ),
+        if (sections.upcoming.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text(
+              "No upcoming duty slots.",
+              style: context.emptyState,
+            ),
+          )
+        else
           ..._slotTiles(context, sections.upcoming, isPast: false),
-        ],
         if (sections.upcoming.isNotEmpty && sections.past.isNotEmpty)
           const SizedBox(height: 20),
         if (sections.past.isNotEmpty) ...[
@@ -280,12 +341,21 @@ class _DutyBody extends StatelessWidget {
     BuildContext context,
     List<DutySessionItem> items, {
     required bool isPast,
+    bool showFindDate = false,
+    String? pastSectionTitle,
   }) {
     if (items.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         children: [
+          if (showFindDate)
+            _DutySlotsSectionHeader(
+              title: "Upcoming slots",
+              onFindDate: () => findDutyDate(context),
+            ),
+          if (pastSectionTitle != null)
+            SectionHeader(pastSectionTitle),
           const SizedBox(height: 80),
           Center(
             child: Text(
@@ -301,7 +371,15 @@ class _DutyBody extends StatelessWidget {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      children: _slotTiles(context, items, isPast: isPast),
+      children: [
+        if (showFindDate)
+          _DutySlotsSectionHeader(
+            title: "Upcoming slots",
+            onFindDate: () => findDutyDate(context),
+          ),
+        if (pastSectionTitle != null) SectionHeader(pastSectionTitle),
+        ..._slotTiles(context, items, isPast: isPast),
+      ],
     );
   }
 
@@ -314,6 +392,7 @@ class _DutyBody extends StatelessWidget {
       for (var i = 0; i < items.length; i++) ...[
         if (i > 0) const SizedBox(height: 8),
         _DutySessionTile(
+          key: sessionKeyFor?.call(items[i].sessionId),
           session: items[i],
           currentUserId: auth.userId,
           isAdmin: auth.isAdmin,
@@ -328,8 +407,40 @@ class _DutyBody extends StatelessWidget {
   }
 }
 
+class _DutySlotsSectionHeader extends StatelessWidget {
+  const _DutySlotsSectionHeader({
+    required this.title,
+    this.onFindDate,
+  });
+
+  final String title;
+  final VoidCallback? onFindDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 0, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title, style: context.sectionHeader),
+          ),
+          if (onFindDate != null)
+            IconButton(
+              tooltip: "Find duty date",
+              icon: const Icon(Icons.calendar_month_outlined),
+              visualDensity: VisualDensity.compact,
+              onPressed: onFindDate,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DutySessionTile extends StatelessWidget {
   const _DutySessionTile({
+    super.key,
     required this.session,
     required this.currentUserId,
     required this.isAdmin,

@@ -39,6 +39,8 @@ def update_toy_service(
     status: str | None = None,
     manufacturer: str | None = None,
     description: str | None = None,
+    total_pieces: int | None = None,
+    missing_pieces: int | None = None,
 ) -> ToyOut | None:
     from app.repositories.toy_repo import update_toy_in_db
 
@@ -50,4 +52,26 @@ def update_toy_service(
         status=status,
         manufacturer=manufacturer,
         description=description,
+        total_pieces=total_pieces,
+        missing_pieces=missing_pieces,
     )
+
+
+def update_toy_pieces_service(
+    toy_id: str,
+    *,
+    total_pieces: int | None = None,
+    missing_pieces: int | None = None,
+) -> ToyOut | None:
+    from app.repositories.toy_repo import update_toy_pieces_in_db
+
+    try:
+        return update_toy_pieces_in_db(
+            toy_id,
+            total_pieces=total_pieces,
+            missing_pieces=missing_pieces,
+        )
+    except ValueError as e:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=422, detail=str(e)) from e

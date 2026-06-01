@@ -93,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
     return Scaffold(
-      appBar: AppBar(title: const Text("Sign in")),
+      appBar: AppBar(title: const Text("Sign in or register")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

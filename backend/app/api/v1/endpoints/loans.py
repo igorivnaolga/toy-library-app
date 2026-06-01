@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.toy import Toy
 from app.schemas.loan import (
+    LoanCheckIn,
     LoanCheckOutFromBooking,
     LoanCheckOutWalkIn,
     LoanOut,
@@ -48,6 +49,7 @@ def _http_error(exc: LoanError) -> HTTPException:
         "loan_not_renewable",
         "renewals_exhausted",
         "pickup_not_due",
+        "invalid_missing_pieces",
     }:
         status = 409
     return HTTPException(status_code=status, detail=exc.message)
@@ -134,11 +136,13 @@ def check_out_walk_in(
 @router.post("/{loan_id}/check-in", response_model=LoanOut)
 def check_in(
     loan_id: uuid.UUID,
+    body: LoanCheckIn | None = None,
     db: Session = Depends(get_db),
     _: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
-        loan = check_in_loan(db, loan_id)
+        missing = body.missing_pieces if body is not None else None
+        loan = check_in_loan(db, loan_id, missing_pieces=missing)
     except LoanError as e:
         raise _http_error(e) from e
     db.commit()

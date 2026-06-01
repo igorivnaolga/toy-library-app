@@ -1,3 +1,4 @@
+import "../../core/toy_pieces.dart";
 import "../bookings/booking_models.dart";
 
 /// Loan row from `/api/v1/loans/me` and loan mutation endpoints.
@@ -17,6 +18,8 @@ class LoanItem {
     this.maxRenewals,
     this.renewalsRemaining,
     this.memberName,
+    this.toyTotalPieces,
+    this.toyMissingPieces,
   });
 
   final String loanId;
@@ -33,6 +36,8 @@ class LoanItem {
   final bool isOverdue;
   final int? renewalsRemaining;
   final String? memberName;
+  final int? toyTotalPieces;
+  final int? toyMissingPieces;
 
   bool get isActive => status.toLowerCase() == "active";
   bool get isReturned => status.toLowerCase() == "returned";
@@ -62,8 +67,15 @@ class LoanItem {
       isOverdue: json["is_overdue"] == true,
       renewalsRemaining: (json["renewals_remaining"] as num?)?.toInt(),
       memberName: json["member_name"]?.toString(),
+      toyTotalPieces: (json["toy_total_pieces"] as num?)?.toInt(),
+      toyMissingPieces: (json["toy_missing_pieces"] as num?)?.toInt(),
     );
   }
+
+  String get piecesSummary => formatToyPiecesSummary(
+        totalPieces: toyTotalPieces,
+        missingPieces: toyMissingPieces,
+      );
 
   String get statusLabel {
     if (isOverdue && isActive) {
@@ -83,14 +95,23 @@ class LoanItem {
     if (isReturned && returnedAt != null) {
       return "Returned ${formatDisplayDate(returnedAt!)}";
     }
-    final dueText = "Due ${formatDisplayDate(dueDate)}";
+    final parts = <String>["Due ${formatDisplayDate(dueDate)}"];
     if (isOverdue) {
-      return "$dueText · Overdue";
+      parts.add("Overdue");
+    }
+    if (renewalCount > 0) {
+      parts.add(
+        renewalCount == 1 ? "Renewed once" : "Renewed $renewalCount times",
+      );
     }
     if (renewalsRemaining != null) {
-      return "$dueText · $renewalsRemaining renewals left";
+      parts.add(
+        renewalsRemaining! > 0
+            ? "$renewalsRemaining renewals left"
+            : "No renewals left",
+      );
     }
-    return dueText;
+    return parts.join(" · ");
   }
 
   String get memberLabel {

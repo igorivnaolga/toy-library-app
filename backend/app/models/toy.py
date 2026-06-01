@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,9 @@ class Toy(Base):
     status: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     manufacturer: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    total_pieces: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    missing_pieces: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     category_label: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
 

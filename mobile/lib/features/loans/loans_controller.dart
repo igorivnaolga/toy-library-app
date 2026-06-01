@@ -127,8 +127,12 @@ class LoansController extends ChangeNotifier {
         .toList();
   }
 
-  Future<LoanItem> checkIn(String loanId) async {
-    final json = await _client.postJson("/api/v1/loans/$loanId/check-in");
+  Future<LoanItem> checkIn(String loanId, {int? missingPieces}) async {
+    final body = missingPieces != null
+        ? {"missing_pieces": missingPieces}
+        : null;
+    final json =
+        await _client.postJson("/api/v1/loans/$loanId/check-in", body);
     final loan = LoanItem.fromJson(json);
     activeLoans = activeLoans.where((l) => l.loanId != loanId).toList();
     myLoans = [
@@ -143,14 +147,20 @@ class LoansController extends ChangeNotifier {
   Future<LoanItem> renewLoan(String loanId) async {
     final json = await _client.postJson("/api/v1/loans/$loanId/renew");
     final loan = LoanItem.fromJson(json);
-    myLoans = [
-      for (final item in myLoans)
-        if (item.loanId == loan.loanId) loan else item,
-    ];
-    activeLoans = [
-      for (final item in activeLoans)
-        if (item.loanId == loan.loanId) loan else item,
-    ];
+    final exists = myLoans.any((item) => item.loanId == loan.loanId);
+    myLoans = exists
+        ? [
+            for (final item in myLoans)
+              if (item.loanId == loan.loanId) loan else item,
+          ]
+        : [...myLoans, loan];
+    final deskExists = activeLoans.any((item) => item.loanId == loan.loanId);
+    activeLoans = deskExists
+        ? [
+            for (final item in activeLoans)
+              if (item.loanId == loan.loanId) loan else item,
+          ]
+        : [...activeLoans, loan];
     sortLoansList(myLoans);
     sortLoansList(activeLoans);
     notifyListeners();

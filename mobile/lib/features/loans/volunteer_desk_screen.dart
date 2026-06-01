@@ -8,25 +8,25 @@ import "../bookings/booking_models.dart";
 import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
-import "../loans/desk_check_in_dialog.dart";
-import "../loans/desk_walk_in_panel.dart";
-import "../loans/loan_models.dart";
-import "../loans/loans_controller.dart";
-import "admin_cv_scan_panel.dart";
+import "desk_check_in_dialog.dart";
+import "desk_walk_in_panel.dart";
+import "loan_models.dart";
+import "loans_controller.dart";
 
-/// Admin desk: separate check-out and check-in flows (CV-ready check-in).
-class AdminLoansScreen extends StatefulWidget {
-  const AdminLoansScreen({super.key});
+/// Volunteer checkout desk: reservations, walk-ins, and check-ins.
+class VolunteerDeskScreen extends StatefulWidget {
+  const VolunteerDeskScreen({super.key});
 
   @override
-  State<AdminLoansScreen> createState() => _AdminLoansScreenState();
+  State<VolunteerDeskScreen> createState() => _VolunteerDeskScreenState();
 }
 
-class _AdminLoansScreenState extends State<AdminLoansScreen> {
+class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<LoansController>().loadVolunteerDesk();
     });
   }
@@ -39,7 +39,11 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
       await catalog.refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Checked out ${booking.toyName ?? booking.toyId}")),
+        SnackBar(
+          content: Text(
+            "Checked out ${booking.toyName ?? booking.toyId}",
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -63,7 +67,9 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
       await catalog.refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Checked in ${loan.toyName ?? loan.toyId}")),
+        SnackBar(
+          content: Text("Checked in ${loan.toyName ?? loan.toyId}"),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -71,6 +77,16 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
         SnackBar(content: Text(loanActionErrorMessage(e))),
       );
     }
+  }
+
+  Future<void> _walkInCheckedOut() async {
+    final catalog = context.read<CatalogController>();
+    final messenger = ScaffoldMessenger.of(context);
+    await catalog.refresh();
+    if (!mounted) return;
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Walk-in toy checked out")),
+    );
   }
 
   void _openToy(String toyId) {
@@ -83,86 +99,62 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Column(
-        children: [
-          Material(
-            color: Theme.of(context).colorScheme.surface,
-            child: const TabBar(
-              tabs: [
-                Tab(text: "Check out"),
-                Tab(text: "Check in"),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _CheckOutTab(
-                  onCheckOut: _checkOut,
-                  onOpenToy: _openToy,
-                  onRefresh: () =>
-                      context.read<LoansController>().loadVolunteerDesk(),
-                ),
-                _CheckInTab(
-                  onCheckIn: _checkIn,
-                  onOpenToy: _openToy,
-                  onRefresh: () =>
-                      context.read<LoansController>().loadVolunteerDesk(),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CheckOutTab extends StatelessWidget {
-  const _CheckOutTab({
-    required this.onCheckOut,
-    required this.onOpenToy,
-    required this.onRefresh,
-  });
-
-  final Future<void> Function(BookingItem booking) onCheckOut;
-  final ValueChanged<String> onOpenToy;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
     return Consumer<LoansController>(
       builder: (context, c, _) {
-        if (c.deskLoading && c.pendingCheckouts.isEmpty) {
+        if (c.deskLoading &&
+            c.pendingCheckouts.isEmpty &&
+            c.activeLoans.isEmpty) {
           return const Center(child: CircularProgressIndicator());
+        }
+
+        final offDuty = c.deskError != null &&
+            c.pendingCheckouts.isEmpty &&
+            c.activeLoans.isEmpty;
+
+        if (offDuty) {
+          return RefreshIndicator(
+            onRefresh: c.loadVolunteerDesk,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24),
+              children: [
+                const SizedBox(height: 80),
+                Icon(
+                  Icons.event_busy,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  c.deskError!,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
         }
 
         final today = deskTodayReservations(c.pendingCheckouts);
         final earlier = deskEarlierReady(c.pendingCheckouts);
+        final empty = today.isEmpty &&
+            earlier.isEmpty &&
+            c.activeLoans.isEmpty;
 
         return RefreshIndicator(
-          onRefresh: onRefresh,
+          onRefresh: c.loadVolunteerDesk,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
               DeskWalkInPanel(
                 loading: c.deskLoading,
-                onCheckedOut: () async {
-                  await context.read<CatalogController>().refresh();
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Walk-in toy checked out")),
-                  );
-                },
+                onCheckedOut: _walkInCheckedOut,
               ),
               const SizedBox(height: 16),
-              if (today.isEmpty && earlier.isEmpty) ...[
+              if (empty) ...[
                 const Center(
                   child: Text(
-                    "No reservations ready for checkout.",
+                    "No reservations or loans on the desk right now.",
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -172,11 +164,11 @@ class _CheckOutTab extends StatelessWidget {
                 const SectionHeader("Today's reservations"),
                 for (var i = 0; i < today.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
-                  _CheckoutTile(
+                  _PendingCheckoutTile(
                     booking: today[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(today[i].toyId),
-                    onCheckOut: () => onCheckOut(today[i]),
+                    onOpen: () => _openToy(today[i].toyId),
+                    onCheckOut: () => _checkOut(today[i]),
                   ),
                 ],
               ],
@@ -186,65 +178,26 @@ class _CheckOutTab extends StatelessWidget {
                 const SectionHeader("Ready for checkout"),
                 for (var i = 0; i < earlier.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
-                  _CheckoutTile(
+                  _PendingCheckoutTile(
                     booking: earlier[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(earlier[i].toyId),
-                    onCheckOut: () => onCheckOut(earlier[i]),
+                    onOpen: () => _openToy(earlier[i].toyId),
+                    onCheckOut: () => _checkOut(earlier[i]),
                   ),
                 ],
               ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _CheckInTab extends StatelessWidget {
-  const _CheckInTab({
-    required this.onCheckIn,
-    required this.onOpenToy,
-    required this.onRefresh,
-  });
-
-  final Future<void> Function(LoanItem loan) onCheckIn;
-  final ValueChanged<String> onOpenToy;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<LoansController>(
-      builder: (context, c, _) {
-        if (c.deskLoading && c.activeLoans.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        return RefreshIndicator(
-          onRefresh: onRefresh,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
-              const AdminCvScanPanel(),
-              const SizedBox(height: 16),
-              if (c.activeLoans.isEmpty)
-                const Center(
-                  child: Text(
-                    "No toys currently on loan.",
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              else ...[
+              if ((today.isNotEmpty || earlier.isNotEmpty) &&
+                  c.activeLoans.isNotEmpty)
+                const SizedBox(height: 20),
+              if (c.activeLoans.isNotEmpty) ...[
                 const SectionHeader("On loan"),
                 for (var i = 0; i < c.activeLoans.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
-                  _CheckInTile(
+                  _ActiveLoanDeskTile(
                     loan: c.activeLoans[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(c.activeLoans[i].toyId),
-                    onCheckIn: () => onCheckIn(c.activeLoans[i]),
+                    onOpen: () => _openToy(c.activeLoans[i].toyId),
+                    onCheckIn: () => _checkIn(c.activeLoans[i]),
                   ),
                 ],
               ],
@@ -256,8 +209,8 @@ class _CheckInTab extends StatelessWidget {
   }
 }
 
-class _CheckoutTile extends StatelessWidget {
-  const _CheckoutTile({
+class _PendingCheckoutTile extends StatelessWidget {
+  const _PendingCheckoutTile({
     required this.booking,
     required this.loading,
     required this.onOpen,
@@ -271,8 +224,7 @@ class _CheckoutTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Material(
       color: colors.surfaceContainerLowest,
@@ -327,8 +279,8 @@ class _CheckoutTile extends StatelessWidget {
   }
 }
 
-class _CheckInTile extends StatelessWidget {
-  const _CheckInTile({
+class _ActiveLoanDeskTile extends StatelessWidget {
+  const _ActiveLoanDeskTile({
     required this.loan,
     required this.loading,
     required this.onOpen,
@@ -342,8 +294,7 @@ class _CheckInTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Material(
       color: colors.surfaceContainerLowest,

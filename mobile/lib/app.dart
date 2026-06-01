@@ -20,6 +20,7 @@ import "features/loans/loans_controller.dart";
 import "features/loans/loans_screen.dart";
 import "features/catalog/catalog_screen.dart";
 import "features/duty/duty_controller.dart";
+import "features/duty/volunteer_duty_tab_screen.dart";
 import "features/duty/duty_screen.dart";
 import "features/info/contact_screen.dart";
 import "features/info/library_info_copy.dart";
@@ -138,6 +139,54 @@ class _RoleHomeState extends State<_RoleHome> {
     showDutyRosterSheet(context);
   }
 
+  void _openLogin(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+    );
+  }
+
+  ButtonStyle _compactOutlinedStyle() {
+    return brandOutlinedButtonStyle().copyWith(
+      padding: const WidgetStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _guestAuthActions() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OutlinedButton(
+            onPressed: () => _openLogin(context),
+            style: _compactOutlinedStyle(),
+            child: const Text("Register"),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => _openLogin(context),
+            style: brandFilledButtonStyle().copyWith(
+              padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
+              textStyle: const WidgetStatePropertyAll(
+                TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+            child: const Text("Sign in"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
@@ -145,70 +194,68 @@ class _RoleHomeState extends State<_RoleHome> {
 
     return DefaultTabController(
       length: tabs.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            LibraryInfoCopy.libraryName,
-            overflow: TextOverflow.ellipsis,
-          ),
-          actions: [
-            if (auth.isAdmin) ...[
-              const AdminNotificationBell(),
-              IconButton(
-                tooltip: "Duty roster",
-                icon: const Icon(Icons.event_available_outlined),
-                onPressed: () => _openDuty(context),
-              ),
-            ],
-            if (!auth.isLoggedIn)
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                        builder: (_) => const LoginScreen()),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: kBrandOnYellow,
-                  textStyle: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                child: const Text("Sign in"),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ProfileAvatar(
-                  fullName: auth.fullName,
-                  avatarPath: auth.avatarPath,
-                  radius: 18,
-                  onTap: () {
-                    context.read<ProfileController>().syncFromAuth();
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ProfileScreen(),
+      child: Builder(
+        builder: (context) {
+          final tabController = DefaultTabController.of(context);
+          return AnimatedBuilder(
+            animation: tabController,
+            builder: (context, _) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text(
+                    LibraryInfoCopy.libraryName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  actions: [
+                    if (auth.isAdmin) ...[
+                      const AdminNotificationBell(),
+                      IconButton(
+                        tooltip: "Duty roster",
+                        icon: const Icon(Icons.event_available_outlined),
+                        onPressed: () => _openDuty(context),
                       ),
-                    );
-                  },
+                    ],
+                    if (!auth.isLoggedIn)
+                      _guestAuthActions()
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ProfileAvatar(
+                          fullName: auth.fullName,
+                          avatarPath: auth.avatarPath,
+                          radius: 18,
+                          onTap: () {
+                            context.read<ProfileController>().syncFromAuth();
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ProfileScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                  bottom: TabBar(
+                    isScrollable: false,
+                    tabAlignment: TabAlignment.fill,
+                    labelPadding: EdgeInsets.zero,
+                    tabs: tabs
+                        .map((t) => Tab(
+                              height: 56,
+                              icon: Icon(t.$2, size: 22),
+                              text: t.$1,
+                              iconMargin: const EdgeInsets.only(bottom: 2),
+                            ))
+                        .toList(),
+                  ),
                 ),
-              ),
-          ],
-          bottom: TabBar(
-            isScrollable: false,
-            tabAlignment: TabAlignment.fill,
-            labelPadding: EdgeInsets.zero,
-            tabs: tabs
-                .map((t) => Tab(
-                      height: 56,
-                      icon: Icon(t.$2, size: 22),
-                      text: t.$1,
-                      iconMargin: const EdgeInsets.only(bottom: 2),
-                    ))
-                .toList(),
-          ),
-        ),
-        body: TabBarView(
-          children: _screensForRole(auth.role),
-        ),
+                body: TabBarView(
+                  children: _screensForRole(auth.role),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -256,7 +303,7 @@ class _RoleHomeState extends State<_RoleHome> {
           CatalogScreen(),
           BookingsScreen(),
           LoansScreen(),
-          DutyScreen(),
+          VolunteerDutyTabScreen(),
           ..._infoScreens,
         ];
       case AppRole.member:

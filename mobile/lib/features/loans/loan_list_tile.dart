@@ -81,6 +81,7 @@ class LoanListTile extends StatelessWidget {
                   const SizedBox(height: 10),
                   BrandChipButton(
                     label: "Renew",
+                    variant: BrandChipButtonVariant.outlined,
                     onPressed: loading ? null : onRenew,
                   ),
                 ],

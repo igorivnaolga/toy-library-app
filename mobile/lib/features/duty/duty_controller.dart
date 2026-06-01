@@ -21,14 +21,24 @@ class DutyController extends ChangeNotifier {
   static const _pastHorizonDays = 28;
   static const _futureHorizonDays = 28;
 
+  DateTime? _loadedFrom;
+  DateTime? _loadedTo;
+
+  /// Set after [jumpToDate]; consumed by [DutyScreen] to scroll the roster.
+  String? scrollToSessionId;
+
   Future<void> loadRoster() async {
+    final today = calendarDay(DateTime.now());
+    final from = today.subtract(const Duration(days: _pastHorizonDays));
+    final to = today.add(const Duration(days: _futureHorizonDays));
+    await _loadRange(from, to);
+  }
+
+  Future<void> _loadRange(DateTime from, DateTime to) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final today = DateTime.now();
-      final from = today.subtract(const Duration(days: _pastHorizonDays));
-      final to = today.add(const Duration(days: _futureHorizonDays));
       final sessionsJson = await _client.getJson(
         "/api/v1/duty/sessions",
         {
@@ -39,6 +49,8 @@ class DutyController extends ChangeNotifier {
       final onDutyJson = await _client.getJson("/api/v1/duty/me/on-duty");
       sessions = parseDutySessionList(sessionsJson);
       onDutyStatus = OnDutyStatus.fromJson(onDutyJson);
+      _loadedFrom = calendarDay(from);
+      _loadedTo = calendarDay(to);
       error = null;
     } on ApiException catch (e) {
       error = _friendlyLoadMessage(e);
@@ -52,6 +64,38 @@ class DutyController extends ChangeNotifier {
       loading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _ensureDateLoaded(DateTime date) async {
+    final day = calendarDay(date);
+    if (_loadedFrom != null &&
+        _loadedTo != null &&
+        !day.isBefore(_loadedFrom!) &&
+        !day.isAfter(_loadedTo!)) {
+      return;
+    }
+    final from = day.subtract(const Duration(days: _pastHorizonDays));
+    final to = day.add(const Duration(days: _futureHorizonDays));
+    await _loadRange(from, to);
+  }
+
+  /// Loads roster if needed and requests scroll to the first slot on [date].
+  Future<bool> jumpToDate(DateTime date) async {
+    await _ensureDateLoaded(date);
+    final day = calendarDay(date);
+    final match = sessions.where((s) => calendarDay(s.sessionDate) == day);
+    if (match.isEmpty) {
+      scrollToSessionId = null;
+      notifyListeners();
+      return false;
+    }
+    scrollToSessionId = match.first.sessionId;
+    notifyListeners();
+    return true;
+  }
+
+  void clearScrollRequest() {
+    scrollToSessionId = null;
   }
 
   Future<List<DeskMember>> searchRosterMembers(String query) async {

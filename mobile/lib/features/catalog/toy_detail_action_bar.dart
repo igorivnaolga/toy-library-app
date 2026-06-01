@@ -1,10 +1,9 @@
 import "package:flutter/material.dart";
 
-import "../../core/app_text_styles.dart";
-import "../../core/brand_chip_button.dart";
-import "../bookings/booking_models.dart";
+import "../../core/brand_chip_button.dart";import "../bookings/booking_models.dart";
 import "../bookings/pickup_date_banner.dart";
 import "catalog_models.dart";
+import "toy_unavailable_banner.dart";
 
 /// Sticky bottom bar for book / manage booking actions on toy detail.
 class ToyDetailActionBar extends StatelessWidget {
@@ -37,19 +36,6 @@ class ToyDetailActionBar extends StatelessWidget {
 
   bool get _isAvailable => toy.availability == "available";
 
-  String get _unavailableMessage {
-    switch (toy.availability) {
-      case "on_loan":
-        return "This toy is on loan and can't be booked right now.";
-      case "reserved":
-        return "This toy is reserved and can't be booked right now.";
-      case "unavailable":
-        return "This toy isn't available for booking right now.";
-      default:
-        return "This toy isn't available for booking right now.";
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -73,10 +59,9 @@ class ToyDetailActionBar extends StatelessWidget {
                   onPressed: onSignIn,
                 )
               else if (!canBookToys)
-                Text(
-                  "Complete membership setup to book toys from the catalog.",
-                  textAlign: TextAlign.center,
-                  style: context.bodyOnYellow,
+                const ToyBookingHintBanner(
+                  message:
+                      "Complete membership setup to book toys from the catalog.",
                 )
               else ...[
                 if (myBooking?.pickupLabel != null) ...[
@@ -117,11 +102,7 @@ class ToyDetailActionBar extends StatelessWidget {
                     onPressed: onBook,
                   )
                 else
-                  Text(
-                    _unavailableMessage,
-                    textAlign: TextAlign.center,
-                    style: context.bodyOnYellow,
-                  ),
+                  ToyUnavailableBanner(availability: toy.availability),
               ],
             ],
           ),

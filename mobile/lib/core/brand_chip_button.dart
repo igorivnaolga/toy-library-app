@@ -101,7 +101,7 @@ class _CompactChipButton extends StatelessWidget {
     final outlined = variant == BrandChipButtonVariant.outlined;
     final enabled = onPressed != null;
     final background = outlined
-        ? kModalSurface
+        ? Colors.transparent
         : (enabled ? kBrandYellow : kBrandYellow.withValues(alpha: 0.55));
     final foreground = enabled
         ? kBrandOnYellow

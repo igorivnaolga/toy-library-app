@@ -21,6 +21,16 @@ class ToyOut(BaseModel):
     manufacturer: str | None = None
     description: str | None = None
     photo_file: str | None = None
+    total_pieces: int | None = Field(
+        default=None,
+        ge=0,
+        description="Expected number of pieces in the toy set.",
+    )
+    missing_pieces: int | None = Field(
+        default=None,
+        ge=0,
+        description="Pieces currently known to be missing from the set.",
+    )
 
     @field_validator("name", mode="before")
     @classmethod
@@ -51,6 +61,15 @@ class ToyUpdate(BaseModel):
     status: str | None = None
     manufacturer: str | None = None
     description: str | None = None
+    total_pieces: int | None = Field(default=None, ge=0)
+    missing_pieces: int | None = Field(default=None, ge=0)
+
+
+class ToyPiecesUpdate(BaseModel):
+    """Desk update of piece counts (on-duty volunteer or admin)."""
+
+    total_pieces: int | None = Field(default=None, ge=0)
+    missing_pieces: int | None = Field(default=None, ge=0)
 
 
 class ToysMetaOut(BaseModel):

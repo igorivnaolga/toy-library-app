@@ -2,8 +2,8 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/app_theme.dart";
 import "../../core/section_header.dart";
-import "../bookings/booking_models.dart";
 import "../profile/profile_labels.dart";
 import "admin_controller.dart";
 import "admin_models.dart";
@@ -71,6 +71,22 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
     await _reload();
   }
 
+  bool get _hasDateFilters =>
+      _startedFrom != null ||
+      _startedTo != null ||
+      _endingFrom != null ||
+      _endingTo != null;
+
+  Future<void> _clearDateFilters() async {
+    setState(() {
+      _startedFrom = null;
+      _startedTo = null;
+      _endingFrom = null;
+      _endingTo = null;
+    });
+    await _reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -85,7 +101,7 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                 TextField(
                   controller: _search,
                   decoration: InputDecoration(
-                    hintText: "Search name, email, or id",
+                    hintText: "Search name or email",
                     prefixIcon: const Icon(Icons.search),
                     isDense: true,
                     suffixIcon: _search.text.isEmpty
@@ -101,7 +117,7 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                   ),
                   onSubmitted: (_) => _reload(),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
                   initialValue: _tierFilter,
                   decoration: const InputDecoration(
@@ -121,70 +137,76 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                     _reload();
                   },
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilterChip(
-                      label: Text(
-                        _startedFrom == null
-                            ? "Started from"
-                            : "Started ≥ ${formatApiDate(_startedFrom!)}",
-                      ),
-                      selected: _startedFrom != null,
-                      onSelected: (_) => _pickDate(
-                        label: "Membership started from",
-                        current: _startedFrom,
-                        onPicked: (d) => _startedFrom = d,
-                      ),
-                    ),
-                    FilterChip(
-                      label: Text(
-                        _startedTo == null
-                            ? "Started to"
-                            : "Started ≤ ${formatApiDate(_startedTo!)}",
-                      ),
-                      selected: _startedTo != null,
-                      onSelected: (_) => _pickDate(
-                        label: "Membership started to",
-                        current: _startedTo,
-                        onPicked: (d) => _startedTo = d,
-                      ),
-                    ),
-                    FilterChip(
-                      label: Text(
-                        _endingFrom == null
-                            ? "Ending from"
-                            : "Ending ≥ ${formatApiDate(_endingFrom!)}",
-                      ),
-                      selected: _endingFrom != null,
-                      onSelected: (_) => _pickDate(
-                        label: "Membership ending from",
-                        current: _endingFrom,
-                        onPicked: (d) => _endingFrom = d,
-                      ),
-                    ),
-                    FilterChip(
-                      label: Text(
-                        _endingTo == null
-                            ? "Ending to"
-                            : "Ending ≤ ${formatApiDate(_endingTo!)}",
-                      ),
-                      selected: _endingTo != null,
-                      onSelected: (_) => _pickDate(
-                        label: "Membership ending to",
-                        current: _endingTo,
-                        onPicked: (d) => _endingTo = d,
-                      ),
-                    ),
-                    ActionChip(
-                      avatar: const Icon(Icons.refresh, size: 18),
-                      label: const Text("Apply"),
-                      onPressed: _reload,
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                _MembershipDateFilterGroup(
+                  title: "Started",
+                  from: _startedFrom,
+                  to: _startedTo,
+                  onFromTap: () => _pickDate(
+                    label: "Membership started from",
+                    current: _startedFrom,
+                    onPicked: (d) => _startedFrom = d,
+                  ),
+                  onToTap: () => _pickDate(
+                    label: "Membership started to",
+                    current: _startedTo,
+                    onPicked: (d) => _startedTo = d,
+                  ),
+                  onFromClear: _startedFrom == null
+                      ? null
+                      : () async {
+                          setState(() => _startedFrom = null);
+                          await _reload();
+                        },
+                  onToClear: _startedTo == null
+                      ? null
+                      : () async {
+                          setState(() => _startedTo = null);
+                          await _reload();
+                        },
                 ),
+                const SizedBox(height: 12),
+                _MembershipDateFilterGroup(
+                  title: "Ending",
+                  from: _endingFrom,
+                  to: _endingTo,
+                  onFromTap: () => _pickDate(
+                    label: "Membership ending from",
+                    current: _endingFrom,
+                    onPicked: (d) => _endingFrom = d,
+                  ),
+                  onToTap: () => _pickDate(
+                    label: "Membership ending to",
+                    current: _endingTo,
+                    onPicked: (d) => _endingTo = d,
+                  ),
+                  onFromClear: _endingFrom == null
+                      ? null
+                      : () async {
+                          setState(() => _endingFrom = null);
+                          await _reload();
+                        },
+                  onToClear: _endingTo == null
+                      ? null
+                      : () async {
+                          setState(() => _endingTo = null);
+                          await _reload();
+                        },
+                ),
+                if (_hasDateFilters) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton(
+                      onPressed: _clearDateFilters,
+                      style: brandOutlinedButtonStyle(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.surface,
+                      ),
+                      child: const Text("Clear dates"),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -229,6 +251,146 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MembershipDateFilterGroup extends StatelessWidget {
+  const _MembershipDateFilterGroup({
+    required this.title,
+    required this.from,
+    required this.to,
+    required this.onFromTap,
+    required this.onToTap,
+    this.onFromClear,
+    this.onToClear,
+  });
+
+  final String title;
+  final DateTime? from;
+  final DateTime? to;
+  final VoidCallback onFromTap;
+  final VoidCallback onToTap;
+  final VoidCallback? onFromClear;
+  final VoidCallback? onToClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: context.sectionHeader.copyWith(
+              fontSize: 13,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _DateFilterChip(
+                  label: "From",
+                  date: from,
+                  onTap: onFromTap,
+                  onClear: onFromClear,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DateFilterChip(
+                  label: "To",
+                  date: to,
+                  onTap: onToTap,
+                  onClear: onToClear,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateFilterChip extends StatelessWidget {
+  const _DateFilterChip({
+    required this.label,
+    required this.date,
+    required this.onTap,
+    this.onClear,
+  });
+
+  final String label;
+  final DateTime? date;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final active = date != null;
+    final chipLabel =
+        active ? "$label · ${formatAdminDate(date)}" : label;
+
+    return Material(
+      color: active
+          ? colors.primaryContainer.withValues(alpha: 0.45)
+          : colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(
+          color: active ? kBrandYellow : colors.outlineVariant,
+          width: active ? 1.5 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  chipLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: context.listSubtitle.copyWith(
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (active && onClear != null) ...[
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: onClear,
+                  customBorder: const CircleBorder(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,10 @@ import "package:flutter/material.dart";
 const Color kBrandYellow = Color(0xFFFDC435);
 const Color kBrandOnYellow = Color(0xFF1A1A1A);
 
+/// Informational status for toys/loans that are out (not an action chip).
+const Color kStatusOnLoanBg = Color(0xFFFFE0B2);
+const Color kStatusOnLoanFg = Color(0xFFE65100);
+
 /// Elevated surface for dialogs and bottom sheets.
 ///
 /// Best practice (Material 3): modals use a neutral [surfaceContainer] step

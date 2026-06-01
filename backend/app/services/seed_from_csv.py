@@ -10,6 +10,7 @@ from app.models.toy import Toy
 from app.models.toy_image import ToyImage
 from app.repositories.category_repo import list_categories_csv
 from app.repositories.toy_repo import load_all_toys
+from app.services.pieces_from_setls import load_pieces_summary
 
 
 _TOY_BATCH_SIZE = 100
@@ -67,6 +68,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
     toys_upserted = 0
     rows_in_batch = 0
     session.execute(text("SET LOCAL statement_timeout = '600s'"))
+    pieces_by_toy = load_pieces_summary()
     for t in load_all_toys():
         category_id = None
         if t.category and t.category.strip():
@@ -74,6 +76,10 @@ def seed_catalog(session: Session) -> tuple[int, int]:
             category_id = label_to_id.get(t.category.strip())
 
         toy_row = session.get(Toy, t.toy_id)
+        piece_data = pieces_by_toy.get(t.toy_id)
+        piece_total = piece_data[0] if piece_data else None
+        piece_missing = piece_data[1] if piece_data else None
+        missing_value = piece_missing if piece_missing and piece_missing > 0 else None
         if toy_row:
             toy_row.name = t.name
             toy_row.category_id = category_id
@@ -82,6 +88,9 @@ def seed_catalog(session: Session) -> tuple[int, int]:
             toy_row.manufacturer = t.manufacturer
             toy_row.description = t.description
             toy_row.category_label = t.category
+            if piece_total is not None:
+                toy_row.total_pieces = piece_total
+                toy_row.missing_pieces = missing_value
         else:
             toy_row = Toy(
                 toy_id=t.toy_id,
@@ -92,6 +101,8 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 manufacturer=t.manufacturer,
                 description=t.description,
                 category_label=t.category,
+                total_pieces=piece_total,
+                missing_pieces=missing_value,
             )
             session.add(toy_row)
             toys_upserted += 1
