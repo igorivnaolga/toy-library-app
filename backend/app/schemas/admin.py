@@ -14,6 +14,10 @@ class AdminNotificationsOut(BaseModel):
         ge=0,
         description="Duty-tier members waiting for volunteer approval.",
     )
+    new_members_count: int = Field(
+        ge=0,
+        description="Members who joined in the last 30 days (excludes pending duty approvals).",
+    )
 
 
 class AdminMemberOut(BaseModel):

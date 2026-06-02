@@ -12,6 +12,7 @@ from app.models.profile import Profile
 from app.schemas.principal import KidProfile
 
 _ALLOWED_TIERS = frozenset({"casual", "non_duty", "duty"})
+RECENT_MEMBERS_DAYS = 30
 
 
 def get_profile_by_id(session: Session, user_id: uuid.UUID) -> Profile | None:
@@ -102,6 +103,61 @@ def approve_duty_volunteer(session: Session, profile: Profile) -> None:
         raise ValueError("not_duty")
     profile.volunteer_confirmed = True
     profile.role = "volunteer"
+
+
+def _recent_members_sql_extra() -> str:
+    """Members with a chosen tier in the last month (duty-pending listed separately)."""
+    return f"""
+          and p.membership_tier is not null
+          and p.role in ('member', 'volunteer')
+          and u.created_at >= (now() at time zone 'utc') - make_interval(days => :days)
+          and not (
+            p.membership_tier = 'duty'
+            and coalesce(p.volunteer_confirmed, false) = false
+            and p.role = 'member'
+          )
+    """
+
+
+def count_recent_members(session: Session, *, days: int = RECENT_MEMBERS_DAYS) -> int:
+    stmt = text(
+        f"""
+        select count(*)::int
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where true
+        {_recent_members_sql_extra()}
+        """
+    )
+    return int(session.execute(stmt, {"days": days}).scalar_one() or 0)
+
+
+def list_recent_members_for_admin(
+    session: Session,
+    *,
+    days: int = RECENT_MEMBERS_DAYS,
+    limit: int = 50,
+) -> list[dict[str, str | bool | None]]:
+    stmt = text(
+        f"""
+        select p.id::text as user_id,
+               coalesce(u.email::text, '') as email,
+               coalesce(p.full_name, '') as full_name,
+               p.role,
+               p.membership_tier,
+               coalesce(p.volunteer_confirmed, false) as volunteer_confirmed,
+               u.created_at as membership_started_at,
+               (u.created_at + interval '1 year') as membership_ends_at
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where true
+        {_recent_members_sql_extra()}
+        order by u.created_at desc nulls last
+        limit :limit
+        """
+    )
+    rows = session.execute(stmt, {"days": days, "limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
 
 
 def count_pending_duty_members(session: Session) -> int:

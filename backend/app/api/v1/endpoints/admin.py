@@ -12,11 +12,14 @@ from sqlalchemy.orm import Session
 from app.core.auth_deps import require_admin
 from app.db.session import get_db
 from app.repositories.profile_repo import (
+    RECENT_MEMBERS_DAYS,
     approve_duty_volunteer,
     count_pending_duty_members,
+    count_recent_members,
     get_profile_by_id,
     list_members_for_admin,
     list_pending_duty_members,
+    list_recent_members_for_admin,
 )
 from app.schemas.admin import (
     AdminBookingsListResponse,
@@ -50,6 +53,25 @@ def admin_notifications(
 ) -> AdminNotificationsOut:
     return AdminNotificationsOut(
         pending_volunteer_approvals=count_pending_duty_members(db),
+        new_members_count=count_recent_members(db),
+    )
+
+
+@router.get("/recent-members", response_model=AdminMembersListResponse)
+def recent_members(
+    days: int = Query(
+        RECENT_MEMBERS_DAYS,
+        ge=1,
+        le=90,
+        description="Include members whose account was created within this many days.",
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminMembersListResponse:
+    rows = list_recent_members_for_admin(db, days=days, limit=limit)
+    return AdminMembersListResponse(
+        data=[AdminMemberOut.model_validate(row) for row in rows],
     )
 
 

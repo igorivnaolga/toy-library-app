@@ -4,14 +4,21 @@ library;
 import "../bookings/booking_models.dart";
 
 class AdminNotifications {
-  const AdminNotifications({required this.pendingVolunteerApprovals});
+  const AdminNotifications({
+    required this.pendingVolunteerApprovals,
+    required this.newMembersCount,
+  });
 
   final int pendingVolunteerApprovals;
+  final int newMembersCount;
+
+  int get badgeCount => pendingVolunteerApprovals + newMembersCount;
 
   factory AdminNotifications.fromJson(Map<String, dynamic> json) {
     return AdminNotifications(
       pendingVolunteerApprovals:
           (json["pending_volunteer_approvals"] as num?)?.toInt() ?? 0,
+      newMembersCount: (json["new_members_count"] as num?)?.toInt() ?? 0,
     );
   }
 }

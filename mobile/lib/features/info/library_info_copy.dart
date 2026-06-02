@@ -23,12 +23,21 @@ Closed on public holidays and over the Christmas break.""";
   static const membershipIntro = """
 Membership is open to families in our community. When you sign in to the app, you can choose a membership type that fits how you take part in the library.""";
 
+  static const casualMembershipDescription =
+      "Browse and borrow with a standard member account.";
+
+  static const nonDutyMembershipDescription =
+      "Full membership without volunteer shifts.";
+
+  static const dutyMembershipDescription =
+      "Members who take volunteer shifts. Duty members are confirmed by our committee before volunteer tools are enabled in the app.";
+
   static const membershipTiers = """
-Casual — Browse and borrow with a standard member account.
+Casual — $casualMembershipDescription
 
-Non-duty member — Full membership without volunteer shifts.
+Non-duty member — $nonDutyMembershipDescription
 
-Duty volunteer — Members who take volunteer shifts. Duty members are confirmed by our committee before volunteer tools are enabled in the app.""";
+Duty volunteer — $dutyMembershipDescription""";
 
   static const membershipBody = """
 $membershipIntro
@@ -42,13 +51,29 @@ Please contact our coordinator on 027 358 3259.
 
 Email: library@cctoylibrary.org.nz""";
 
+  static const coordinatorPhone = "027 358 3259";
+  static const coordinatorPhoneDial = "0273583259";
+  static const coordinatorEmail = "library@cctoylibrary.org.nz";
+
   static const locationTitle = "Location";
 
+  static const locationAddressLine1 = "Sir John McKenzie Memorial building";
+  static const locationAddressLine2 = "393 Riccarton Road, Upper Riccarton";
+  static const locationAddressHint = "Next to Countdown Church Corner";
+
+  static const locationLat = -43.53803;
+  static const locationLng = 172.60456;
+
   static const locationBody = """
-Sir John McKenzie Memorial building
+$locationAddressLine1
 393 Riccarton Road
 Upper Riccarton
-(next to Countdown Church Corner)""";
+($locationAddressHint)""";
+
+  static const openingHoursEntries = [
+    ("Wednesday", "1:00 pm – 2:30 pm"),
+    ("Saturday", "11:30 am – 2:00 pm"),
+  ];
 
   static const paymentsTitle = "Payments";
 

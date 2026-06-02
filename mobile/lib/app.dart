@@ -23,8 +23,8 @@ import "features/duty/duty_controller.dart";
 import "features/duty/volunteer_duty_tab_screen.dart";
 import "features/duty/duty_screen.dart";
 import "features/info/contact_screen.dart";
-import "features/info/library_info_copy.dart";
 import "features/info/membership_info_screen.dart";
+import "features/info/library_info_copy.dart";
 import "features/membership/membership_onboarding_screen.dart";
 import "features/profile/profile_avatar.dart";
 import "features/profile/profile_controller.dart";
@@ -145,44 +145,21 @@ class _RoleHomeState extends State<_RoleHome> {
     );
   }
 
-  ButtonStyle _compactOutlinedStyle() {
-    return brandOutlinedButtonStyle().copyWith(
-      padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
-      textStyle: const WidgetStatePropertyAll(
-        TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-
   Widget _guestAuthActions() {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          OutlinedButton(
-            onPressed: () => _openLogin(context),
-            style: _compactOutlinedStyle(),
-            child: const Text("Register"),
+      child: FilledButton(
+        onPressed: () => _openLogin(context),
+        style: brandFilledButtonStyle().copyWith(
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () => _openLogin(context),
-            style: brandFilledButtonStyle().copyWith(
-              padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
-              textStyle: const WidgetStatePropertyAll(
-                TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
-            child: const Text("Sign in"),
+          minimumSize: const WidgetStatePropertyAll(Size(0, 36)),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
-        ],
+        ),
+        child: const Text("Sign in"),
       ),
     );
   }
@@ -262,12 +239,20 @@ class _RoleHomeState extends State<_RoleHome> {
 
   static const _infoTabs = [
     ("Contact", Icons.contact_page_outlined),
+  ];
+
+  static const _guestInfoTabs = [
+    ("Contact", Icons.contact_page_outlined),
     ("Membership", Icons.card_membership),
   ];
 
   static const _infoScreens = [
     ContactScreen(),
-    MembershipInfoScreen(),
+  ];
+
+  static const _guestInfoScreens = [
+    ContactScreen(),
+    MembershipInfoScreen(embedded: true),
   ];
 
   List<(String, IconData)> _tabsForRole(AppRole role) {
@@ -285,7 +270,7 @@ class _RoleHomeState extends State<_RoleHome> {
       case AppRole.member:
         return const [catalog, bookings, loans, ..._infoTabs];
       case AppRole.guest:
-        return const [catalog, ..._infoTabs];
+        return const [catalog, ..._guestInfoTabs];
     }
   }
 
@@ -314,7 +299,7 @@ class _RoleHomeState extends State<_RoleHome> {
           ..._infoScreens,
         ];
       case AppRole.guest:
-        return const [CatalogScreen(), ..._infoScreens];
+        return const [CatalogScreen(), ..._guestInfoScreens];
     }
   }
 }

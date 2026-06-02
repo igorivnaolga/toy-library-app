@@ -13,16 +13,19 @@ class AdminController extends ChangeNotifier {
 
   AdminNotifications? notifications;
   List<PendingVolunteer> pendingVolunteers = [];
+  List<AdminMember> recentMembers = [];
   List<BookingItem> bookings = [];
   List<AdminMember> members = [];
 
   bool notificationsLoading = false;
   bool pendingLoading = false;
+  bool recentMembersLoading = false;
   bool bookingsLoading = false;
   bool membersLoading = false;
 
   String? notificationsError;
   String? pendingError;
+  String? recentMembersError;
   String? bookingsError;
   String? membersError;
 
@@ -39,6 +42,23 @@ class AdminController extends ChangeNotifier {
       notificationsError = e.toString();
     } finally {
       notificationsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadRecentMembers() async {
+    recentMembersLoading = true;
+    recentMembersError = null;
+    notifyListeners();
+    try {
+      final json = await _client.getJson("/api/v1/admin/recent-members");
+      recentMembers = parseAdminMemberList(json);
+      recentMembersError = null;
+    } catch (e) {
+      recentMembersError = e.toString();
+      recentMembers = [];
+    } finally {
+      recentMembersLoading = false;
       notifyListeners();
     }
   }
@@ -71,7 +91,10 @@ class AdminController extends ChangeNotifier {
     await _client.postJson("/api/v1/admin/users/$userId/approve-volunteer");
     pendingVolunteers =
         pendingVolunteers.where((v) => v.userId != userId).toList();
-    await loadNotifications(silent: true);
+    await Future.wait([
+      loadNotifications(silent: true),
+      loadRecentMembers(),
+    ]);
     notifyListeners();
   }
 

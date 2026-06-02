@@ -6,6 +6,7 @@ import "../../core/app_theme.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
+import "../info/membership_info_screen.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
@@ -199,31 +200,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _ProfileSection(
             title: "Membership",
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.card_membership_outlined,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+              Material(
+                color: theme.colorScheme.surface,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const MembershipInfoScreen(),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.card_membership_outlined,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.55),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: auth.membershipTier == "duty" && auth.isMember
+                              ? Text(
+                                  "Volunteer access pending approval",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.secondary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                )
+                              : Text(
+                                  "Your current membership",
+                                  style: context.profileSecondary,
+                                ),
+                        ),
+                        _MembershipBadge(
+                          label: membershipStatus,
+                          style: membershipBadgeStyle(
+                            label: membershipStatus,
+                            colors: theme.colorScheme,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: auth.membershipTier == "duty" && auth.isMember
-                          ? Text(
-                              "Volunteer access pending approval",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.secondary,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            )
-                          : Text(
-                              "Your current membership",
-                              style: context.profileSecondary,
-                            ),
-                    ),
-                    _MembershipBadge(label: membershipStatus),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -538,26 +562,29 @@ class _ProfileSection extends StatelessWidget {
 }
 
 class _MembershipBadge extends StatelessWidget {
-  const _MembershipBadge({required this.label});
+  const _MembershipBadge({
+    required this.label,
+    required this.style,
+  });
 
   final String label;
+  final MembershipBadgeStyle style;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
+        color: style.background,
         borderRadius: BorderRadius.circular(999),
+        border: style.border,
       ),
       child: Text(
         label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: theme.colorScheme.onPrimaryContainer,
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: style.foreground,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }

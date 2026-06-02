@@ -1,5 +1,43 @@
+import "package:flutter/material.dart";
+
+import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
 
+class MembershipBadgeStyle {
+  const MembershipBadgeStyle({
+    required this.background,
+    required this.foreground,
+    this.border,
+  });
+
+  final Color background;
+  final Color foreground;
+  final BoxBorder? border;
+}
+
+MembershipBadgeStyle membershipBadgeStyle({
+  required String label,
+  Color? tierForeground,
+  required ColorScheme colors,
+}) {
+  if (label == "Volunteer") {
+    return const MembershipBadgeStyle(
+      background: kBrandYellow,
+      foreground: kBrandOnYellow,
+    );
+  }
+  if (tierForeground != null) {
+    return MembershipBadgeStyle(
+      background: tierForeground.withValues(alpha: 0.12),
+      foreground: tierForeground,
+      border: Border.all(color: tierForeground.withValues(alpha: 0.28)),
+    );
+  }
+  return MembershipBadgeStyle(
+    background: colors.primaryContainer,
+    foreground: colors.onPrimaryContainer,
+  );
+}
 String membershipTierLabel(String? tier) {
   switch ((tier ?? "").trim()) {
     case "casual":

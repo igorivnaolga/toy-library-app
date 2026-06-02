@@ -4,6 +4,8 @@ import "package:provider/provider.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/api_client.dart";
 import "../../core/auth_store.dart";
+import "membership_tier_card.dart";
+import "membership_tiers.dart";
 
 /// First login: pick a membership tier (stored on `profiles` via backend).
 class MembershipOnboardingScreen extends StatefulWidget {
@@ -73,63 +75,19 @@ class _MembershipOnboardingScreenState
                 ),
               ),
             ),
-          _TierCard(
-            title: "Casual",
-            subtitle: "Browse and borrow with a standard member account.",
-            onTap: _busy ? null : () => _choose("casual"),
-          ),
-          const SizedBox(height: 12),
-          _TierCard(
-            title: "Non-duty member",
-            subtitle: "Member without volunteer shifts.",
-            onTap: _busy ? null : () => _choose("non_duty"),
-          ),
-          const SizedBox(height: 12),
-          _TierCard(
-            title: "Duty volunteer (pending)",
-            subtitle:
-                "You intend to take volunteer shifts. An admin will confirm "
-                "before volunteer tools unlock.",
-            onTap: _busy ? null : () => _choose("duty"),
-          ),
+          for (var i = 0; i < membershipTierOptions.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            MembershipTierCard(
+              title: membershipTierOptions[i].title,
+              subtitle: membershipTierOptions[i].subtitle,
+              onTap: _busy ? null : () => _choose(membershipTierOptions[i].tier),
+            ),
+          ],
           if (_busy) const Padding(
             padding: EdgeInsets.only(top: 24),
             child: Center(child: CircularProgressIndicator()),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TierCard extends StatelessWidget {
-  const _TierCard({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: context.cardTitle),
-              const SizedBox(height: 8),
-              Text(subtitle, style: context.listSubtitle),
-            ],
-          ),
-        ),
       ),
     );
   }

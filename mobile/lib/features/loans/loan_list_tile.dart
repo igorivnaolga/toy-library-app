@@ -99,12 +99,10 @@ class LoanStatusChip extends StatelessWidget {
     super.key,
     required this.label,
     this.isOverdue = false,
-    this.width = kBookingsChipWidth,
   });
 
   final String label;
   final bool isOverdue;
-  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -119,22 +117,19 @@ class LoanStatusChip extends StatelessWidget {
             _ => (Colors.grey.shade300, kBrandOnYellow),
           };
 
-    return SizedBox(
-      width: width,
-      height: 32,
-      child: Material(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
         color: bg,
-        shape: const StadiumBorder(),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-              decoration: TextDecoration.none,
-            ),
-          ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: fg,
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+          decoration: TextDecoration.none,
         ),
       ),
     );

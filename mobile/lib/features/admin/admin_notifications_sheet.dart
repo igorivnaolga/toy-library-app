@@ -1,33 +1,24 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
-import "../../core/app_text_styles.dart";
-import "../../core/section_header.dart";
+import "../../core/api_client.dart";
+import "../../core/api_exception.dart";
+import "../../core/app_theme.dart";
+import "../profile/profile_labels.dart";
 import "admin_controller.dart";
 import "admin_models.dart";
 
-/// Bell icon action: pending duty-tier volunteer approvals.
+/// Opens admin notifications (full screen).
 Future<void> showAdminNotificationsSheet(BuildContext context) async {
-  final controller = context.read<AdminController>();
-  await controller.loadPendingVolunteers();
   if (!context.mounted) return;
-
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (context) {
-      return DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        minChildSize: 0.35,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) {
-          return _PendingApprovalsSheet(scrollController: scrollController);
-        },
-      );
-    },
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => const AdminNotificationsScreen(),
+    ),
   );
+  if (context.mounted) {
+    await context.read<AdminController>().loadNotifications(silent: true);
+  }
 }
 
 class AdminNotificationBell extends StatelessWidget {
@@ -37,9 +28,9 @@ class AdminNotificationBell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AdminController>(
       builder: (context, admin, _) {
-        final count = admin.notifications?.pendingVolunteerApprovals ?? 0;
+        final count = admin.notifications?.badgeCount ?? 0;
         return IconButton(
-          tooltip: "Pending approvals",
+          tooltip: "Admin notifications",
           onPressed: () => showAdminNotificationsSheet(context),
           icon: Badge(
             isLabelVisible: count > 0,
@@ -52,100 +43,299 @@ class AdminNotificationBell extends StatelessWidget {
   }
 }
 
-class _PendingApprovalsSheet extends StatelessWidget {
-  const _PendingApprovalsSheet({required this.scrollController});
+/// Pending duty approvals and recently joined members.
+class AdminNotificationsScreen extends StatefulWidget {
+  const AdminNotificationsScreen({super.key});
 
-  final ScrollController scrollController;
+  @override
+  State<AdminNotificationsScreen> createState() =>
+      _AdminNotificationsScreenState();
+}
+
+class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
+  bool _loading = true;
+  String? _loadError;
+  List<PendingVolunteer> _pending = [];
+  List<AdminMember> _recent = [];
+  String? _recentError;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+      _recentError = null;
+    });
+
+    final client = context.read<BackendClient>();
+    List<PendingVolunteer> pending = [];
+    List<AdminMember> recent = [];
+    String? loadError;
+    String? recentError;
+
+    try {
+      final json =
+          await client.getJson("/api/v1/admin/pending-duty-volunteers");
+      final raw = json["data"];
+      if (raw is List<dynamic>) {
+        pending = raw
+            .whereType<Map<String, dynamic>>()
+            .map(PendingVolunteer.fromJson)
+            .toList();
+      }
+    } on ApiException catch (e) {
+      loadError = "Pending approvals: ${e.message}";
+    } catch (e) {
+      loadError = "Pending approvals: $e";
+    }
+
+    try {
+      final json = await client.getJson("/api/v1/admin/recent-members");
+      recent = parseAdminMemberList(json);
+    } on ApiException catch (e) {
+      recentError = e.message;
+    } catch (e) {
+      recentError = e.toString();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _pending = pending;
+      _recent = recent;
+      _loadError = loadError;
+      _recentError = recentError;
+      _loading = false;
+    });
+  }
+
+  Future<void> _approve(PendingVolunteer volunteer) async {
+    final client = context.read<BackendClient>();
+    try {
+      await client.postJson(
+        "/api/v1/admin/users/${volunteer.userId}/approve-volunteer",
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Approved ${volunteer.displayName}")),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      final message =
+          e is ApiException ? e.message : adminActionErrorMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AdminController>(
-      builder: (context, admin, _) {
-        if (admin.pendingLoading && admin.pendingVolunteers.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Notifications"),
+      ),
+      body: SafeArea(
+        child: _buildBody(),
+      ),
+    );
+  }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                "Pending volunteer approvals",
-                style: context.screenTitle,
-              ),
-            ),
-            if (admin.pendingError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  admin.pendingError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            Expanded(
-              child: admin.pendingVolunteers.isEmpty
-                  ? ListView(
-                      controller: scrollController,
-                      children: const [
-                        EmptyStateMessage(
-                          "No members waiting for approval.",
-                          topSpacing: 48,
-                        ),
-                      ],
-                    )
-                  : ListView.separated(
-                      controller: scrollController,
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                      itemCount: admin.pendingVolunteers.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final row = admin.pendingVolunteers[i];
-                        return _PendingVolunteerTile(volunteer: row);
-                      },
-                    ),
+            CircularProgressIndicator(color: kBrandYellow),
+            SizedBox(height: 16),
+            Text(
+              "Loading notifications…",
+              style: TextStyle(fontSize: 14, color: Color(0xFF5C5C5C)),
             ),
           ],
-        );
-      },
+        ),
+      );
+    }
+
+    if (_loadError != null && _pending.isEmpty && _recent.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _loadError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _load,
+                child: const Text("Retry"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_loadError != null) ...[
+            Text(
+              _loadError!,
+              style: const TextStyle(color: Colors.red, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+          ],
+          _sectionTitle("Pending volunteer approvals"),
+          const SizedBox(height: 8),
+          if (_pending.isEmpty)
+            _sectionBody("No duty members waiting for approval.")
+          else
+            ..._pending.map(
+              (row) => _PendingVolunteerCard(
+                volunteer: row,
+                onApprove: () => _approve(row),
+              ),
+            ),
+          const SizedBox(height: 24),
+          _sectionTitle("New members (last 30 days)"),
+          const SizedBox(height: 8),
+          if (_recentError != null) ...[
+            Text(
+              _recentError!,
+              style: const TextStyle(color: Colors.red, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (_recent.isEmpty && _recentError == null)
+            _sectionBody("No new members in the last 30 days.")
+          else
+            ..._recent.map((member) => _RecentMemberCard(member: member)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF1A1A1A),
+      ),
+    );
+  }
+
+  Widget _sectionBody(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 14,
+        height: 1.35,
+        color: Color(0xFF5C5C5C),
+      ),
     );
   }
 }
 
-class _PendingVolunteerTile extends StatelessWidget {
-  const _PendingVolunteerTile({required this.volunteer});
+class _PendingVolunteerCard extends StatelessWidget {
+  const _PendingVolunteerCard({
+    required this.volunteer,
+    required this.onApprove,
+  });
 
   final PendingVolunteer volunteer;
+  final VoidCallback onApprove;
 
   @override
   Widget build(BuildContext context) {
-    final admin = context.read<AdminController>();
-    return ListTile(
-      title: Text(volunteer.displayName, style: context.cardTitle),
-      subtitle: Text(
-        volunteer.email.isEmpty ? "Duty tier member" : volunteer.email,
-        style: context.listSubtitle,
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              volunteer.displayName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              volunteer.email.isEmpty ? "Duty tier member" : volunteer.email,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton(
+                onPressed: onApprove,
+                child: const Text("Approve"),
+              ),
+            ),
+          ],
+        ),
       ),
-      trailing: FilledButton(
-        onPressed: admin.pendingLoading
-            ? null
-            : () async {
-                try {
-                  await admin.approveVolunteer(volunteer.userId);
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Approved ${volunteer.displayName}"),
-                    ),
-                  );
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(adminActionErrorMessage(e))),
-                  );
-                }
-              },
-        child: const Text("Approve"),
+    );
+  }
+}
+
+class _RecentMemberCard extends StatelessWidget {
+  const _RecentMemberCard({required this.member});
+
+  final AdminMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    final tier = membershipTierLabel(member.membershipTier);
+    final role = member.role == "volunteer" ? "Volunteer" : "Member";
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              member.displayName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            if (member.email.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                member.email,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Text(
+              "$role · $tier · Joined ${formatAdminDate(member.membershipStartedAt)}",
+              style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+            ),
+          ],
+        ),
       ),
     );
   }
