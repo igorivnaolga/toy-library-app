@@ -3,6 +3,7 @@ import "package:flutter/material.dart";
 import "../../core/app_text_styles.dart";
 import "catalog_models.dart";
 import "toy_availability_badge.dart";
+import "toy_id_badge.dart";
 import "toy_photo_tile.dart";
 
 /// Branded row for one toy in the catalog list.
@@ -47,11 +48,14 @@ class ToyCatalogListTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: context.cardTitle,
                     ),
+                    if (toy.toyId.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ToyIdBadge(toyId: toy.toyId),
+                    ],
                     if (_hasSubtitle) ...[
                       const SizedBox(height: 4),
                       _CatalogSubtitle(
                         category: toy.category,
-                        status: toy.status,
                         piecesSummary: toy.piecesSummary,
                       ),
                     ],
@@ -69,9 +73,7 @@ class ToyCatalogListTile extends StatelessWidget {
 
   bool get _hasSubtitle {
     final category = toy.category?.trim();
-    final status = toy.status?.trim();
     return (category != null && category.isNotEmpty) ||
-        (status != null && status.isNotEmpty) ||
         toy.piecesSummary.isNotEmpty;
   }
 }
@@ -79,12 +81,10 @@ class ToyCatalogListTile extends StatelessWidget {
 class _CatalogSubtitle extends StatelessWidget {
   const _CatalogSubtitle({
     required this.category,
-    required this.status,
     required this.piecesSummary,
   });
 
   final String? category;
-  final String? status;
   final String piecesSummary;
 
   @override
@@ -92,19 +92,16 @@ class _CatalogSubtitle extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final categoryLabel = category?.trim();
-    final statusLabel = status?.trim();
     final hasCategory =
         categoryLabel != null && categoryLabel.isNotEmpty;
-    final hasStatus = statusLabel != null && statusLabel.isNotEmpty;
     final hasPieces = piecesSummary.isNotEmpty;
 
-    if (!hasCategory && !hasStatus && !hasPieces) {
+    if (!hasCategory && !hasPieces) {
       return const SizedBox.shrink();
     }
 
     final mutedStyle = context.listSubtitle;
     final categoryStyle = mutedStyle.copyWith(fontWeight: FontWeight.w600);
-    final statusStyle = mutedStyle;
 
     return Wrap(
       spacing: 6,
@@ -112,7 +109,7 @@ class _CatalogSubtitle extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         if (hasCategory) Text(categoryLabel, style: categoryStyle),
-        if (hasCategory && hasStatus)
+        if (hasCategory && hasPieces)
           Text(
             "·",
             style: mutedStyle.copyWith(
@@ -120,16 +117,7 @@ class _CatalogSubtitle extends StatelessWidget {
               color: colors.outline,
             ),
           ),
-        if (hasStatus) Text(statusLabel, style: statusStyle),
-        if ((hasCategory || hasStatus) && hasPieces)
-          Text(
-            "·",
-            style: mutedStyle.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colors.outline,
-            ),
-          ),
-        if (hasPieces) Text(piecesSummary, style: statusStyle),
+        if (hasPieces) Text(piecesSummary, style: mutedStyle),
       ],
     );
   }

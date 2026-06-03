@@ -15,6 +15,7 @@ import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_edit_sheet.dart";
 import "toy_availability_badge.dart";
+import "toy_id_badge.dart";
 import "toy_detail_action_bar.dart";
 import "toy_detail_section.dart";
 import "toy_photo_placeholder.dart";
@@ -270,10 +271,17 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                       style: context.detailTitle,
                     ),
                     const SizedBox(height: 10),
-                    ToyAvailabilityBadge(availability: t.availability),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ToyIdBadge(toyId: t.toyId, compact: false),
+                        ToyAvailabilityBadge(availability: t.availability),
+                      ],
+                    ),
                     if (t.category != null ||
                         t.ageRange != null ||
-                        t.status != null ||
                         hasToyPiecesInfo(
                           totalPieces: t.totalPieces,
                           missingPieces: t.missingPieces,
@@ -290,8 +298,6 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                         ToyDetailMetaRow(label: "Category", value: t.category!),
                       if (t.ageRange != null)
                         ToyDetailMetaRow(label: "Age range", value: t.ageRange!),
-                      if (t.status != null)
-                        ToyDetailMetaRow(label: "Status", value: t.status!),
                       if (hasToyPiecesInfo(
                         totalPieces: t.totalPieces,
                         missingPieces: t.missingPieces,
