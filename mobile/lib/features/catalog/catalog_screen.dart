@@ -5,6 +5,8 @@ import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
+import "../../core/app_input_field.dart";
+import "../../core/search_field.dart";
 import "catalog_provider.dart";
 import "toy_catalog_list_tile.dart";
 import "toy_detail_screen.dart";
@@ -227,43 +229,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: TextField(
             controller: _searchController,
-            style: TextStyle(color: colors.onSurface),
-            cursorColor: kBrandYellow,
-            decoration: InputDecoration(
+            style: fieldTextStyle(context),
+            cursorColor: fieldCursorColor(context),
+            decoration: searchInputDecoration(
+              context,
               hintText: "Search toys…",
-              prefixIcon: Icon(
-                Icons.search,
-                color: colors.onSurface.withValues(alpha: 0.55),
-              ),
-              suffixIcon: _searchController.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: Icon(
-                        Icons.clear,
-                        color: colors.onSurface.withValues(alpha: 0.55),
-                      ),
-                      onPressed: _clearSearch,
-                      tooltip: "Clear search",
-                    ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+              suffixIcon: searchClearSuffix(
+                context,
+                visible: _searchController.text.isNotEmpty,
+                onClear: _clearSearch,
               ),
             ),
             onChanged: (value) {

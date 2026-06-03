@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "api_client.dart";
+import "api_exception.dart";
 import "../features/profile/kid_profile.dart";
 
 /// App roles from backend `profiles.role`.
@@ -147,16 +148,7 @@ class AuthStore extends ChangeNotifier {
       notifyListeners();
     }
     try {
-      final me = await backend.getJson("/api/v1/auth/me");
-      userId = me["user_id"]?.toString();
-      email = me["email"]?.toString();
-      fullName = me["full_name"]?.toString();
-      role = parseRole(me["role"]?.toString());
-      membershipTier = me["membership_tier"]?.toString();
-      volunteerConfirmed = me["volunteer_confirmed"] == true;
-      kids = _parseKids(me);
-      kidsNames = kids.map((kid) => kid.name).toList();
-      avatarPath = me["avatar_path"]?.toString();
+      await _fetchProfileFromBackend(backend);
       error = null;
     } catch (e) {
       // Keep user signed in but treat as guest if backend profile isn't ready yet.
@@ -166,12 +158,39 @@ class AuthStore extends ChangeNotifier {
       kidsNames = const [];
       kids = const [];
       avatarPath = null;
-      error = "Couldn't load profile role yet: $e";
+      error = authProfileErrorMessage(e);
     } finally {
       if (!silent) {
         profileLoading = false;
       }
       notifyListeners();
+    }
+  }
+
+  Future<void> _fetchProfileFromBackend(BackendClient backend) async {
+    const maxAttempts = 3;
+    Object? lastError;
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+      }
+      try {
+        final me = await backend.getJson("/api/v1/auth/me");
+        userId = me["user_id"]?.toString();
+        email = me["email"]?.toString();
+        fullName = me["full_name"]?.toString();
+        role = parseRole(me["role"]?.toString());
+        membershipTier = me["membership_tier"]?.toString();
+        volunteerConfirmed = me["volunteer_confirmed"] == true;
+        kids = _parseKids(me);
+        kidsNames = kids.map((kid) => kid.name).toList();
+        avatarPath = me["avatar_path"]?.toString();
+        return;
+      } catch (e) {
+        lastError = e;
+        if (attempt < maxAttempts - 1 && isJwtClockSkewError(e)) continue;
+        throw lastError!;
+      }
     }
   }
 
@@ -218,4 +237,22 @@ class AuthStore extends ChangeNotifier {
     _authSub?.cancel();
     super.dispose();
   }
+}
+
+/// True when the backend rejects the token because `iat`/`nbf` is in the future.
+bool isJwtClockSkewError(Object error) {
+  final text = error.toString().toLowerCase();
+  return text.contains("not yet valid") &&
+      (text.contains("iat") || text.contains("nbf"));
+}
+
+String authProfileErrorMessage(Object error) {
+  if (isJwtClockSkewError(error)) {
+    return "Couldn't load your profile: your device clock may be ahead of the "
+        "server. Check date & time settings (use automatic time) and try again.";
+  }
+  if (error is ApiException) {
+    return "Couldn't load your profile: ${error.message}";
+  }
+  return "Couldn't load your profile: $error";
 }

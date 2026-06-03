@@ -1,6 +1,8 @@
 import "package:flutter/material.dart";
 
 import "../../core/app_theme.dart";
+import "../../core/app_input_field.dart";
+import "../../core/search_field.dart";
 
 /// Dev-only visual check for brand colors — open from a debug entry or hot-restart route.
 class ThemePreviewScreen extends StatelessWidget {
@@ -39,10 +41,12 @@ class ThemePreviewScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            const TextField(
-              decoration: InputDecoration(
-                labelText: "Search toys",
-                prefixIcon: Icon(Icons.search),
+            TextField(
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration: searchInputDecoration(
+                context,
+                hintText: "Search toys",
               ),
             ),
             const SizedBox(height: 12),

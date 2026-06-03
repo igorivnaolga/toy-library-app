@@ -39,6 +39,12 @@ class Settings(BaseSettings):
         default=None,
         description="Supabase JWT Secret (not the anon key). Used to verify Bearer tokens.",
     )
+    supabase_jwt_leeway_seconds: int = Field(
+        default=120,
+        ge=0,
+        le=600,
+        description="Clock skew tolerance when validating access token iat/nbf/exp.",
+    )
 
 
 @lru_cache

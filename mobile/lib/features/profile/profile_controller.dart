@@ -39,14 +39,18 @@ class ProfileController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addKid(String name, DateTime birthDate) async {
+  Future<bool> addKid(String name, {required DateTime birthDate}) async {
     final cleaned = name.trim();
     if (cleaned.isEmpty) return false;
     kids = [
       ...kids,
       KidProfile(
         name: cleaned,
-        birthDate: DateTime(birthDate.year, birthDate.month, birthDate.day),
+        birthDate: DateTime(
+          birthDate.year,
+          birthDate.month,
+          birthDate.day,
+        ),
       ),
     ];
     notifyListeners();

@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "auth_messages.dart";
 
@@ -100,13 +101,17 @@ class _LoginScreenState extends State<LoginScreen> {
           TextField(
             controller: _email,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: "Email"),
+            style: fieldTextStyle(context),
+            cursorColor: fieldCursorColor(context),
+            decoration: labeledInputDecoration(context, labelText: "Email"),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _password,
             obscureText: true,
-            decoration: const InputDecoration(labelText: "Password"),
+            style: fieldTextStyle(context),
+            cursorColor: fieldCursorColor(context),
+            decoration: labeledInputDecoration(context, labelText: "Password"),
           ),
           const SizedBox(height: 16),
           FilledButton(

@@ -22,6 +22,14 @@ class LoansController extends ChangeNotifier {
   String? myLoansError;
   String? deskError;
 
+  /// Active loan for [toyId], if any (requires [loadMyLoans] with `activeOnly: true`).
+  LoanItem? activeLoanForToy(String toyId) {
+    for (final loan in myLoans) {
+      if (loan.isActive && loan.toyId == toyId) return loan;
+    }
+    return null;
+  }
+
   Future<void> loadMyLoans({bool activeOnly = false}) async {
     myLoansLoading = true;
     myLoansError = null;
@@ -105,7 +113,10 @@ class LoansController extends ChangeNotifier {
 
   Future<List<DeskMember>> searchDeskMembers(String query) async {
     final trimmed = query.trim();
-    if (trimmed.length < 2) return [];
+    if (trimmed.isEmpty) {
+      final json = await _client.getJson("/api/v1/duty/members");
+      return parseDeskMemberList(json);
+    }
     final json = await _client.getJson("/api/v1/duty/members", {"q": trimmed});
     return parseDeskMemberList(json);
   }

@@ -286,7 +286,7 @@ def search_members_for_desk(
 ) -> list[dict[str, str]]:
     """Find members/volunteers by name, email, or profile id (volunteer desk walk-in)."""
     cleaned = query.strip()
-    if len(cleaned) < 2:
+    if not cleaned:
         return []
     pattern = f"%{cleaned}%"
     stmt = text(

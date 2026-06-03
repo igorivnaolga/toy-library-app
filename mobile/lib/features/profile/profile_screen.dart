@@ -2,7 +2,7 @@ import "package:flutter/material.dart";
 import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
-import "../../core/app_theme.dart";
+import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
@@ -93,18 +93,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _addKid(ProfileController profile) async {
     final name = _kidController.text.trim();
-    final birthDate = _kidBirthDate;
-    if (name.isEmpty || birthDate == null) {
+    if (name.isEmpty || _kidBirthDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Enter a name and date of birth")),
       );
       return;
     }
-    final ok = await profile.addKid(name, birthDate);
+    final ok = await profile.addKid(name, birthDate: _kidBirthDate!);
     if (!mounted) return;
     if (ok) {
       _kidController.clear();
       setState(() => _kidBirthDate = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Added $name")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(profile.error ?? "Could not add child")),
+      );
     }
   }
 
@@ -295,63 +301,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (_editingChildren) ...[
                 const Divider(height: 1),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: TextField(
                     controller: _kidController,
-                    decoration: InputDecoration(
+                    style: fieldTextStyle(context),
+                    cursorColor: fieldCursorColor(context),
+                    decoration: labeledInputDecoration(
+                      context,
                       labelText: "Child name",
-                      filled: true,
                       fillColor: theme.colorScheme.surface,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
                     ),
                     textCapitalization: TextCapitalization.words,
-                    onSubmitted: (_) => _addKid(profile),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted:
+                        profile.saving ? null : (_) => _addKid(profile),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: profile.saving ? null : _pickKidBirthDate,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              labelText: "Date of birth",
-                              filled: true,
-                              fillColor: theme.colorScheme.surface,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                            ),
-                            child: Text(
-                              _kidBirthDate == null
-                                  ? "Select date"
-                                  : _formatBirthDate(_kidBirthDate!),
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: _kidBirthDate == null
-                                    ? theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.45)
-                                    : null,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: InkWell(
+                    onTap: profile.saving ? null : _pickKidBirthDate,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: labeledInputDecoration(
+                        context,
+                        labelText: "Date of birth",
+                        fillColor: theme.colorScheme.surface,
+                        suffixIcon: _kidBirthDate == null
+                            ? Icon(
+                                Icons.calendar_today_outlined,
+                                size: 20,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.55),
+                              )
+                            : IconButton(
+                                tooltip: "Clear date",
+                                icon: const Icon(Icons.clear, size: 20),
+                                onPressed: profile.saving
+                                    ? null
+                                    : () =>
+                                        setState(() => _kidBirthDate = null),
                               ),
-                            ),
-                          ),
-                        ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed:
-                            profile.saving ? null : () => _addKid(profile),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: kBrandYellow,
-                          foregroundColor: kBrandOnYellow,
-                        ),
-                        child: const Text("Add"),
+                      child: Text(
+                        _kidBirthDate == null
+                            ? "Select date"
+                            : _formatBirthDate(_kidBirthDate!),
+                        style: _kidBirthDate == null
+                            ? fieldPlaceholderStyle(context)
+                            : fieldTextStyle(context),
                       ),
-                    ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: BrandChipButton(
+                    label: profile.saving ? "Saving…" : "Add child",
+                    large: true,
+                    onPressed: profile.saving ? null : () => _addKid(profile),
                   ),
                 ),
               ],
@@ -458,13 +466,12 @@ class _ProfileHeader extends StatelessWidget {
                   child: TextField(
                     controller: nameController,
                     textAlign: TextAlign.center,
-                    decoration: InputDecoration(
+                    style: fieldTextStyle(context),
+                    cursorColor: fieldCursorColor(context),
+                    decoration: labeledInputDecoration(
+                      context,
                       labelText: "Full name",
-                      filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     textCapitalization: TextCapitalization.words,
                     onChanged: onNameChanged,
@@ -590,7 +597,6 @@ class _MembershipBadge extends StatelessWidget {
   }
 }
 
-/// Red sign-out control for the profile app bar (kept clear of the DEBUG banner).
 class _ProfileSignOutAction extends StatelessWidget {
   const _ProfileSignOutAction({required this.onPressed});
 

@@ -10,6 +10,7 @@ import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
 import "../loans/desk_check_in_dialog.dart";
 import "../loans/desk_walk_in_panel.dart";
+import "../loans/loan_desk_summary.dart";
 import "../loans/loan_models.dart";
 import "../loans/loans_controller.dart";
 import "admin_cv_scan_panel.dart";
@@ -120,7 +121,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
   }
 }
 
-class _CheckOutTab extends StatelessWidget {
+class _CheckOutTab extends StatefulWidget {
   const _CheckOutTab({
     required this.onCheckOut,
     required this.onOpenToy,
@@ -130,6 +131,13 @@ class _CheckOutTab extends StatelessWidget {
   final Future<void> Function(BookingItem booking) onCheckOut;
   final ValueChanged<String> onOpenToy;
   final Future<void> Function() onRefresh;
+
+  @override
+  State<_CheckOutTab> createState() => _CheckOutTabState();
+}
+
+class _CheckOutTabState extends State<_CheckOutTab> {
+  bool _walkInDraft = false;
 
   @override
   Widget build(BuildContext context) {
@@ -143,13 +151,18 @@ class _CheckOutTab extends StatelessWidget {
         final earlier = deskEarlierReady(c.pendingCheckouts);
 
         return RefreshIndicator(
-          onRefresh: onRefresh,
+          onRefresh: widget.onRefresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
               DeskWalkInPanel(
                 loading: c.deskLoading,
+                onDraftChanged: (active) {
+                  if (_walkInDraft != active) {
+                    setState(() => _walkInDraft = active);
+                  }
+                },
                 onCheckedOut: () async {
                   await context.read<CatalogController>().refresh();
                   if (!context.mounted) return;
@@ -159,7 +172,7 @@ class _CheckOutTab extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 16),
-              if (today.isEmpty && earlier.isEmpty) ...[
+              if (today.isEmpty && earlier.isEmpty && !_walkInDraft) ...[
                 const Center(
                   child: Text(
                     "No reservations ready for checkout.",
@@ -175,8 +188,8 @@ class _CheckOutTab extends StatelessWidget {
                   _CheckoutTile(
                     booking: today[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(today[i].toyId),
-                    onCheckOut: () => onCheckOut(today[i]),
+                    onOpen: () => widget.onOpenToy(today[i].toyId),
+                    onCheckOut: () => widget.onCheckOut(today[i]),
                   ),
                 ],
               ],
@@ -189,8 +202,8 @@ class _CheckOutTab extends StatelessWidget {
                   _CheckoutTile(
                     booking: earlier[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(earlier[i].toyId),
-                    onCheckOut: () => onCheckOut(earlier[i]),
+                    onOpen: () => widget.onOpenToy(earlier[i].toyId),
+                    onCheckOut: () => widget.onCheckOut(earlier[i]),
                   ),
                 ],
               ],
@@ -342,8 +355,7 @@ class _CheckInTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
 
     return Material(
       color: colors.surfaceContainerLowest,
@@ -356,36 +368,8 @@ class _CheckInTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ToyPhotoTile(toyId: loan.toyId),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      loan.toyName ?? loan.toyId,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.cardTitle,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      loan.deskSubtitle,
-                      style: context.listSubtitle.copyWith(
-                        color: loan.isOverdue
-                            ? colors.error
-                            : context.listSubtitle.color,
-                      ),
-                    ),
-                    if (loan.piecesSummary.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        loan.piecesSummary,
-                        style: context.listSubtitle,
-                      ),
-                    ],
-                  ],
-                ),
+                child: LoanDeskSummary(loan: loan),
               ),
               const SizedBox(width: 8),
               BrandChipButton(

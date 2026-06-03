@@ -1,18 +1,13 @@
 import "package:flutter/material.dart";
 
-/// Church Corner Toy Library brand yellow (from organisation letterhead).
 const Color kBrandYellow = Color(0xFFFDC435);
 const Color kBrandOnYellow = Color(0xFF1A1A1A);
 
-/// Informational status for toys/loans that are out (not an action chip).
+const Color kMembershipTierCardBg = Color(0xFFFFF6E0);
+
 const Color kStatusOnLoanBg = Color(0xFFFFE0B2);
 const Color kStatusOnLoanFg = Color(0xFFE65100);
 
-/// Elevated surface for dialogs and bottom sheets.
-///
-/// Best practice (Material 3): modals use a neutral [surfaceContainer] step
-/// above the page background — enough contrast to show layering, without a
-/// strong brand tint that hurts readability.
 const Color kModalSurface = Color(0xFFF6F4F0);
 
 /// Shared height for side-by-side modal actions (Cancel + confirm).
@@ -36,7 +31,6 @@ ButtonStyle brandOutlinedButtonStyle({Color? backgroundColor}) {
   );
 }
 
-/// Primary confirm action matching [brandOutlinedButtonStyle] height.
 ButtonStyle brandFilledButtonStyle() {
   return FilledButton.styleFrom(
     backgroundColor: kBrandYellow,
@@ -52,7 +46,6 @@ ButtonStyle brandFilledButtonStyle() {
   );
 }
 
-/// Light theme: white chrome, yellow reserved for actions and highlights.
 ThemeData buildAppTheme() {
   final base = ColorScheme.fromSeed(
     seedColor: kBrandYellow,
@@ -111,7 +104,30 @@ ThemeData buildAppTheme() {
       fillColor: scheme.surfaceContainerHighest,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       hintStyle: TextStyle(
-        color: scheme.onSurface.withValues(alpha: 0.45),
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: scheme.onSurface.withValues(alpha: 0.62),
+      ),
+      labelStyle: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: scheme.onSurface.withValues(alpha: 0.55),
+      ),
+      floatingLabelStyle: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: kBrandYellow,
+      ),
+      helperStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: scheme.onSurface.withValues(alpha: 0.62),
+        height: 1.3,
+      ),
+      errorStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: scheme.error,
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

@@ -3,6 +3,7 @@ import "package:flutter/services.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
+import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "catalog_models.dart";
@@ -159,22 +160,33 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
             const SizedBox(height: 16),
             TextField(
               controller: _name,
-              decoration: const InputDecoration(labelText: "Name"),
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration: labeledInputDecoration(context, labelText: "Name"),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _category,
-              decoration: const InputDecoration(labelText: "Category"),
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration:
+                  labeledInputDecoration(context, labelText: "Category"),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _ageRange,
-              decoration: const InputDecoration(labelText: "Age range"),
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration:
+                  labeledInputDecoration(context, labelText: "Age range"),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _status,
-              decoration: const InputDecoration(
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration: labeledInputDecoration(
+                context,
                 labelText: "Status",
                 helperText: 'e.g. "In library", "On loan", "Reserved"',
               ),
@@ -182,21 +194,34 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _manufacturer,
-              decoration: const InputDecoration(labelText: "Manufacturer"),
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration: labeledInputDecoration(
+                context,
+                labelText: "Manufacturer",
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _description,
-              decoration: const InputDecoration(labelText: "Description"),
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              decoration: labeledInputDecoration(
+                context,
+                labelText: "Description",
+              ),
               minLines: 3,
               maxLines: 6,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _totalPieces,
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
+              decoration: labeledInputDecoration(
+                context,
                 labelText: "Total pieces",
                 helperText: "Leave blank if unknown",
               ),
@@ -204,9 +229,12 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _missingPieces,
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: const InputDecoration(
+              decoration: labeledInputDecoration(
+                context,
                 labelText: "Missing pieces",
                 helperText: "Leave blank if none or unknown",
               ),

@@ -2,13 +2,15 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/app_input_field.dart";
+import "../../core/search_field.dart";
 import "../../core/section_header.dart";
 import "../bookings/booking_list_tile.dart";
 import "../bookings/booking_models.dart";
 import "../catalog/toy_detail_screen.dart";
 import "admin_controller.dart";
 
-/// All member bookings with date and member filters.
+/// All member bookings with date range and search.
 class AdminBookingsScreen extends StatefulWidget {
   const AdminBookingsScreen({super.key});
 
@@ -81,20 +83,20 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
               children: [
                 TextField(
                   controller: _memberQuery,
-                  decoration: InputDecoration(
-                    hintText: "Filter by member, email, or toy",
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _memberQuery.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _memberQuery.clear();
-                              setState(() {});
-                              _reload();
-                            },
-                          ),
-                    isDense: true,
+                  style: fieldTextStyle(context),
+                  cursorColor: fieldCursorColor(context),
+                  decoration: searchInputDecoration(
+                    context,
+                    hintText: "Search by member, email, or toy",
+                    suffixIcon: searchClearSuffix(
+                      context,
+                      visible: _memberQuery.text.isNotEmpty,
+                      onClear: () {
+                        _memberQuery.clear();
+                        setState(() {});
+                        _reload();
+                      },
+                    ),
                   ),
                   onSubmitted: (_) => _reload(),
                 ),
@@ -126,11 +128,6 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                         label: const Text("Clear dates"),
                         onPressed: _clearDates,
                       ),
-                    ActionChip(
-                      avatar: const Icon(Icons.refresh, size: 18),
-                      label: const Text("Apply"),
-                      onPressed: _reload,
-                    ),
                   ],
                 ),
               ],
@@ -168,7 +165,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: const [
-                      EmptyStateMessage("No bookings match these filters."),
+                      EmptyStateMessage("No bookings match your search."),
                     ],
                   ),
                 );

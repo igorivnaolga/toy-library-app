@@ -11,6 +11,7 @@ import "../bookings/booking_confirmed_dialog.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/bookings_controller.dart";
 import "../bookings/pickup_date_flow.dart";
+import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_edit_sheet.dart";
@@ -34,6 +35,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   Future<ToyItem>? _future;
   bool _started = false;
   bool _bookingsRequested = false;
+  bool _loansRequested = false;
   bool _bookingInProgress = false;
   bool _cancellingInProgress = false;
   bool _reschedulingInProgress = false;
@@ -41,12 +43,14 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_bookingsRequested) {
-      final auth = context.read<AuthStore>();
-      if (auth.canBookToys) {
-        _bookingsRequested = true;
-        context.read<BookingsController>().loadBookings();
-      }
+    final auth = context.read<AuthStore>();
+    if (!_bookingsRequested && auth.canBookToys) {
+      _bookingsRequested = true;
+      context.read<BookingsController>().loadBookings();
+    }
+    if (!_loansRequested && auth.canBookToys) {
+      _loansRequested = true;
+      context.read<LoansController>().loadMyLoans(activeOnly: true);
     }
     if (_started) return;
     _started = true;
@@ -146,6 +150,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
     final bookings = context.watch<BookingsController>();
+    final loans = context.watch<LoansController>();
 
     return FutureBuilder<ToyItem>(
       future: _future,
@@ -187,6 +192,9 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
         final colors = theme.colorScheme;
         final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
         final myBooking = bookings.pendingBookingForToy(t.toyId);
+        final myActiveLoan = t.availability == "on_loan"
+            ? loans.activeLoanForToy(t.toyId)
+            : null;
         final description = t.description?.trim().isNotEmpty == true
             ? t.description!.trim()
             : null;
@@ -217,6 +225,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
             isLoggedIn: auth.isLoggedIn,
             canBookToys: auth.canBookToys,
             myBooking: myBooking,
+            myActiveLoan: myActiveLoan,
             bookingInProgress: _bookingInProgress,
             cancellingInProgress: _cancellingInProgress,
             reschedulingInProgress: _reschedulingInProgress,

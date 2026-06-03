@@ -54,6 +54,8 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
     if not isinstance(alg, str) or not alg:
         raise HTTPException(status_code=401, detail="Invalid token: missing alg")
 
+    leeway = settings.supabase_jwt_leeway_seconds
+
     try:
         if alg == "HS256":
             if not settings.supabase_jwt_secret:
@@ -71,6 +73,7 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
                 algorithms=["HS256"],
                 audience="authenticated",
                 issuer=issuer,
+                leeway=leeway,
             )
 
         if alg in _ASYM_ALGS:
@@ -81,6 +84,7 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
                 algorithms=[alg],
                 audience="authenticated",
                 issuer=issuer,
+                leeway=leeway,
             )
 
         raise HTTPException(

@@ -10,6 +10,7 @@ import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
 import "desk_check_in_dialog.dart";
 import "desk_walk_in_panel.dart";
+import "loan_desk_summary.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
 
@@ -22,6 +23,8 @@ class VolunteerDeskScreen extends StatefulWidget {
 }
 
 class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
+  bool _walkInDraft = false;
+
   @override
   void initState() {
     super.initState();
@@ -138,7 +141,8 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
         final earlier = deskEarlierReady(c.pendingCheckouts);
         final empty = today.isEmpty &&
             earlier.isEmpty &&
-            c.activeLoans.isEmpty;
+            c.activeLoans.isEmpty &&
+            !_walkInDraft;
 
         return RefreshIndicator(
           onRefresh: c.loadVolunteerDesk,
@@ -148,6 +152,11 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
             children: [
               DeskWalkInPanel(
                 loading: c.deskLoading,
+                onDraftChanged: (active) {
+                  if (_walkInDraft != active) {
+                    setState(() => _walkInDraft = active);
+                  }
+                },
                 onCheckedOut: _walkInCheckedOut,
               ),
               const SizedBox(height: 16),
@@ -307,35 +316,12 @@ class _ActiveLoanDeskTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ToyPhotoTile(toyId: loan.toyId),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      loan.toyName ?? loan.toyId,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.cardTitle,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      loan.deskSubtitle,
-                      style: context.listSubtitle.copyWith(
-                        color: loan.isOverdue
-                            ? colors.error
-                            : context.listSubtitle.color,
-                      ),
-                    ),
-                    if (loan.piecesSummary.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        loan.piecesSummary,
-                        style: context.listSubtitle,
-                      ),
-                    ],
-                  ],
+                child: LoanDeskSummary(
+                  loan: loan,
+                  showToyId: false,
+                  showPieces: true,
+                  showMemberAndDue: true,
                 ),
               ),
               const SizedBox(width: 8),

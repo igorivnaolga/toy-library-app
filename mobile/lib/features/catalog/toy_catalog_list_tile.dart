@@ -19,8 +19,8 @@ class ToyCatalogListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
+    final category = toy.category?.trim();
 
     return Material(
       color: colors.surfaceContainerLowest,
@@ -52,11 +52,13 @@ class ToyCatalogListTile extends StatelessWidget {
                       const SizedBox(height: 6),
                       ToyIdBadge(toyId: toy.toyId),
                     ],
-                    if (_hasSubtitle) ...[
-                      const SizedBox(height: 4),
-                      _CatalogSubtitle(
-                        category: toy.category,
-                        piecesSummary: toy.piecesSummary,
+                    if (category != null && category.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        category,
+                        style: context.listSubtitle.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ],
@@ -68,57 +70,6 @@ class ToyCatalogListTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  bool get _hasSubtitle {
-    final category = toy.category?.trim();
-    return (category != null && category.isNotEmpty) ||
-        toy.piecesSummary.isNotEmpty;
-  }
-}
-
-class _CatalogSubtitle extends StatelessWidget {
-  const _CatalogSubtitle({
-    required this.category,
-    required this.piecesSummary,
-  });
-
-  final String? category;
-  final String piecesSummary;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final categoryLabel = category?.trim();
-    final hasCategory =
-        categoryLabel != null && categoryLabel.isNotEmpty;
-    final hasPieces = piecesSummary.isNotEmpty;
-
-    if (!hasCategory && !hasPieces) {
-      return const SizedBox.shrink();
-    }
-
-    final mutedStyle = context.listSubtitle;
-    final categoryStyle = mutedStyle.copyWith(fontWeight: FontWeight.w600);
-
-    return Wrap(
-      spacing: 6,
-      runSpacing: 2,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (hasCategory) Text(categoryLabel, style: categoryStyle),
-        if (hasCategory && hasPieces)
-          Text(
-            "·",
-            style: mutedStyle.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colors.outline,
-            ),
-          ),
-        if (hasPieces) Text(piecesSummary, style: mutedStyle),
-      ],
     );
   }
 }

@@ -2,20 +2,36 @@ import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
+import "../loans/loan_models.dart";
 
 /// Info callout when a toy cannot be booked from the detail action bar.
 class ToyUnavailableBanner extends StatelessWidget {
   const ToyUnavailableBanner({
     super.key,
     required this.availability,
+    this.myActiveLoan,
   });
 
   final String availability;
+  final LoanItem? myActiveLoan;
 
   ({IconData icon, Color background, Color foreground, String message})
       get _content {
     switch (availability) {
       case "on_loan":
+        final mine = myActiveLoan;
+        if (mine != null) {
+          final due = formatDisplayDate(mine.dueDate);
+          final message = mine.isOverdue
+              ? "You have this toy on loan. It was due $due — please return it soon."
+              : "You have this toy on loan. Due back $due.";
+          return (
+            icon: Icons.assignment_outlined,
+            background: kBrandYellow.withValues(alpha: 0.22),
+            foreground: kBrandOnYellow,
+            message: message,
+          );
+        }
         return (
           icon: Icons.sync,
           background: const Color(0xFFFFE0B2).withValues(alpha: 0.45),

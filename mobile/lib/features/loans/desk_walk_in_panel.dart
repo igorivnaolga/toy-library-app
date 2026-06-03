@@ -4,6 +4,8 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/app_input_field.dart";
+import "../../core/search_field.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/catalog_models.dart";
 import "desk_member.dart";
@@ -15,10 +17,14 @@ class DeskWalkInPanel extends StatefulWidget {
     super.key,
     required this.loading,
     required this.onCheckedOut,
+    this.onDraftChanged,
   });
 
   final bool loading;
   final VoidCallback onCheckedOut;
+
+  /// Called when a member or toy is selected for walk-in (draft in progress).
+  final ValueChanged<bool>? onDraftChanged;
 
   @override
   State<DeskWalkInPanel> createState() => _DeskWalkInPanelState();
@@ -41,6 +47,18 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
 
   bool get _hasMember => _selectedMember != null;
 
+  bool get _hasDraft => _hasMember || _selectedToys.isNotEmpty;
+
+  void _notifyDraftChanged() {
+    widget.onDraftChanged?.call(_hasDraft);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyDraftChanged());
+  }
+
   @override
   void dispose() {
     _toyDebounce?.cancel();
@@ -60,6 +78,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _toyResults = [];
       _error = null;
     });
+    _notifyDraftChanged();
   }
 
   void _selectMember(DeskMember member) {
@@ -69,6 +88,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _memberResults = [];
       _error = null;
     });
+    _notifyDraftChanged();
   }
 
   void _addToy(ToyItem toy) {
@@ -79,6 +99,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _toyResults = [];
       _error = null;
     });
+    _notifyDraftChanged();
   }
 
   void _removeToy(String toyId) {
@@ -86,6 +107,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _selectedToys.removeWhere((item) => item.toyId == toyId);
       _error = null;
     });
+    _notifyDraftChanged();
   }
 
   void _scheduleToySearch() {
@@ -187,6 +209,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         _toyResults = [];
         _memberResults = [];
       });
+      _notifyDraftChanged();
       widget.onCheckedOut();
     } catch (e) {
       if (!mounted) return;
@@ -236,17 +259,13 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
               TextField(
                 controller: _memberQuery,
                 enabled: !busy,
-                decoration: InputDecoration(
+                style: fieldTextStyle(context),
+                cursorColor: fieldCursorColor(context),
+                decoration: searchInputDecoration(
+                  context,
                   hintText: "Search name or email",
                   suffixIcon: _searchingMembers
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
+                      ? searchLoadingSuffix()
                       : null,
                 ),
                 onChanged: (_) => _scheduleMemberSearch(),
@@ -289,18 +308,13 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
               TextField(
                 controller: _toyQuery,
                 enabled: !busy,
-                decoration: InputDecoration(
+                style: fieldTextStyle(context),
+                cursorColor: fieldCursorColor(context),
+                decoration: searchInputDecoration(
+                  context,
                   hintText: "Search toy id or name to add",
-                  suffixIcon: _searchingToys
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : null,
+                  suffixIcon:
+                      _searchingToys ? searchLoadingSuffix() : null,
                 ),
                 onChanged: (_) => _scheduleToySearch(),
               ),

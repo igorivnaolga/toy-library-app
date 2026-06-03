@@ -1,7 +1,9 @@
 import "package:flutter/material.dart";
 
-import "../../core/brand_chip_button.dart";import "../bookings/booking_models.dart";
+import "../../core/brand_chip_button.dart";
+import "../bookings/booking_models.dart";
 import "../bookings/pickup_date_banner.dart";
+import "../loans/loan_models.dart";
 import "catalog_models.dart";
 import "toy_unavailable_banner.dart";
 
@@ -20,6 +22,7 @@ class ToyDetailActionBar extends StatelessWidget {
     required this.onBook,
     required this.onChangePickupDate,
     required this.onCancelBooking,
+    this.myActiveLoan,
   });
 
   final ToyItem toy;
@@ -33,6 +36,7 @@ class ToyDetailActionBar extends StatelessWidget {
   final VoidCallback onBook;
   final VoidCallback onChangePickupDate;
   final VoidCallback onCancelBooking;
+  final LoanItem? myActiveLoan;
 
   bool get _isAvailable => toy.availability == "available";
 
@@ -102,7 +106,10 @@ class ToyDetailActionBar extends StatelessWidget {
                     onPressed: onBook,
                   )
                 else
-                  ToyUnavailableBanner(availability: toy.availability),
+                  ToyUnavailableBanner(
+                    availability: toy.availability,
+                    myActiveLoan: myActiveLoan,
+                  ),
               ],
             ],
           ),

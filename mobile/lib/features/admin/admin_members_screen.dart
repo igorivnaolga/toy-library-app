@@ -2,6 +2,8 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/app_input_field.dart";
+import "../../core/search_field.dart";
 import "../../core/app_theme.dart";
 import "../../core/section_header.dart";
 import "../profile/profile_labels.dart";
@@ -100,29 +102,29 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
               children: [
                 TextField(
                   controller: _search,
-                  decoration: InputDecoration(
+                  style: fieldTextStyle(context),
+                  cursorColor: fieldCursorColor(context),
+                  decoration: searchInputDecoration(
+                    context,
                     hintText: "Search name or email",
-                    prefixIcon: const Icon(Icons.search),
-                    isDense: true,
-                    suffixIcon: _search.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _search.clear();
-                              setState(() {});
-                              _reload();
-                            },
-                          ),
+                    suffixIcon: searchClearSuffix(
+                      context,
+                      visible: _search.text.isNotEmpty,
+                      onClear: () {
+                        _search.clear();
+                        setState(() {});
+                        _reload();
+                      },
+                    ),
                   ),
                   onSubmitted: (_) => _reload(),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
                   initialValue: _tierFilter,
-                  decoration: const InputDecoration(
+                  decoration: labeledInputDecoration(
+                    context,
                     labelText: "Membership type",
-                    isDense: true,
                   ),
                   items: _tierOptions
                       .map(

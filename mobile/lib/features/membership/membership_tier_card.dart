@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/app_theme.dart";
 
 /// Selectable membership tier row (onboarding and info screens).
 class MembershipTierCard extends StatelessWidget {
@@ -19,15 +20,12 @@ class MembershipTierCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Card(
+      color: kMembershipTierCardBg,
+      surfaceTintColor: Colors.transparent,
       elevation: selected ? 1 : 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: selected
-            ? BorderSide(color: colors.primary, width: 2)
-            : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
