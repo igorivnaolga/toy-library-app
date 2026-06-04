@@ -50,6 +50,25 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
     }
   }
 
+  Future<void> _handleScannedToyId(String toyId) async {
+    final controller = context.read<LoansController>();
+    LoanItem? match;
+    for (final loan in controller.activeLoans) {
+      if (loan.toyId == toyId) {
+        match = loan;
+        break;
+      }
+    }
+    if (!mounted) return;
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Toy $toyId isn't on loan right now.")),
+      );
+      return;
+    }
+    await _checkIn(match);
+  }
+
   Future<void> _checkIn(LoanItem loan) async {
     final result = await showDeskCheckInDialog(context, loan);
     if (result == null || !mounted) return;
@@ -109,6 +128,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
                 _CheckInTab(
                   onCheckIn: _checkIn,
                   onOpenToy: _openToy,
+                  onToyIdScanned: _handleScannedToyId,
                   onRefresh: () =>
                       context.read<LoansController>().loadVolunteerDesk(),
                 ),
@@ -219,11 +239,13 @@ class _CheckInTab extends StatelessWidget {
   const _CheckInTab({
     required this.onCheckIn,
     required this.onOpenToy,
+    required this.onToyIdScanned,
     required this.onRefresh,
   });
 
   final Future<void> Function(LoanItem loan) onCheckIn;
   final ValueChanged<String> onOpenToy;
+  final Future<void> Function(String toyId) onToyIdScanned;
   final Future<void> Function() onRefresh;
 
   @override
@@ -240,7 +262,7 @@ class _CheckInTab extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              const AdminCvScanPanel(),
+              AdminCvScanPanel(onToyIdScanned: onToyIdScanned),
               const SizedBox(height: 16),
               if (c.activeLoans.isEmpty)
                 const Center(
