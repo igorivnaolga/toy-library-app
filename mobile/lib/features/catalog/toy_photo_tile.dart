@@ -36,6 +36,10 @@ class _ToyPhotoTileState extends State<ToyPhotoTile> {
     }
 
     final url = toyPhotoHttpUrl(widget.toyId);
+    // Decode at display resolution so large source images don't load full-size
+    // for a small thumbnail (keeps the catalog list light on memory).
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final cacheSize = (widget.size * dpr).round();
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
@@ -44,6 +48,8 @@ class _ToyPhotoTileState extends State<ToyPhotoTile> {
         child: Image.network(
           url,
           fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          cacheWidth: cacheSize,
           gaplessPlayback: true,
           errorBuilder: (_, __, ___) {
             if (!_loadFailed) {

@@ -16,6 +16,7 @@ class LoanDeskSummary extends StatelessWidget {
     this.piecesAfterMember = true,
     /// When false, shows a placeholder instead of loading the photo (e.g. in a dialog).
     this.loadPhoto = true,
+    this.photoSize = 56,
   });
 
   final LoanItem loan;
@@ -24,6 +25,7 @@ class LoanDeskSummary extends StatelessWidget {
   final bool showMemberAndDue;
   final bool loadPhoto;
   final bool piecesAfterMember;
+  final double photoSize;
 
   @override
   Widget build(BuildContext context) {
@@ -34,8 +36,12 @@ class LoanDeskSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         loadPhoto
-            ? ToyPhotoTile(toyId: loan.toyId)
-            : const ToyPhotoPlaceholder(size: 56),
+            ? ToyPhotoTile(
+                toyId: loan.toyId,
+                photoFile: loan.photoFile,
+                size: photoSize,
+              )
+            : ToyPhotoPlaceholder(size: photoSize),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

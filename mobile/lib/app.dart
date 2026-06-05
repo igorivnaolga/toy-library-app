@@ -78,7 +78,7 @@ class ToyLibraryApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: "Toy Library",
+        title: LibraryInfoCopy.appBarTitle,
         theme: buildAppTheme(),
         home: const _AppShell(),
       ),
@@ -180,7 +180,7 @@ class _RoleHomeState extends State<_RoleHome> {
               return Scaffold(
                 appBar: AppBar(
                   title: const Text(
-                    LibraryInfoCopy.libraryName,
+                    LibraryInfoCopy.appBarTitle,
                     overflow: TextOverflow.ellipsis,
                   ),
                   actions: [

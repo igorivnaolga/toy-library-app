@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.schemas.booking import BookingOut
+from app.schemas.principal import KidProfile
 
 
 class AdminNotificationsOut(BaseModel):
@@ -39,6 +42,24 @@ class AdminMemberOut(BaseModel):
 
 class AdminMembersListResponse(BaseModel):
     data: list[AdminMemberOut]
+
+
+class AdminMemberDetailOut(AdminMemberOut):
+    kids: list[KidProfile] = Field(default_factory=list)
+    avatar_path: str | None = None
+    admin_notes: str | None = Field(
+        None,
+        description="Private notes visible to admins only.",
+    )
+
+
+class AdminMembershipUpdateIn(BaseModel):
+    membership_tier: Literal["casual", "non_duty", "duty"]
+
+
+class AdminMemberUpdateIn(BaseModel):
+    kids: list[KidProfile] | None = None
+    admin_notes: str | None = None
 
 
 class AdminBookingsListResponse(BaseModel):

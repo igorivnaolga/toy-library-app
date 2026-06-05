@@ -8,6 +8,7 @@ production deployments should use migrations instead of `create_all`.
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
@@ -15,12 +16,30 @@ from app.db.base import Base
 from app.db.session import get_engine
 
 
+def _apply_schema_patches(engine) -> None:
+    """Idempotent DDL for columns added after initial deploy."""
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE public.profiles "
+                "ADD COLUMN IF NOT EXISTS admin_notes text"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE public.toys "
+                "ADD COLUMN IF NOT EXISTS rental_price_cents integer"
+            )
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    if settings.database_url and settings.create_tables_on_startup:
-        engine = get_engine()
-        if engine is not None:
+    engine = get_engine()
+    if settings.database_url and engine is not None:
+        _apply_schema_patches(engine)
+        if settings.create_tables_on_startup:
             # Dev-only convenience: create ORM tables if they don't exist yet.
             Base.metadata.create_all(bind=engine)
     yield

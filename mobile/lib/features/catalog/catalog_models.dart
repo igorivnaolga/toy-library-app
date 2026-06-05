@@ -47,6 +47,7 @@ class ToyItem {
     this.photoFile,
     this.totalPieces,
     this.missingPieces,
+    this.rentalPriceCents,
   });
 
   final String toyId;
@@ -60,6 +61,13 @@ class ToyItem {
   final String? photoFile;
   final int? totalPieces;
   final int? missingPieces;
+  final int? rentalPriceCents;
+
+  String? get rentalPriceLabel {
+    final cents = rentalPriceCents;
+    if (cents == null) return null;
+    return "\$${(cents / 100).toStringAsFixed(2)}";
+  }
 
   String get piecesSummary => formatToyPiecesSummary(
         totalPieces: totalPieces,
@@ -79,6 +87,7 @@ class ToyItem {
       photoFile: json["photo_file"] as String?,
       totalPieces: (json["total_pieces"] as num?)?.toInt(),
       missingPieces: (json["missing_pieces"] as num?)?.toInt(),
+      rentalPriceCents: (json["rental_price_cents"] as num?)?.toInt(),
     );
   }
 }

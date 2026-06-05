@@ -65,6 +65,23 @@ def apply_membership_choice(session: Session, profile: Profile, tier: str) -> No
         profile.role = "member"
 
 
+def update_member_for_admin(
+    session: Session,
+    profile: Profile,
+    *,
+    kids: list[KidProfile] | None = None,
+    admin_notes: str | None = None,
+    admin_notes_set: bool = False,
+) -> Profile:
+    """Admin edits to a member profile (children, private notes)."""
+    if kids is not None:
+        update_profile(session, profile, kids=kids)
+    if admin_notes_set:
+        cleaned = admin_notes.strip() if admin_notes else ""
+        profile.admin_notes = cleaned or None
+    return profile
+
+
 def update_profile(
     session: Session,
     profile: Profile,
@@ -95,6 +112,25 @@ def update_profile(
         cleaned_path = avatar_path.strip()
         profile.avatar_path = cleaned_path or None
     return profile
+
+
+def update_membership_tier_for_admin(
+    session: Session,
+    profile: Profile,
+    tier: str,
+) -> None:
+    """Admin override: change membership tier and reset volunteer state when needed."""
+    if tier not in _ALLOWED_TIERS:
+        raise ValueError("invalid_tier")
+    if profile.role == "admin":
+        raise ValueError("cannot_change_admin")
+    profile.membership_tier = tier
+    if tier == "duty":
+        profile.volunteer_confirmed = False
+        profile.role = "member"
+    else:
+        profile.volunteer_confirmed = False
+        profile.role = "member"
 
 
 def approve_duty_volunteer(session: Session, profile: Profile) -> None:

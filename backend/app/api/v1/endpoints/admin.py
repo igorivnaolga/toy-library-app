@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_admin
@@ -17,14 +18,21 @@ from app.repositories.profile_repo import (
     count_pending_duty_members,
     count_recent_members,
     get_profile_by_id,
+    get_user_email,
+    kids_from_profile,
     list_members_for_admin,
     list_pending_duty_members,
     list_recent_members_for_admin,
+    update_member_for_admin,
+    update_membership_tier_for_admin,
 )
 from app.schemas.admin import (
     AdminBookingsListResponse,
+    AdminMemberDetailOut,
     AdminMemberOut,
     AdminMembersListResponse,
+    AdminMembershipUpdateIn,
+    AdminMemberUpdateIn,
     AdminNotificationsOut,
 )
 from app.schemas.booking import booking_out_from_model
@@ -164,6 +172,99 @@ def list_members(
     return AdminMembersListResponse(
         data=[AdminMemberOut.model_validate(row) for row in rows],
     )
+
+
+def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
+    created_row = session.execute(
+        text("select created_at from auth.users where id = :id"),
+        {"id": profile.id},
+    ).scalar_one_or_none()
+    membership_started_at = created_row
+    membership_ends_at = None
+    if created_row is not None:
+        membership_ends_at = created_row + timedelta(days=365)
+    kids = kids_from_profile(profile)
+    return AdminMemberDetailOut(
+        user_id=str(profile.id),
+        email=get_user_email(session, profile.id) or "",
+        full_name=profile.full_name or "",
+        role=profile.role,
+        membership_tier=profile.membership_tier,
+        volunteer_confirmed=bool(profile.volunteer_confirmed),
+        membership_started_at=membership_started_at,
+        membership_ends_at=membership_ends_at,
+        kids=kids,
+        avatar_path=profile.avatar_path,
+        admin_notes=profile.admin_notes,
+    )
+
+
+@router.get("/users/{user_id}", response_model=AdminMemberDetailOut)
+def get_member_detail(
+    user_id: uuid.UUID,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminMemberDetailOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    return _member_detail_out(db, profile)
+
+
+@router.patch("/users/{user_id}/membership", response_model=AdminMemberDetailOut)
+def update_member_membership(
+    user_id: uuid.UUID,
+    body: AdminMembershipUpdateIn,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminMemberDetailOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    try:
+        update_membership_tier_for_admin(db, profile, body.membership_tier)
+    except ValueError as e:
+        code = str(e)
+        if code == "cannot_change_admin":
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change membership for admin accounts.",
+            ) from e
+        raise HTTPException(status_code=400, detail="Invalid membership tier.") from e
+    db.commit()
+    db.refresh(profile)
+    return _member_detail_out(db, profile)
+
+
+@router.patch("/users/{user_id}", response_model=AdminMemberDetailOut)
+def update_member_profile(
+    user_id: uuid.UUID,
+    body: AdminMemberUpdateIn,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminMemberDetailOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    payload = body.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=422, detail="No fields to update.")
+    update_member_for_admin(
+        db,
+        profile,
+        kids=body.kids,
+        admin_notes=body.admin_notes,
+        admin_notes_set="admin_notes" in payload,
+    )
+    db.commit()
+    db.refresh(profile)
+    return _member_detail_out(db, profile)
 
 
 @router.patch("/toys/{toy_id}", response_model=ToyOut)

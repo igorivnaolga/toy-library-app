@@ -31,6 +31,11 @@ class ToyOut(BaseModel):
         ge=0,
         description="Pieces currently known to be missing from the set.",
     )
+    rental_price_cents: int | None = Field(
+        default=None,
+        ge=0,
+        description="Toy rental price in NZD cents (from SETLS).",
+    )
 
     @field_validator("name", mode="before")
     @classmethod

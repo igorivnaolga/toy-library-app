@@ -35,6 +35,10 @@ class LoanOut(BaseModel):
     user_id: str
     toy_id: str
     toy_name: str | None = None
+    photo_file: str | None = Field(
+        None,
+        description="Catalog image filename for the toy, if any.",
+    )
     toy_total_pieces: int | None = Field(
         None,
         description="Expected pieces in the toy set when loaded for desk views.",
@@ -77,12 +81,14 @@ def loan_out_from_model(
     *,
     max_renewals: int | None = None,
 ) -> LoanOut:
-    toy_name = loan.toy.name if getattr(loan, "toy", None) is not None else None
+    toy = getattr(loan, "toy", None)
+    toy_name = toy.name if toy is not None else None
+    photo_file = toy.image.filename if toy is not None and toy.image else None
     toy_total_pieces = None
     toy_missing_pieces = None
-    if getattr(loan, "toy", None) is not None:
-        toy_total_pieces = loan.toy.total_pieces
-        toy_missing_pieces = loan.toy.missing_pieces
+    if toy is not None:
+        toy_total_pieces = toy.total_pieces
+        toy_missing_pieces = toy.missing_pieces
     member_name = None
     profile = getattr(loan, "profile", None)
     if profile is not None and profile.full_name:
@@ -95,6 +101,7 @@ def loan_out_from_model(
         user_id=str(loan.user_id),
         toy_id=loan.toy_id,
         toy_name=toy_name,
+        photo_file=photo_file,
         toy_total_pieces=toy_total_pieces,
         toy_missing_pieces=toy_missing_pieces,
         member_name=member_name,

@@ -66,10 +66,20 @@ ThemeData buildAppTheme() {
     outlineVariant: const Color(0xFFE0E0E0),
   );
 
+  final baseText = ThemeData(useMaterial3: true).textTheme;
+  final textTheme = baseText
+      .copyWith(
+        bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 16),
+        bodyMedium: baseText.bodyMedium?.copyWith(fontSize: 16),
+        bodySmall: baseText.bodySmall?.copyWith(fontSize: 13),
+      )
+      .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
+
   return ThemeData(
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
     useMaterial3: true,
+    textTheme: textTheme,
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
       foregroundColor: scheme.onSurface,

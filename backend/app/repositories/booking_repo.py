@@ -55,7 +55,7 @@ def create_booking(
 def get_booking_by_id(session: Session, booking_id: uuid.UUID) -> Booking | None:
     return session.scalar(
         select(Booking)
-        .options(joinedload(Booking.toy))
+        .options(joinedload(Booking.toy).joinedload(Toy.image))
         .where(Booking.id == booking_id)
     )
 
@@ -65,7 +65,7 @@ def get_booking_for_user(
 ) -> Booking | None:
     return session.scalar(
         select(Booking)
-        .options(joinedload(Booking.toy))
+        .options(joinedload(Booking.toy).joinedload(Toy.image))
         .where(Booking.id == booking_id, Booking.user_id == user_id)
     )
 
@@ -88,7 +88,7 @@ def list_bookings_for_user(
     )
     stmt = (
         select(Booking)
-        .options(joinedload(Booking.toy))
+        .options(joinedload(Booking.toy).joinedload(Toy.image))
         .where(Booking.user_id == user_id)
         .order_by(
             status_rank.asc(),
@@ -122,7 +122,10 @@ def list_pending_bookings_ready_for_checkout(
     return list(
         session.scalars(
             select(Booking)
-            .options(joinedload(Booking.toy), joinedload(Booking.profile))
+            .options(
+                joinedload(Booking.toy).joinedload(Toy.image),
+                joinedload(Booking.profile),
+            )
             .where(
                 Booking.status == BOOKING_STATUS_PENDING,
                 Booking.pickup_date.is_not(None),
@@ -175,7 +178,10 @@ def list_bookings_for_admin(
     )
     stmt = (
         select(Booking)
-        .options(joinedload(Booking.toy), joinedload(Booking.profile))
+        .options(
+            joinedload(Booking.toy).joinedload(Toy.image),
+            joinedload(Booking.profile),
+        )
         .order_by(
             status_rank.asc(),
             Booking.pickup_date.asc().nulls_last(),

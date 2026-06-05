@@ -16,6 +16,7 @@ class CatalogController extends ChangeNotifier {
   List<String> ageRangeOptions = [];
   List<ToyItem> toys = [];
   bool loading = false;
+  bool loadingMore = false;
   String? error;
   String searchQuery = "";
   String? categoryFilterLabel;
@@ -28,6 +29,7 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> loadInitial() async {
     loading = true;
+    loadingMore = false;
     error = null;
     notifyListeners();
     try {
@@ -84,9 +86,8 @@ class CatalogController extends ChangeNotifier {
   }
 
   Future<void> loadMore() async {
-    if (!hasNext || loading) return;
-    loading = true;
-    error = null;
+    if (!hasNext || loading || loadingMore) return;
+    loadingMore = true;
     notifyListeners();
     try {
       await _fetchToyPage(reset: false);
@@ -96,7 +97,7 @@ class CatalogController extends ChangeNotifier {
     } catch (e) {
       error = e.toString();
     } finally {
-      loading = false;
+      loadingMore = false;
       notifyListeners();
     }
   }
@@ -140,6 +141,7 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> _reloadToysOnly() async {
     loading = true;
+    loadingMore = false;
     error = null;
     notifyListeners();
     try {

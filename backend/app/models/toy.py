@@ -25,6 +25,7 @@ class Toy(Base):
 
     total_pieces: Mapped[int | None] = mapped_column(Integer, nullable=True)
     missing_pieces: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rental_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     category_label: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
 

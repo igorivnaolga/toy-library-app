@@ -22,6 +22,7 @@ from app.db.session import get_engine, session_scope
 from app.models.toy import Toy as ToyORM
 from app.schemas.toy import ToyOut
 from app.services.pieces_from_setls import load_pieces_summary
+from app.services.rental_price_from_setls import load_rental_prices
 
 _MAX_DISTINCT_AGE_RANGES = 100
 
@@ -61,6 +62,7 @@ def load_all_toys() -> tuple[ToyOut, ...]:
             missing_pieces = None
             if piece_data and piece_data[1] > 0:
                 missing_pieces = piece_data[1]
+            rental_price_cents = rental_by_toy.get(toy_id)
             toys.append(
                 ToyOut(
                     toy_id=toy_id,
@@ -74,6 +76,7 @@ def load_all_toys() -> tuple[ToyOut, ...]:
                     photo_file=_to_none(row.get("photo_file_desc")),
                     total_pieces=total_pieces,
                     missing_pieces=missing_pieces,
+                    rental_price_cents=rental_price_cents,
                 )
             )
     return tuple(toys)
@@ -109,6 +112,7 @@ def _toy_row_to_out(toy: ToyORM) -> ToyOut:
         photo_file=photo_file,
         total_pieces=toy.total_pieces,
         missing_pieces=toy.missing_pieces,
+        rental_price_cents=toy.rental_price_cents,
     )
 
 

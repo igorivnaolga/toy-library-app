@@ -134,8 +134,6 @@ class AdminController extends ChangeNotifier {
     String? membershipTier,
     DateTime? startedFrom,
     DateTime? startedTo,
-    DateTime? endingFrom,
-    DateTime? endingTo,
     String? queryText,
   }) async {
     membersLoading = true;
@@ -151,12 +149,6 @@ class AdminController extends ChangeNotifier {
       }
       if (startedTo != null) {
         query["started_to"] = formatApiDate(startedTo);
-      }
-      if (endingFrom != null) {
-        query["ending_from"] = formatApiDate(endingFrom);
-      }
-      if (endingTo != null) {
-        query["ending_to"] = formatApiDate(endingTo);
       }
       final q = queryText?.trim();
       if (q != null && q.isNotEmpty) {
@@ -182,6 +174,34 @@ class AdminController extends ChangeNotifier {
       "limit": "20",
     });
     return parseAdminMemberList(json);
+  }
+
+  Future<AdminMemberDetail> loadMemberDetail(String userId) async {
+    final json = await _client.getJson("/api/v1/admin/users/$userId");
+    return AdminMemberDetail.fromJson(json);
+  }
+
+  Future<AdminMemberDetail> updateMemberMembership(
+    String userId,
+    String membershipTier,
+  ) async {
+    final json = await _client.patchJson(
+      "/api/v1/admin/users/$userId/membership",
+      {"membership_tier": membershipTier},
+    );
+    return AdminMemberDetail.fromJson(json);
+  }
+
+  Future<AdminMemberDetail> updateMemberProfile(
+    String userId, {
+    List<Map<String, dynamic>>? kids,
+    String? adminNotes,
+  }) async {
+    final body = <String, dynamic>{};
+    if (kids != null) body["kids"] = kids;
+    if (adminNotes != null) body["admin_notes"] = adminNotes;
+    final json = await _client.patchJson("/api/v1/admin/users/$userId", body);
+    return AdminMemberDetail.fromJson(json);
   }
 }
 

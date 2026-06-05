@@ -8,6 +8,8 @@ import "../../core/app_theme.dart";
 import "../../core/section_header.dart";
 import "../profile/profile_labels.dart";
 import "admin_controller.dart";
+import "admin_date_filters.dart";
+import "admin_member_profile_screen.dart";
 import "admin_models.dart";
 
 /// Member roster with membership tier and date filters.
@@ -23,8 +25,6 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
   String? _tierFilter;
   DateTime? _startedFrom;
   DateTime? _startedTo;
-  DateTime? _endingFrom;
-  DateTime? _endingTo;
 
   static const _tierOptions = [
     (null, "All tiers"),
@@ -50,8 +50,6 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
           membershipTier: _tierFilter,
           startedFrom: _startedFrom,
           startedTo: _startedTo,
-          endingFrom: _endingFrom,
-          endingTo: _endingTo,
           queryText: _search.text,
         );
   }
@@ -73,18 +71,12 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
     await _reload();
   }
 
-  bool get _hasDateFilters =>
-      _startedFrom != null ||
-      _startedTo != null ||
-      _endingFrom != null ||
-      _endingTo != null;
+  bool get _hasDateFilters => _startedFrom != null || _startedTo != null;
 
   Future<void> _clearDateFilters() async {
     setState(() {
       _startedFrom = null;
       _startedTo = null;
-      _endingFrom = null;
-      _endingTo = null;
     });
     await _reload();
   }
@@ -140,7 +132,7 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                _MembershipDateFilterGroup(
+                AdminDateFilterGroup(
                   title: "Started",
                   from: _startedFrom,
                   to: _startedTo,
@@ -164,34 +156,6 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                       ? null
                       : () async {
                           setState(() => _startedTo = null);
-                          await _reload();
-                        },
-                ),
-                const SizedBox(height: 12),
-                _MembershipDateFilterGroup(
-                  title: "Ending",
-                  from: _endingFrom,
-                  to: _endingTo,
-                  onFromTap: () => _pickDate(
-                    label: "Membership ending from",
-                    current: _endingFrom,
-                    onPicked: (d) => _endingFrom = d,
-                  ),
-                  onToTap: () => _pickDate(
-                    label: "Membership ending to",
-                    current: _endingTo,
-                    onPicked: (d) => _endingTo = d,
-                  ),
-                  onFromClear: _endingFrom == null
-                      ? null
-                      : () async {
-                          setState(() => _endingFrom = null);
-                          await _reload();
-                        },
-                  onToClear: _endingTo == null
-                      ? null
-                      : () async {
-                          setState(() => _endingTo = null);
                           await _reload();
                         },
                 ),
@@ -245,8 +209,22 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   itemCount: admin.members.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, i) =>
-                      _AdminMemberTile(member: admin.members[i]),
+                  itemBuilder: (context, i) => _AdminMemberTile(
+                    member: admin.members[i],
+                    onTap: () async {
+                      final member = admin.members[i];
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => AdminMemberProfileScreen(
+                            userId: member.userId,
+                            initialMember: member,
+                          ),
+                        ),
+                      );
+                      if (!context.mounted) return;
+                      await _reload();
+                    },
+                  ),
                 ),
               );
             },
@@ -257,150 +235,14 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
   }
 }
 
-class _MembershipDateFilterGroup extends StatelessWidget {
-  const _MembershipDateFilterGroup({
-    required this.title,
-    required this.from,
-    required this.to,
-    required this.onFromTap,
-    required this.onToTap,
-    this.onFromClear,
-    this.onToClear,
-  });
-
-  final String title;
-  final DateTime? from;
-  final DateTime? to;
-  final VoidCallback onFromTap;
-  final VoidCallback onToTap;
-  final VoidCallback? onFromClear;
-  final VoidCallback? onToClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            title,
-            style: context.sectionHeader.copyWith(
-              fontSize: 13,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _DateFilterChip(
-                  label: "From",
-                  date: from,
-                  onTap: onFromTap,
-                  onClear: onFromClear,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DateFilterChip(
-                  label: "To",
-                  date: to,
-                  onTap: onToTap,
-                  onClear: onToClear,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DateFilterChip extends StatelessWidget {
-  const _DateFilterChip({
-    required this.label,
-    required this.date,
-    required this.onTap,
-    this.onClear,
-  });
-
-  final String label;
-  final DateTime? date;
-  final VoidCallback onTap;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final active = date != null;
-    final chipLabel =
-        active ? "$label · ${formatAdminDate(date)}" : label;
-
-    return Material(
-      color: active
-          ? colors.primaryContainer.withValues(alpha: 0.45)
-          : colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(
-          color: active ? kBrandYellow : colors.outlineVariant,
-          width: active ? 1.5 : 1,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  chipLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: context.listSubtitle.copyWith(
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (active && onClear != null) ...[
-                const SizedBox(width: 4),
-                InkWell(
-                  onTap: onClear,
-                  customBorder: const CircleBorder(),
-                  child: Padding(
-                    padding: const EdgeInsets.all(2),
-                    child: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AdminMemberTile extends StatelessWidget {
-  const _AdminMemberTile({required this.member});
+  const _AdminMemberTile({
+    required this.member,
+    required this.onTap,
+  });
 
   final AdminMember member;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -408,6 +250,7 @@ class _AdminMemberTile extends StatelessWidget {
     final role = member.role == "volunteer" ? "Volunteer" : "Member";
 
     return ListTile(
+      onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       title: Text(
         member.displayName,
@@ -422,8 +265,7 @@ class _AdminMemberTile extends StatelessWidget {
           Text("$role · $tier", style: context.listSubtitle),
           const SizedBox(height: 2),
           Text(
-            "Started ${formatAdminDate(member.membershipStartedAt)} · "
-            "Ends ${formatAdminDate(member.membershipEndsAt)}",
+            "Started ${formatAdminDate(member.membershipStartedAt)}",
             style: context.listSubtitle,
           ),
         ],

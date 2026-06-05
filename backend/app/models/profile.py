@@ -42,6 +42,7 @@ class Profile(Base):
         server_default=text("'[]'"),
     )
     avatar_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    admin_notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
     bookings: Mapped[list["Booking"]] = relationship(back_populates="profile")
     loans: Mapped[list["Loan"]] = relationship(back_populates="profile")

@@ -38,6 +38,10 @@ class BookingOut(BaseModel):
     user_id: str
     toy_id: str
     toy_name: str | None = None
+    photo_file: str | None = Field(
+        None,
+        description="Catalog image filename for the toy, if any.",
+    )
     member_name: str | None = Field(
         None,
         description="Member full name when loaded for volunteer desk views.",
@@ -85,7 +89,9 @@ def booking_out_from_model(
     member_email: str | None = None,
 ) -> BookingOut:
     """Map SQLAlchemy ``Booking`` (+ optional loaded ``toy`` / ``profile``) to API JSON."""
-    toy_name = booking.toy.name if getattr(booking, "toy", None) is not None else None
+    toy = getattr(booking, "toy", None)
+    toy_name = toy.name if toy is not None else None
+    photo_file = toy.image.filename if toy is not None and toy.image else None
     member_name = None
     profile = getattr(booking, "profile", None)
     if profile is not None and profile.full_name:
@@ -98,6 +104,7 @@ def booking_out_from_model(
         user_id=str(booking.user_id),
         toy_id=booking.toy_id,
         toy_name=toy_name,
+        photo_file=photo_file,
         member_name=member_name,
         member_email=member_email,
         status=booking.status,

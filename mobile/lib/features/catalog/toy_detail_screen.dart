@@ -242,31 +242,34 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               ToyDetailSectionCard(
-                padding: EdgeInsets.zero,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 4 / 3,
-                    child: hasPhotoName
-                        ? Image.network(
-                            toyPhotoHttpUrl(t.toyId),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: hasPhotoName
+                          ? Image.network(
+                              toyPhotoHttpUrl(t.toyId),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.medium,
+                              errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(
+                                expand: true,
+                                borderRadius: 12,
+                              ),
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) {
+                                  return child;
+                                }
+                                return const Center(
+                                    child: CircularProgressIndicator());
+                              },
+                            )
+                          : ToyPhotoPlaceholder(
                               expand: true,
                               borderRadius: 12,
                             ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) {
-                                return child;
-                              }
-                              return const Center(
-                                  child: CircularProgressIndicator());
-                            },
-                          )
-                        : ToyPhotoPlaceholder(
-                            expand: true,
-                            borderRadius: 12,
-                          ),
+                    ),
                   ),
                 ),
               ),
@@ -295,6 +298,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                           totalPieces: t.totalPieces,
                           missingPieces: t.missingPieces,
                         ) ||
+                        t.rentalPriceLabel != null ||
                         (t.manufacturer != null &&
                             t.manufacturer!.isNotEmpty)) ...[
                       const SizedBox(height: 16),
@@ -316,6 +320,11 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                           value: t.piecesSummary.isNotEmpty
                               ? t.piecesSummary
                               : "Not recorded",
+                        ),
+                      if (t.rentalPriceLabel != null)
+                        ToyDetailMetaRow(
+                          label: "Rental price",
+                          value: t.rentalPriceLabel!,
                         ),
                       if (t.manufacturer != null && t.manufacturer!.isNotEmpty)
                         ToyDetailMetaRow(

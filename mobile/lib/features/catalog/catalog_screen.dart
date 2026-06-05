@@ -29,6 +29,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   ];
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
 
   @override
@@ -36,6 +37,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     super.initState();
     final catalog = context.read<CatalogController>();
     _searchController.text = catalog.searchQuery;
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       catalog.loadInitial();
@@ -46,7 +48,31 @@ class _CatalogScreenState extends State<CatalogScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // Prefetch well before the end so the next page is ready when the user arrives.
+    final prefetchDistance =
+        position.viewportDimension * 2.5 + 200;
+    if (position.pixels >= position.maxScrollExtent - prefetchDistance) {
+      context.read<CatalogController>().loadMore();
+    }
+  }
+
+  void _prefetchIfListDoesNotFillScreen(CatalogController catalog) {
+    if (!catalog.hasNext || catalog.loading || catalog.loadingMore) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      if (position.maxScrollExtent <= 0) {
+        catalog.loadMore();
+      }
+    });
   }
 
   void _scheduleSearch(String value) {
@@ -384,11 +410,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     ),
                   );
                 }
-                final showFooter =
-                    c.hasNext || (c.loading && c.toys.isNotEmpty);
+                _prefetchIfListDoesNotFillScreen(c);
+                final showFooter = c.loadingMore;
                 return RefreshIndicator(
                   onRefresh: () => context.read<CatalogController>().refresh(),
                   child: ListView.separated(
+                    controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                     itemCount: c.toys.length + (showFooter ? 1 : 0),
@@ -412,28 +439,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           },
                         );
                       }
-                      if (c.loading && c.toys.isNotEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (c.hasNext) {
-                        return Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Center(
-                            child: TextButton(
-                              onPressed: c.loading
-                                  ? null
-                                  : () => context
-                                      .read<CatalogController>()
-                                      .loadMore(),
-                              child: const Text("Load more"),
-                            ),
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                        );
-                      }
-                      return const SizedBox.shrink();
+                        ),
+                      );
                     },
                   ),
                 );

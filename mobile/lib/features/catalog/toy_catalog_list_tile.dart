@@ -36,7 +36,11 @@ class ToyCatalogListTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ToyPhotoTile(toyId: toy.toyId, photoFile: toy.photoFile),
+              ToyPhotoTile(
+                toyId: toy.toyId,
+                photoFile: toy.photoFile,
+                size: 80,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

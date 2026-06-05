@@ -2,6 +2,7 @@
 library;
 
 import "../bookings/booking_models.dart";
+import "../profile/kid_profile.dart";
 
 class AdminNotifications {
   const AdminNotifications({
@@ -86,6 +87,46 @@ class AdminMember {
 
   String get displayName =>
       fullName.isNotEmpty ? fullName : (email.isNotEmpty ? email : userId);
+}
+
+class AdminMemberDetail extends AdminMember {
+  const AdminMemberDetail({
+    required super.userId,
+    required super.email,
+    required super.fullName,
+    required super.role,
+    super.membershipTier,
+    super.volunteerConfirmed = false,
+    super.membershipStartedAt,
+    super.membershipEndsAt,
+    this.kids = const [],
+    this.avatarPath,
+    this.adminNotes,
+  });
+
+  final List<KidProfile> kids;
+  final String? avatarPath;
+  final String? adminNotes;
+
+  factory AdminMemberDetail.fromJson(Map<String, dynamic> json) {
+    return AdminMemberDetail(
+      userId: json["user_id"]?.toString() ?? "",
+      email: json["email"]?.toString() ?? "",
+      fullName: json["full_name"]?.toString() ?? "",
+      role: json["role"]?.toString() ?? "member",
+      membershipTier: json["membership_tier"]?.toString(),
+      volunteerConfirmed: json["volunteer_confirmed"] == true,
+      membershipStartedAt: json["membership_started_at"] == null
+          ? null
+          : DateTime.tryParse(json["membership_started_at"].toString()),
+      membershipEndsAt: json["membership_ends_at"] == null
+          ? null
+          : DateTime.tryParse(json["membership_ends_at"].toString()),
+      kids: parseKidsList(json["kids"]),
+      avatarPath: json["avatar_path"]?.toString(),
+      adminNotes: json["admin_notes"]?.toString(),
+    );
+  }
 }
 
 List<BookingItem> parseAdminBookingList(Map<String, dynamic> json) {

@@ -246,7 +246,11 @@ class _PendingCheckoutTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ToyPhotoTile(toyId: booking.toyId),
+              ToyPhotoTile(
+                toyId: booking.toyId,
+                photoFile: booking.photoFile,
+                size: 80,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -322,12 +326,12 @@ class _ActiveLoanDeskTile extends StatelessWidget {
                   showToyId: false,
                   showPieces: true,
                   showMemberAndDue: true,
+                  photoSize: 80,
                 ),
               ),
               const SizedBox(width: 8),
               BrandChipButton(
                 label: "Check in",
-                variant: BrandChipButtonVariant.outlined,
                 fixedWidth: 100,
                 onPressed: loading ? null : onCheckIn,
               ),

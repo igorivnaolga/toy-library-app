@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.loan import LOAN_STATUS_ACTIVE, LOAN_STATUS_RETURNED, Loan
+from app.models.toy import Toy
 
 
 def create_loan(
@@ -37,7 +38,10 @@ def create_loan(
 def get_loan_by_id(session: Session, loan_id: uuid.UUID) -> Loan | None:
     return session.scalar(
         select(Loan)
-        .options(joinedload(Loan.toy), joinedload(Loan.profile))
+        .options(
+            joinedload(Loan.toy).joinedload(Toy.image),
+            joinedload(Loan.profile),
+        )
         .where(Loan.id == loan_id)
     )
 
@@ -45,7 +49,7 @@ def get_loan_by_id(session: Session, loan_id: uuid.UUID) -> Loan | None:
 def get_active_loan_for_toy(session: Session, toy_id: str) -> Loan | None:
     return session.scalar(
         select(Loan)
-        .options(joinedload(Loan.toy))
+        .options(joinedload(Loan.toy).joinedload(Toy.image))
         .where(
             Loan.toy_id == toy_id,
             Loan.status == LOAN_STATUS_ACTIVE,
@@ -75,7 +79,7 @@ def list_loans_for_user(
 ) -> list[Loan]:
     stmt = (
         select(Loan)
-        .options(joinedload(Loan.toy))
+        .options(joinedload(Loan.toy).joinedload(Toy.image))
         .where(Loan.user_id == user_id)
         .order_by(Loan.checked_out_at.desc())
     )
@@ -88,7 +92,10 @@ def list_active_loans(session: Session) -> list[Loan]:
     return list(
         session.scalars(
             select(Loan)
-            .options(joinedload(Loan.toy), joinedload(Loan.profile))
+            .options(
+                joinedload(Loan.toy).joinedload(Toy.image),
+                joinedload(Loan.profile),
+            )
             .where(Loan.status == LOAN_STATUS_ACTIVE)
             .order_by(Loan.due_date.asc(), Loan.checked_out_at.asc())
         )

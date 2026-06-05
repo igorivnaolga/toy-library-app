@@ -48,7 +48,11 @@ class BookingListTile extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ToyPhotoTile(toyId: item.toyId),
+                    ToyPhotoTile(
+                      toyId: item.toyId,
+                      photoFile: item.photoFile,
+                      size: 80,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

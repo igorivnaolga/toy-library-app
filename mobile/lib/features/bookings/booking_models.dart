@@ -7,6 +7,7 @@ class BookingItem {
     required this.status,
     required this.createdAt,
     this.toyName,
+    this.photoFile,
     this.pickupDate,
     this.pickupLabel,
     this.cancelledAt,
@@ -18,6 +19,7 @@ class BookingItem {
   final String userId;
   final String toyId;
   final String? toyName;
+  final String? photoFile;
   final String status;
   final DateTime? pickupDate;
   final String? pickupLabel;
@@ -36,6 +38,7 @@ class BookingItem {
       userId: json["user_id"]?.toString() ?? "",
       toyId: json["toy_id"]?.toString() ?? "",
       toyName: json["toy_name"]?.toString(),
+      photoFile: json["photo_file"]?.toString(),
       status: json["status"]?.toString() ?? "unknown",
       pickupDate: parseApiDate(json["pickup_date"]),
       pickupLabel: json["pickup_label"]?.toString(),

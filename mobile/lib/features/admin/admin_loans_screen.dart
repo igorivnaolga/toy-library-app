@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/section_header.dart";
 import "../../core/brand_chip_button.dart";
@@ -235,7 +236,7 @@ class _CheckOutTabState extends State<_CheckOutTab> {
   }
 }
 
-class _CheckInTab extends StatelessWidget {
+class _CheckInTab extends StatefulWidget {
   const _CheckInTab({
     required this.onCheckIn,
     required this.onOpenToy,
@@ -249,6 +250,29 @@ class _CheckInTab extends StatelessWidget {
   final Future<void> Function() onRefresh;
 
   @override
+  State<_CheckInTab> createState() => _CheckInTabState();
+}
+
+class _CheckInTabState extends State<_CheckInTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = "";
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LoanItem> _filtered(List<LoanItem> loans) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return loans;
+    return loans.where((loan) {
+      final name = (loan.toyName ?? "").toLowerCase();
+      return loan.toyId.toLowerCase().contains(q) || name.contains(q);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<LoansController>(
       builder: (context, c, _) {
@@ -256,30 +280,62 @@ class _CheckInTab extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
+        final all = c.activeLoans;
+        final filtered = _filtered(all);
+
         return RefreshIndicator(
-          onRefresh: onRefresh,
+          onRefresh: widget.onRefresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              AdminCvScanPanel(onToyIdScanned: onToyIdScanned),
+              AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
               const SizedBox(height: 16),
-              if (c.activeLoans.isEmpty)
+              if (all.isNotEmpty) ...[
+                TextField(
+                  controller: _searchController,
+                  style: fieldTextStyle(context),
+                  cursorColor: fieldCursorColor(context),
+                  textInputAction: TextInputAction.search,
+                  decoration: searchInputDecoration(
+                    context,
+                    hintText: "Search by toy name or ID",
+                    suffixIcon: searchClearSuffix(
+                      context,
+                      visible: _query.isNotEmpty,
+                      onClear: () {
+                        _searchController.clear();
+                        setState(() => _query = "");
+                      },
+                    ),
+                  ),
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (all.isEmpty)
                 const Center(
                   child: Text(
                     "No toys currently on loan.",
                     textAlign: TextAlign.center,
                   ),
                 )
+              else if (filtered.isEmpty)
+                Center(
+                  child: Text(
+                    'No toys match "${_query.trim()}".',
+                    textAlign: TextAlign.center,
+                  ),
+                )
               else ...[
                 const SectionHeader("On loan"),
-                for (var i = 0; i < c.activeLoans.length; i++) ...[
+                for (var i = 0; i < filtered.length; i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   _CheckInTile(
-                    loan: c.activeLoans[i],
+                    loan: filtered[i],
                     loading: c.deskLoading,
-                    onOpen: () => onOpenToy(c.activeLoans[i].toyId),
-                    onCheckIn: () => onCheckIn(c.activeLoans[i]),
+                    onOpen: () => widget.onOpenToy(filtered[i].toyId),
+                    onCheckIn: () => widget.onCheckIn(filtered[i]),
                   ),
                 ],
               ],
@@ -391,12 +447,11 @@ class _CheckInTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: LoanDeskSummary(loan: loan),
+                child: LoanDeskSummary(loan: loan, photoSize: 80),
               ),
               const SizedBox(width: 8),
               BrandChipButton(
                 label: "Check in",
-                variant: BrandChipButtonVariant.outlined,
                 fixedWidth: 100,
                 onPressed: loading ? null : onCheckIn,
               ),

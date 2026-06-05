@@ -13,6 +13,7 @@ class LoanItem {
     required this.renewalCount,
     required this.isOverdue,
     this.toyName,
+    this.photoFile,
     this.bookingId,
     this.returnedAt,
     this.maxRenewals,
@@ -26,6 +27,7 @@ class LoanItem {
   final String userId;
   final String toyId;
   final String? toyName;
+  final String? photoFile;
   final String? bookingId;
   final String status;
   final DateTime checkedOutAt;
@@ -55,6 +57,7 @@ class LoanItem {
       userId: json["user_id"]?.toString() ?? "",
       toyId: json["toy_id"]?.toString() ?? "",
       toyName: json["toy_name"]?.toString(),
+      photoFile: json["photo_file"]?.toString(),
       bookingId: json["booking_id"]?.toString(),
       status: json["status"]?.toString() ?? "unknown",
       checkedOutAt: DateTime.parse(json["checked_out_at"] as String),

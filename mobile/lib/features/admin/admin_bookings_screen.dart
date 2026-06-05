@@ -3,12 +3,14 @@ import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
 import "../../core/app_input_field.dart";
+import "../../core/app_theme.dart";
 import "../../core/search_field.dart";
 import "../../core/section_header.dart";
 import "../bookings/booking_list_tile.dart";
 import "../bookings/booking_models.dart";
 import "../catalog/toy_detail_screen.dart";
 import "admin_controller.dart";
+import "admin_date_filters.dart";
 
 /// All member bookings with date range and search.
 class AdminBookingsScreen extends StatefulWidget {
@@ -43,31 +45,31 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
         );
   }
 
-  Future<void> _pickDate({required bool isFrom}) async {
-    final initial = isFrom ? _pickupFrom : _pickupTo;
+  Future<void> _pickDate({
+    required String label,
+    required DateTime? current,
+    required ValueChanged<DateTime?> onPicked,
+  }) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial ?? DateTime.now(),
+      helpText: label,
+      initialDate: current ?? DateTime.now(),
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
     );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (isFrom) {
-        _pickupFrom = picked;
-      } else {
-        _pickupTo = picked;
-      }
-    });
+    if (!mounted) return;
+    setState(() => onPicked(picked));
     await _reload();
   }
 
-  void _clearDates() {
+  bool get _hasDateFilters => _pickupFrom != null || _pickupTo != null;
+
+  Future<void> _clearDates() async {
     setState(() {
       _pickupFrom = null;
       _pickupTo = null;
     });
-    _reload();
+    await _reload();
   }
 
   @override
@@ -100,36 +102,48 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                   ),
                   onSubmitted: (_) => _reload(),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilterChip(
-                      label: Text(
-                        _pickupFrom == null
-                            ? "From date"
-                            : "From ${formatApiDate(_pickupFrom!)}",
-                      ),
-                      selected: _pickupFrom != null,
-                      onSelected: (_) => _pickDate(isFrom: true),
-                    ),
-                    FilterChip(
-                      label: Text(
-                        _pickupTo == null
-                            ? "To date"
-                            : "To ${formatApiDate(_pickupTo!)}",
-                      ),
-                      selected: _pickupTo != null,
-                      onSelected: (_) => _pickDate(isFrom: false),
-                    ),
-                    if (_pickupFrom != null || _pickupTo != null)
-                      ActionChip(
-                        label: const Text("Clear dates"),
-                        onPressed: _clearDates,
-                      ),
-                  ],
+                const SizedBox(height: 12),
+                AdminDateFilterGroup(
+                  title: "Pickup",
+                  from: _pickupFrom,
+                  to: _pickupTo,
+                  onFromTap: () => _pickDate(
+                    label: "Pickup from",
+                    current: _pickupFrom,
+                    onPicked: (d) => _pickupFrom = d,
+                  ),
+                  onToTap: () => _pickDate(
+                    label: "Pickup to",
+                    current: _pickupTo,
+                    onPicked: (d) => _pickupTo = d,
+                  ),
+                  onFromClear: _pickupFrom == null
+                      ? null
+                      : () async {
+                          setState(() => _pickupFrom = null);
+                          await _reload();
+                        },
+                  onToClear: _pickupTo == null
+                      ? null
+                      : () async {
+                          setState(() => _pickupTo = null);
+                          await _reload();
+                        },
                 ),
+                if (_hasDateFilters) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton(
+                      onPressed: _clearDates,
+                      style: brandOutlinedButtonStyle(
+                        backgroundColor:
+                            Theme.of(context).colorScheme.surface,
+                      ),
+                      child: const Text("Clear dates"),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

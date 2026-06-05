@@ -1,6 +1,7 @@
 /// Static copy for Church Corner Toy Library (from organisation materials).
 abstract final class LibraryInfoCopy {
   static const libraryName = "Church Corner Toy Library";
+  static const appBarTitle = "CC Toy Library";
 
   static const welcomeTitle = "Welcome to the Church Corner Toy Library";
 

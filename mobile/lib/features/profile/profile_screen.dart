@@ -426,7 +426,7 @@ class _ProfileHeader extends StatelessWidget {
             ProfileAvatar(
               fullName: fullName == "Your name" ? null : fullName,
               avatarPath: avatarPath,
-              radius: 56,
+              radius: 68,
               onTap: uploadingAvatar ? null : onChangePhoto,
             ),
             if (uploadingAvatar)
@@ -436,7 +436,7 @@ class _ProfileHeader extends StatelessWidget {
                 top: 0,
                 bottom: 0,
                 child: CircleAvatar(
-                  radius: 56,
+                  radius: 68,
                   backgroundColor: const Color(0x66000000),
                   child: const CircularProgressIndicator(strokeWidth: 2),
                 ),

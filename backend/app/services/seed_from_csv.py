@@ -11,6 +11,7 @@ from app.models.toy_image import ToyImage
 from app.repositories.category_repo import list_categories_csv
 from app.repositories.toy_repo import load_all_toys
 from app.services.pieces_from_setls import load_pieces_summary
+from app.services.rental_price_from_setls import load_rental_prices
 
 
 _TOY_BATCH_SIZE = 100
@@ -69,6 +70,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
     rows_in_batch = 0
     session.execute(text("SET LOCAL statement_timeout = '600s'"))
     pieces_by_toy = load_pieces_summary()
+    rental_by_toy = load_rental_prices()
     for t in load_all_toys():
         category_id = None
         if t.category and t.category.strip():
@@ -80,6 +82,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
         piece_total = piece_data[0] if piece_data else None
         piece_missing = piece_data[1] if piece_data else None
         missing_value = piece_missing if piece_missing and piece_missing > 0 else None
+        rental_cents = rental_by_toy.get(t.toy_id)
         if toy_row:
             toy_row.name = t.name
             toy_row.category_id = category_id
@@ -91,6 +94,8 @@ def seed_catalog(session: Session) -> tuple[int, int]:
             if piece_total is not None:
                 toy_row.total_pieces = piece_total
                 toy_row.missing_pieces = missing_value
+            if rental_cents is not None:
+                toy_row.rental_price_cents = rental_cents
         else:
             toy_row = Toy(
                 toy_id=t.toy_id,
@@ -103,6 +108,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
                 category_label=t.category,
                 total_pieces=piece_total,
                 missing_pieces=missing_value,
+                rental_price_cents=rental_cents,
             )
             session.add(toy_row)
             toys_upserted += 1
