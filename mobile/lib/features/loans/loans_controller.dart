@@ -6,6 +6,7 @@ import "../bookings/booking_models.dart";
 import "../catalog/catalog_models.dart";
 import "desk_member.dart";
 import "loan_models.dart";
+import "piece_estimate.dart";
 
 /// Loads and mutates loans via `/api/v1/loans` and volunteer checkout queue.
 class LoansController extends ChangeNotifier {
@@ -136,6 +137,19 @@ class LoansController extends ChangeNotifier {
         .whereType<Map<String, dynamic>>()
         .map(ToyItem.fromJson)
         .toList();
+  }
+
+  Future<PieceEstimate> estimatePieces({
+    required String toyId,
+    required String imagePath,
+  }) async {
+    final json = await _client.postMultipartImage(
+      "/api/v1/desk/identify-pieces",
+      fileField: "image",
+      filePath: imagePath,
+      fields: {"toy_id": toyId},
+    );
+    return PieceEstimate.fromJson(json);
   }
 
   Future<LoanItem> checkIn(String loanId, {int? missingPieces}) async {

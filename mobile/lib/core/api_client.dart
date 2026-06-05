@@ -16,6 +16,13 @@ abstract class BackendClient {
   Future<Map<String, dynamic>> postJson(String path,
       [Map<String, dynamic>? body]);
 
+  Future<Map<String, dynamic>> postMultipartImage(
+    String path, {
+    required String fileField,
+    required String filePath,
+    Map<String, String>? fields,
+  });
+
   Future<Map<String, dynamic>> deleteJson(String path);
 }
 
@@ -104,6 +111,26 @@ class ApiClient implements BackendClient {
           body: body == null || body.isEmpty ? "{}" : jsonEncode(body),
         )
         .timeout(const Duration(seconds: 20));
+    return _decodeObject(response);
+  }
+
+  @override
+  Future<Map<String, dynamic>> postMultipartImage(
+    String path, {
+    required String fileField,
+    required String filePath,
+    Map<String, String>? fields,
+  }) async {
+    final uri = _uri(path, null);
+    final request = http.MultipartRequest("POST", uri);
+    request.headers.addAll(_headers());
+    if (fields != null) {
+      request.fields.addAll(fields);
+    }
+    request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
+    final streamed =
+        await _http.send(request).timeout(const Duration(seconds: 30));
+    final response = await http.Response.fromStream(streamed);
     return _decodeObject(response);
   }
 

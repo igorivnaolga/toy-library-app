@@ -66,6 +66,16 @@ class _FakeBackend implements BackendClient {
   }
 
   @override
+  Future<Map<String, dynamic>> postMultipartImage(
+    String path, {
+    required String fileField,
+    required String filePath,
+    Map<String, String>? fields,
+  }) {
+    throw UnsupportedError(path);
+  }
+
+  @override
   Future<Map<String, dynamic>> deleteJson(String path) {
     throw UnsupportedError(path);
   }

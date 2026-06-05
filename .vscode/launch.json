@@ -17,6 +17,22 @@
       ]
     },
     {
+      "name": "Flutter Android (USB phone, Supabase)",
+      "request": "launch",
+      "type": "dart",
+      "program": "mobile/lib/main.dart",
+      "cwd": "mobile",
+      "args": [
+        "--dart-define-from-file=env/dev.json",
+        "--dart-define=USE_ADB_REVERSE=true"
+      ],
+      "toolArgs": [
+        "--no-dds",
+        "--host-vmservice-port=58162",
+        "--device-timeout=120"
+      ]
+    },
+    {
       "name": "Flutter Android (emulator, guest/no auth)",
       "request": "launch",
       "type": "dart",

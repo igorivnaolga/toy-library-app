@@ -1,11 +1,14 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
+import "package:image_picker/image_picker.dart";
+import "package:provider/provider.dart";
 
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/modal_action_buttons.dart";
 import "loan_desk_summary.dart";
 import "loan_models.dart";
+import "loans_controller.dart";
 
 class DeskCheckInResult {
   const DeskCheckInResult({this.missingPieces});
@@ -33,8 +36,11 @@ class _DeskCheckInDialog extends StatefulWidget {
 }
 
 class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
+  final ImagePicker _picker = ImagePicker();
   late final TextEditingController _missingController;
   String? _validationError;
+  String? _estimateMessage;
+  bool _estimating = false;
 
   @override
   void initState() {
@@ -49,6 +55,45 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
   void dispose() {
     _missingController.dispose();
     super.dispose();
+  }
+
+  Future<void> _estimateFromPhoto() async {
+    if (_estimating) return;
+    final XFile? shot = await _picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (shot == null || !mounted) return;
+
+    final controller = context.read<LoansController>();
+    setState(() {
+      _estimating = true;
+      _estimateMessage = null;
+    });
+    try {
+      final estimate = await controller.estimatePieces(
+        toyId: widget.loan.toyId,
+        imagePath: shot.path,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (estimate.suggestedMissing != null) {
+          _missingController.text = estimate.suggestedMissing.toString();
+        }
+        _estimateMessage = estimate.message;
+        _validationError = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _estimateMessage =
+              "Couldn't estimate from the photo. Enter missing pieces manually.";
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _estimating = false);
+    }
   }
 
   void _confirm() {
@@ -120,6 +165,25 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                 }
               },
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _estimating ? null : _estimateFromPhoto,
+                icon: _estimating
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.camera_alt_outlined, size: 18),
+                label: Text(_estimating ? "Checking…" : "Estimate from photo"),
+              ),
+            ),
+            if (_estimateMessage != null) ...[
+              const SizedBox(height: 6),
+              Text(_estimateMessage!, style: fieldHelperStyle(context)),
+            ],
             const SizedBox(height: 12),
             Text(
               "Confirm the toy matches what is being returned, then check it in.",
