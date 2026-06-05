@@ -130,7 +130,11 @@ class ProfileController extends ChangeNotifier {
 
     try {
       final supabase = Supabase.instance.client;
-      final storagePath = "$userId/avatar.jpg";
+      final previousPath = avatarPath;
+      // Unique filename per upload so the public URL changes and clients
+      // don't show a cached copy of the previous avatar.
+      final storagePath =
+          "$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg";
       final bytes = await picked.readAsBytes();
       await supabase.storage.from("avatars").uploadBinary(
             storagePath,
@@ -145,6 +149,18 @@ class ProfileController extends ChangeNotifier {
         "avatar_path": storagePath,
       });
       avatarPath = storagePath;
+
+      if (previousPath != null &&
+          previousPath.isNotEmpty &&
+          previousPath != storagePath &&
+          !previousPath.startsWith("http")) {
+        try {
+          await supabase.storage.from("avatars").remove([previousPath]);
+        } catch (_) {
+          // Old avatar cleanup is best-effort; ignore failures.
+        }
+      }
+
       await _auth.refreshProfile(silent: true);
       syncFromAuth();
       return true;
