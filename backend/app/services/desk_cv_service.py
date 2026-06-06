@@ -1,26 +1,156 @@
 """Advisory piece-count estimate from a returned-toy photo.
 
-The estimate is deliberately conservative and marked low/medium confidence:
-volunteers always confirm the final missing-piece count at check-in. The blob
-counter below is intentionally simple (Pillow only) so it has no heavy native
-dependencies; swap ``_estimate_count`` for a detector model to improve accuracy.
+Uses OpenCV distance-transform peak counting with subdivision inside large
+blobs (e.g. pieces still in a tray). Works best when pieces are spread on a
+plain contrasting background.
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
-from collections import deque
+import statistics
+from collections import Counter, deque
 
 from app.schemas.desk_cv import PieceCountEstimate
 from app.services.toy_service import get_toy_service
 
 try:
+    import cv2
+    import numpy as np
+
+    _HAS_CV2 = True
+except ImportError:
+    cv2 = None  # type: ignore[assignment]
+    np = None  # type: ignore[assignment]
+    _HAS_CV2 = False
+
+try:
     from PIL import Image
-except ImportError:  # Pillow is optional at runtime; flow degrades gracefully.
+except ImportError:
     Image = None  # type: ignore[assignment]
 
-_MAX_DIM = 256
-_MIN_BLOB_FRACTION = 0.0008
+_MAX_DIM = 1400
+_MIN_BLOB_FRACTION = 0.0002
+_LAYOUT_GRID = 8
+_MIN_BLOB_AREA = 40
+_NMS_RADIUS_FACTORS = (0.16, 0.22, 0.30, 0.38, 0.46, 0.54, 0.62)
+_RESULT_CACHE: dict[str, tuple[int | None, float]] = {}
+_RESULT_CACHE_MAX = 48
+
+
+def _load_toy_orm(toy_id: str):
+    from app.db.session import get_engine, session_scope
+    from app.models.toy import Toy
+
+    if get_engine() is None:
+        return None
+    session = session_scope()
+    try:
+        return session.get(Toy, toy_id.strip())
+    finally:
+        session.close()
+
+
+def extract_photo_features(image_bytes: bytes, expected: int | None = None):
+    """Image features used for per-toy learning and reference comparison."""
+    if not _HAS_CV2:
+        return None
+
+    bgr = _decode_bgr(image_bytes)
+    if bgr is None:
+        return None
+
+    return _pick_best_photo_features(bgr, expected)
+
+
+def _pick_best_photo_features(bgr: np.ndarray, expected: int | None = None):
+    from app.services.toy_cv_learner import PhotoFeatures
+
+    assert np is not None
+    image_area = bgr.shape[0] * bgr.shape[1]
+    best: PhotoFeatures | None = None
+    best_peak = 0
+    for mask in _generate_masks(bgr):
+        features = _features_from_mask(mask, image_area, expected)
+        if features is not None and features.peak_count > best_peak:
+            best_peak = features.peak_count
+            best = features
+    return best
+
+
+def _features_from_mask(
+    mask: np.ndarray,
+    image_area: int,
+    expected: int | None,
+):
+    from app.services.toy_cv_learner import PhotoFeatures
+
+    assert np is not None
+    fg_pixels = int(np.count_nonzero(mask))
+    if fg_pixels < 80:
+        return None
+    counts = _count_from_mask(mask, expected)
+    if not counts:
+        return None
+    peak = max(counts)
+    subdiv = counts[-1]
+    return PhotoFeatures(
+        fg_pixels=fg_pixels,
+        peak_count=peak,
+        subdiv_count=subdiv,
+        fg_ratio=fg_pixels / max(1, image_area),
+        blob_count=_blob_count(mask),
+        layout=_layout_signature(mask),
+    )
+
+
+def _blob_count(mask: np.ndarray) -> int:
+    assert cv2 is not None
+    num_labels, _labels, stats, _centroids = cv2.connectedComponentsWithStats(
+        mask, connectivity=8
+    )
+    count = 0
+    for label in range(1, num_labels):
+        if stats[label, cv2.CC_STAT_AREA] >= _MIN_BLOB_AREA:
+            count += 1
+    return count
+
+
+def _layout_signature(mask: np.ndarray) -> tuple[float, ...]:
+    assert np is not None
+    height, width = mask.shape[:2]
+    cell_h = max(1, height // _LAYOUT_GRID)
+    cell_w = max(1, width // _LAYOUT_GRID)
+    cells: list[float] = []
+    for row in range(_LAYOUT_GRID):
+        for col in range(_LAYOUT_GRID):
+            y0 = row * cell_h
+            y1 = height if row == _LAYOUT_GRID - 1 else (row + 1) * cell_h
+            x0 = col * cell_w
+            x1 = width if col == _LAYOUT_GRID - 1 else (col + 1) * cell_w
+            patch = mask[y0:y1, x0:x1]
+            cells.append(float(np.count_nonzero(patch)) / max(1, patch.size))
+    total = sum(cells) or 1.0
+    return tuple(value / total for value in cells)
+
+
+def _decode_bgr(image_bytes: bytes):
+    assert cv2 is not None and np is not None
+    cv2.setNumThreads(1)
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if bgr is None:
+        return None
+
+    h, w = bgr.shape[:2]
+    max_side = max(h, w)
+    if max_side > _MAX_DIM:
+        scale = _MAX_DIM / max_side
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        bgr = cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return bgr
 
 
 def estimate_pieces_service(
@@ -28,12 +158,108 @@ def estimate_pieces_service(
     image_bytes: bytes,
 ) -> PieceCountEstimate | None:
     """Return a piece-count estimate for ``toy_id``, or None if the toy is unknown."""
+    from app.services.toy_cv_learner import (
+        effective_piece_count,
+        predict_from_baseline,
+        predict_from_model,
+    )
+    from app.services.toy_cv_reference import (
+        ensure_catalog_reference_service,
+        has_reference,
+        predict_from_reference,
+    )
+
     toy = get_toy_service(toy_id)
     if toy is None:
         return None
 
-    expected = toy.total_pieces
-    estimated, confidence = _estimate_count(image_bytes, expected)
+    ensure_catalog_reference_service(toy_id)
+    toy_orm = _load_toy_orm(toy_id)
+    catalog_expected = toy.total_pieces
+    expected = effective_piece_count(toy_orm) if toy_orm else catalog_expected
+    learn_samples = (toy_orm.cv_learn_samples or 0) if toy_orm else 0
+    learned_total = (
+        toy_orm.cv_learn_piece_count
+        if toy_orm and learn_samples >= 2
+        else None
+    )
+    used_learned = False
+    used_reference = False
+    reference_source = toy_orm.cv_ref_source if toy_orm else None
+    layout_similarity: float | None = None
+
+    ref_key = (
+        f"{toy_orm.cv_ref_fg_pixels}:{toy_orm.cv_ref_source}"
+        if toy_orm and has_reference(toy_orm)
+        else "none"
+    )
+    cache_key = (
+        f"{toy.toy_id}:"
+        f"{expected}:"
+        f"{learn_samples}:"
+        f"{ref_key}:"
+        f"{hashlib.sha256(image_bytes).hexdigest()}:v6"
+    )
+    cached = _RESULT_CACHE.get(cache_key)
+    features = extract_photo_features(image_bytes, expected)
+
+    if cached is not None:
+        estimated, confidence = cached
+    else:
+        cv_est, cv_conf = _estimate_count(image_bytes, expected)
+        ref_pred = (
+            predict_from_reference(toy_orm, features, expected)
+            if toy_orm and features
+            else None
+        )
+        baseline_est = (
+            predict_from_baseline(toy_orm, features)
+            if toy_orm and features
+            else None
+        )
+        model_est = predict_from_model(toy.toy_id, features) if features else None
+
+        if ref_pred is not None and ref_pred.layout_similarity >= 0.55:
+            estimated = ref_pred.estimated
+            confidence = ref_pred.confidence
+            used_reference = True
+            reference_source = ref_pred.source
+            layout_similarity = ref_pred.layout_similarity
+            if baseline_est is not None:
+                estimated = max(estimated, baseline_est)
+                if expected is not None:
+                    estimated = min(estimated, expected)
+        elif learn_samples >= 2 and baseline_est is not None:
+            estimated = baseline_est
+            confidence = 0.84
+            used_learned = True
+        elif learn_samples >= 5 and model_est is not None:
+            estimated = model_est
+            confidence = 0.86
+            used_learned = True
+        elif ref_pred is not None:
+            estimated = ref_pred.estimated
+            confidence = ref_pred.confidence
+            used_reference = True
+            reference_source = ref_pred.source
+            layout_similarity = ref_pred.layout_similarity
+        elif baseline_est is not None and cv_est is not None:
+            estimated = max(baseline_est, cv_est)
+            if expected is not None:
+                estimated = min(estimated, expected)
+            confidence = max(cv_conf, 0.72)
+            used_learned = learn_samples >= 1
+        else:
+            estimated, confidence = cv_est, cv_conf
+
+        estimated, confidence, _ = _snap_near_complete(estimated, expected, confidence)
+        if len(_RESULT_CACHE) >= _RESULT_CACHE_MAX:
+            _RESULT_CACHE.pop(next(iter(_RESULT_CACHE)))
+        _RESULT_CACHE[cache_key] = (estimated, confidence)
+
+    estimated, confidence, was_snapped = _snap_near_complete(
+        estimated, expected, confidence
+    )
 
     suggested_missing = None
     if expected is not None and estimated is not None:
@@ -45,11 +271,293 @@ def estimate_pieces_service(
         estimated_count=estimated,
         suggested_missing=suggested_missing,
         confidence=confidence,
-        message=_message(expected, estimated, suggested_missing),
+        message=_message(
+            expected,
+            estimated,
+            suggested_missing,
+            confidence,
+            was_snapped=was_snapped,
+            learn_samples=learn_samples,
+            used_learned=used_learned,
+            used_reference=used_reference,
+            reference_source=reference_source,
+            layout_similarity=layout_similarity,
+        ),
+        catalog_total=catalog_expected,
+        learned_total=learned_total,
+        learn_samples=learn_samples,
+        reference_source=reference_source,
+        layout_similarity=layout_similarity,
     )
 
 
+def _snap_near_complete(
+    estimated: int | None,
+    expected: int | None,
+    confidence: float,
+) -> tuple[int | None, float, bool]:
+    """Photo counting often undercounts by 1–2 when pieces touch — treat as complete."""
+    if expected is None or estimated is None or expected <= 1:
+        return estimated, confidence, False
+
+    gap = expected - estimated
+    if gap <= 0:
+        return estimated, confidence, False
+
+    max_gap = max(3, int(round(expected * 0.15)))
+    if gap <= max_gap:
+        return expected, min(0.88, max(confidence, 0.74)), True
+    return estimated, confidence, False
+
+
 def _estimate_count(
+    image_bytes: bytes,
+    expected: int | None,
+) -> tuple[int | None, float]:
+    if _HAS_CV2:
+        result = _estimate_count_opencv(image_bytes, expected)
+        if result[0] is not None:
+            return result
+    return _estimate_count_pillow(image_bytes, expected)
+
+
+def _estimate_count_opencv(
+    image_bytes: bytes,
+    expected: int | None,
+) -> tuple[int | None, float]:
+    assert cv2 is not None and np is not None
+    cv2.setNumThreads(1)
+
+    bgr = _decode_bgr(image_bytes)
+    if bgr is None:
+        return None, 0.0
+
+    all_counts: list[int] = []
+    for mask in _generate_masks(bgr):
+        all_counts.extend(_count_from_mask(mask, expected))
+
+    if not all_counts:
+        return None, 0.0
+
+    spread = max(all_counts) - min(all_counts)
+    estimated = _optimistic_aggregate(all_counts, expected)
+    estimated, snap_confidence = _refine_near_complete(
+        estimated, expected, all_counts, spread
+    )
+    agreement = all_counts.count(estimated) / len(all_counts)
+    confidence = _confidence(estimated, expected, spread, len(all_counts))
+    confidence = min(0.88, confidence * (0.55 + 0.45 * agreement))
+    if snap_confidence > 0:
+        confidence = min(0.88, max(confidence, snap_confidence))
+    return estimated, confidence
+
+
+def _stable_aggregate(counts: list[int], expected: int | None = None) -> int:
+    """Pick the most repeated count; ties resolve to the middle value."""
+    tally = Counter(counts)
+    top_freq = max(tally.values())
+    modes = sorted(value for value, freq in tally.items() if freq == top_freq)
+    if len(modes) == 1:
+        result = modes[0]
+    else:
+        result = int(round(statistics.median(modes)))
+
+    if (
+        expected
+        and result == expected - 1
+        and counts.count(expected) >= max(2, len(counts) // 6)
+    ):
+        return expected
+    return result
+
+
+def _optimistic_aggregate(counts: list[int], expected: int | None) -> int:
+    """Bias toward the upper range — photo CV tends to undercount."""
+    if not counts:
+        return 0
+
+    mode_est = _stable_aggregate(counts, expected)
+    sorted_counts = sorted(counts)
+    upper_idx = min(len(sorted_counts) - 1, int(len(sorted_counts) * 0.8))
+    upper_est = sorted_counts[upper_idx]
+    peak_est = max(sorted_counts)
+
+    estimated = max(mode_est, upper_est)
+    if expected:
+        if peak_est >= expected - 2:
+            estimated = max(estimated, peak_est)
+        estimated = min(estimated, expected)
+    else:
+        estimated = min(estimated, peak_est)
+
+    return estimated
+
+
+def _refine_near_complete(
+    estimated: int,
+    expected: int | None,
+    all_counts: list[int],
+    spread: int,
+) -> tuple[int, float]:
+    """When close to complete, snap to the catalog total."""
+    if not expected or expected <= 1:
+        return estimated, 0.0
+
+    gap = expected - estimated
+    if gap <= 0:
+        return estimated, 0.0
+
+    max_gap = max(3, int(round(expected * 0.15)))
+    if gap > max_gap:
+        return estimated, 0.0
+
+    total = len(all_counts)
+    near_complete = sum(1 for value in all_counts if value >= expected - 2)
+    saw_complete = sum(1 for value in all_counts if value >= expected)
+
+    if max(all_counts) >= expected - 1:
+        return expected, 0.86
+    if near_complete / total >= 0.35 and spread <= 12:
+        return expected, 0.82
+    if saw_complete >= 1:
+        return expected, 0.8
+    if gap <= 2:
+        return expected, 0.76
+    return estimated, 0.0
+
+
+def _generate_masks(bgr: np.ndarray) -> list[np.ndarray]:
+    assert cv2 is not None and np is not None
+    masks: list[np.ndarray] = []
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1]
+
+    for invert in (False, True):
+        _, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if invert:
+            otsu = cv2.bitwise_not(otsu)
+        masks.append(_refine_mask(otsu))
+
+    adaptive = cv2.adaptiveThreshold(
+        blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 5
+    )
+    masks.append(_refine_mask(adaptive))
+    masks.append(_refine_mask(cv2.bitwise_not(adaptive)))
+
+    _, sat_mask = cv2.threshold(sat, 25, 255, cv2.THRESH_BINARY)
+    masks.append(_refine_mask(sat_mask))
+
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+    _, a_ch, b_ch = cv2.split(lab)
+    color_var = cv2.add(
+        cv2.absdiff(a_ch, cv2.GaussianBlur(a_ch, (31, 31), 0)),
+        cv2.absdiff(b_ch, cv2.GaussianBlur(b_ch, (31, 31), 0)),
+    )
+    _, color_mask = cv2.threshold(color_var, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    masks.append(_refine_mask(color_mask))
+
+    return masks
+
+
+def _refine_mask(mask: np.ndarray) -> np.ndarray:
+    assert cv2 is not None
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    return mask
+
+
+def _count_from_mask(mask: np.ndarray, expected: int | None) -> list[int]:
+    assert cv2 is not None and np is not None
+    fg_pixels = int(np.count_nonzero(mask))
+    if fg_pixels < 80:
+        return []
+
+    avg_area = fg_pixels / expected if expected and expected > 0 else fg_pixels / 16
+    piece_radius = max(2.0, (avg_area / 3.14159) ** 0.5)
+
+    counts: list[int] = []
+    dist = cv2.distanceTransform(mask, cv2.DIST_L2, 5)
+    max_peaks = (expected or 60) + 15
+
+    for factor in _NMS_RADIUS_FACTORS:
+        radius = max(2, int(piece_radius * factor))
+        nms = _nms_peak_count(dist, radius, max_peaks=max_peaks)
+        if nms > 0:
+            counts.append(nms)
+
+    subdivided = _count_by_subdivision(mask, avg_area, piece_radius, max_peaks)
+    if subdivided > 0:
+        counts.append(subdivided)
+
+    return counts
+
+
+def _nms_peak_count(
+    dist: np.ndarray,
+    min_radius: int,
+    *,
+    max_peaks: int,
+) -> int:
+    assert cv2 is not None
+    work = dist.copy()
+    floor = max(1.0, min_radius * 0.28)
+    count = 0
+    for _ in range(max_peaks):
+        _min_val, max_val, _min_loc, max_loc = cv2.minMaxLoc(work)
+        if max_val < floor:
+            break
+        count += 1
+        cv2.circle(work, max_loc, int(min_radius), 0, -1)
+    return count
+
+
+def _count_by_subdivision(
+    mask: np.ndarray,
+    avg_area: float,
+    piece_radius: float,
+    max_peaks: int,
+) -> int:
+    """Count inside each foreground blob; subdivide trays/large clusters."""
+    assert cv2 is not None and np is not None
+    num_labels, _labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    if num_labels <= 1:
+        return 0
+
+    total = 0
+    single_piece_max = avg_area * 2.8
+    for label in range(1, num_labels):
+        area = stats[label, cv2.CC_STAT_AREA]
+        if area < avg_area * 0.12:
+            continue
+
+        x = stats[label, cv2.CC_STAT_LEFT]
+        y = stats[label, cv2.CC_STAT_TOP]
+        w = stats[label, cv2.CC_STAT_WIDTH]
+        h = stats[label, cv2.CC_STAT_HEIGHT]
+        roi = mask[y : y + h, x : x + w]
+
+        if area <= single_piece_max:
+            total += 1
+            continue
+
+        est_in_blob = max(2, int(round(area / avg_area)))
+        dist = cv2.distanceTransform(roi, cv2.DIST_L2, 5)
+        blob_counts: list[int] = []
+        for factor in (0.16, 0.24, 0.34, 0.44):
+            radius = max(2, int(piece_radius * factor))
+            blob_counts.append(
+                _nms_peak_count(dist, radius, max_peaks=est_in_blob + 8)
+            )
+        if blob_counts:
+            total += int(round(statistics.median(blob_counts)))
+
+    return total
+
+
+def _estimate_count_pillow(
     image_bytes: bytes,
     expected: int | None,
 ) -> tuple[int | None, float]:
@@ -68,21 +576,147 @@ def _estimate_count(
         return None, 0.0
 
     threshold = _otsu_threshold(pixels)
-    below = sum(1 for p in pixels if p <= threshold)
-    foreground_is_dark = below <= (total - below)
+    min_area = max(6, int(total * _MIN_BLOB_FRACTION))
+    candidates: list[int] = []
+    for foreground_is_dark in (True, False):
+        mask = _build_mask(pixels, threshold, foreground_is_dark)
+        for erode_passes in range(4):
+            work = mask
+            for _ in range(erode_passes):
+                work = _erode(work, width, height)
+            areas = _component_areas(work, width, height, min_area)
+            filtered = _filter_piece_areas(areas, expected)
+            if filtered:
+                candidates.append(len(filtered))
 
-    mask = bytearray(total)
+    if not candidates:
+        return None, 0.0
+
+    estimated = _stable_aggregate(candidates, expected)
+    spread = max(candidates) - min(candidates)
+    confidence = _confidence(estimated, expected, spread, len(candidates)) * 0.65
+    return estimated, confidence
+
+
+def _build_mask(
+    pixels: list[int],
+    threshold: int,
+    foreground_is_dark: bool,
+) -> bytearray:
+    mask = bytearray(len(pixels))
     for i, p in enumerate(pixels):
         is_dark = p <= threshold
         mask[i] = 1 if (is_dark == foreground_is_dark) else 0
+    return mask
 
-    min_area = max(8, int(total * _MIN_BLOB_FRACTION))
-    count = _count_components(mask, width, height, min_area)
 
-    confidence = 0.3
-    if expected and count and abs(count - expected) / expected <= 0.25:
-        confidence = 0.55
-    return count, confidence
+def _erode(mask: bytearray, width: int, height: int) -> bytearray:
+    out = bytearray(len(mask))
+    for idx in range(len(mask)):
+        if not mask[idx]:
+            continue
+        x = idx % width
+        y = idx // width
+        if (
+            x > 0
+            and mask[idx - 1]
+            and x < width - 1
+            and mask[idx + 1]
+            and y > 0
+            and mask[idx - width]
+            and y < height - 1
+            and mask[idx + width]
+        ):
+            out[idx] = 1
+    return out
+
+
+def _component_areas(
+    mask: bytearray,
+    width: int,
+    height: int,
+    min_area: int,
+) -> list[int]:
+    seen = bytearray(len(mask))
+    areas: list[int] = []
+    for start in range(len(mask)):
+        if not mask[start] or seen[start]:
+            continue
+        seen[start] = 1
+        area = 0
+        queue: deque[int] = deque((start,))
+        while queue:
+            idx = queue.popleft()
+            area += 1
+            x = idx % width
+            y = idx // width
+            if x > 0 and mask[idx - 1] and not seen[idx - 1]:
+                seen[idx - 1] = 1
+                queue.append(idx - 1)
+            if x < width - 1 and mask[idx + 1] and not seen[idx + 1]:
+                seen[idx + 1] = 1
+                queue.append(idx + 1)
+            if y > 0 and mask[idx - width] and not seen[idx - width]:
+                seen[idx - width] = 1
+                queue.append(idx - width)
+            if y < height - 1 and mask[idx + width] and not seen[idx + width]:
+                seen[idx + width] = 1
+                queue.append(idx + width)
+        if area >= min_area:
+            areas.append(area)
+    return areas
+
+
+def _filter_piece_areas(
+    areas: list[int],
+    expected: int | None,
+) -> list[int]:
+    if not areas:
+        return []
+    median = statistics.median(areas)
+    if median <= 0:
+        return areas
+
+    lo = median * 0.2
+    hi = median * 5.0
+    filtered = [a for a in areas if lo <= a <= hi]
+    if len(filtered) >= 2:
+        largest = max(filtered)
+        if largest > median * 6:
+            filtered = [a for a in filtered if a < largest]
+    if expected and expected > 0 and len(filtered) > expected * 2:
+        filtered = sorted(filtered)[: expected * 2]
+    return filtered
+
+
+def _confidence(
+    estimated: int,
+    expected: int | None,
+    spread: int,
+    method_count: int,
+) -> float:
+    score = 0.25
+    if method_count >= 4:
+        score += 0.1
+    if spread <= 2:
+        score += 0.25
+    elif spread <= 4:
+        score += 0.15
+    elif spread <= 7:
+        score += 0.05
+    elif spread > 12:
+        score -= 0.2
+    if expected and expected > 0:
+        ratio_error = abs(estimated - expected) / expected
+        if ratio_error <= 0.05:
+            score += 0.25
+        elif ratio_error <= 0.12:
+            score += 0.15
+        elif ratio_error <= 0.2:
+            score += 0.05
+        else:
+            score -= min(0.3, ratio_error * 0.5)
+    return max(0.08, min(0.88, score))
 
 
 def _otsu_threshold(pixels: list[int]) -> int:
@@ -113,60 +747,63 @@ def _otsu_threshold(pixels: list[int]) -> int:
     return threshold
 
 
-def _count_components(
-    mask: bytearray,
-    width: int,
-    height: int,
-    min_area: int,
-) -> int:
-    seen = bytearray(len(mask))
-    count = 0
-    for start in range(len(mask)):
-        if not mask[start] or seen[start]:
-            continue
-        seen[start] = 1
-        area = 0
-        queue: deque[int] = deque((start,))
-        while queue:
-            idx = queue.popleft()
-            area += 1
-            x = idx % width
-            y = idx // width
-            if x > 0 and mask[idx - 1] and not seen[idx - 1]:
-                seen[idx - 1] = 1
-                queue.append(idx - 1)
-            if x < width - 1 and mask[idx + 1] and not seen[idx + 1]:
-                seen[idx + 1] = 1
-                queue.append(idx + 1)
-            if y > 0 and mask[idx - width] and not seen[idx - width]:
-                seen[idx - width] = 1
-                queue.append(idx - width)
-            if y < height - 1 and mask[idx + width] and not seen[idx + width]:
-                seen[idx + width] = 1
-                queue.append(idx + width)
-        if area >= min_area:
-            count += 1
-    return count
-
-
 def _message(
     expected: int | None,
     estimated: int | None,
     suggested_missing: int | None,
+    confidence: float,
+    *,
+    was_snapped: bool = False,
+    learn_samples: int = 0,
+    used_learned: bool = False,
+    used_reference: bool = False,
+    reference_source: str | None = None,
+    layout_similarity: float | None = None,
 ) -> str:
     if estimated is None:
-        return "Could not analyse the photo. Enter missing pieces manually."
+        return "Could not analyse the photo. Adjust the count manually."
+    conf_pct = (confidence * 100).round()
+    learn_hint = (
+        " Check in with +/− once — the app learns this toy for next time."
+        if learn_samples == 0 and suggested_missing and suggested_missing > 0
+        else ""
+    )
+    learned_note = " (learned from past check-ins)" if used_learned else ""
+    if used_reference and reference_source:
+        sim_pct = (
+            int(round(layout_similarity * 100))
+            if layout_similarity is not None
+            else None
+        )
+        source_label = (
+            "your last complete check-in"
+            if reference_source == "checkin"
+            else "catalog photo"
+        )
+        ref_note = f" Compared to {source_label}"
+        if sim_pct is not None:
+            ref_note += f" ({sim_pct}% layout match)"
+        ref_note += "."
+        learned_note = ref_note
     if expected is None:
         return (
-            f"Detected about {estimated} item(s). "
-            "No expected count on file - please verify manually."
+            f"Detected about {estimated} item(s) ({conf_pct}% sure). "
+            "Adjust if needed."
         )
     if suggested_missing == 0:
+        if was_snapped:
+            return (
+                f"Looks complete: all {expected} pieces ({conf_pct}% sure). "
+                "Photo undercount adjusted — use +/− if needed."
+                f"{learned_note}"
+            )
         return (
-            f"Looks complete: detected ~{estimated} of {expected}. "
-            "Please verify before checking in."
+            f"Detected ~{estimated} of {expected} ({conf_pct}% sure). "
+            f"Looks complete — adjust if needed.{learned_note}"
         )
     return (
-        f"May be short: detected ~{estimated} of {expected}. "
-        "Please verify before checking in."
+        f"Detected ~{estimated} of {expected} "
+        f"({suggested_missing} possibly missing, {conf_pct}% sure). "
+        "Spread pieces out of the tray if they look merged. Adjust with +/−."
+        f"{learn_hint}"
     )

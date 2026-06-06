@@ -152,6 +152,23 @@ class LoansController extends ChangeNotifier {
     return PieceEstimate.fromJson(json);
   }
 
+  /// Fire-and-forget training from a volunteer-confirmed check-in photo.
+  Future<void> learnFromPhoto({
+    required String toyId,
+    required String imagePath,
+    required int confirmedPieceCount,
+  }) async {
+    await _client.postMultipartImage(
+      "/api/v1/desk/learn-from-photo",
+      fileField: "image",
+      filePath: imagePath,
+      fields: {
+        "toy_id": toyId,
+        "confirmed_piece_count": confirmedPieceCount.toString(),
+      },
+    );
+  }
+
   Future<LoanItem> checkIn(String loanId, {int? missingPieces}) async {
     final body = missingPieces != null
         ? {"missing_pieces": missingPieces}

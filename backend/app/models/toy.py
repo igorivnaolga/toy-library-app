@@ -27,6 +27,19 @@ class Toy(Base):
     missing_pieces: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rental_price_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    cv_learn_piece_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_learn_fg_pixels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_learn_peak_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_learn_samples: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    cv_ref_piece_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_ref_fg_pixels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_ref_peak_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_ref_blob_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_ref_image_area: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cv_ref_layout: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cv_ref_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
     category_label: Mapped[str | None] = mapped_column(Text, nullable=True, index=True)
 
     category_rel: Mapped["Category | None"] = relationship(back_populates="toys")

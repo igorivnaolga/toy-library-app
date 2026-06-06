@@ -7,6 +7,11 @@ class PieceEstimate {
     this.suggestedMissing,
     required this.confidence,
     required this.message,
+    this.catalogTotal,
+    this.learnedTotal,
+    this.learnSamples = 0,
+    this.referenceSource,
+    this.layoutSimilarity,
   });
 
   final String toyId;
@@ -15,6 +20,11 @@ class PieceEstimate {
   final int? suggestedMissing;
   final double confidence;
   final String message;
+  final int? catalogTotal;
+  final int? learnedTotal;
+  final int learnSamples;
+  final String? referenceSource;
+  final double? layoutSimilarity;
 
   factory PieceEstimate.fromJson(Map<String, dynamic> json) {
     return PieceEstimate(
@@ -24,6 +34,11 @@ class PieceEstimate {
       suggestedMissing: (json["suggested_missing"] as num?)?.toInt(),
       confidence: (json["confidence"] as num?)?.toDouble() ?? 0,
       message: json["message"]?.toString() ?? "",
+      catalogTotal: (json["catalog_total"] as num?)?.toInt(),
+      learnedTotal: (json["learned_total"] as num?)?.toInt(),
+      learnSamples: (json["learn_samples"] as num?)?.toInt() ?? 0,
+      referenceSource: json["reference_source"]?.toString(),
+      layoutSimilarity: (json["layout_similarity"] as num?)?.toDouble(),
     );
   }
 }

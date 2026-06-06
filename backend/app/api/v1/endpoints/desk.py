@@ -5,10 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.core.auth_deps import require_on_duty_desk
-from app.schemas.desk_cv import PieceCountEstimate
+from app.schemas.desk_cv import LearnFromPhotoResult, PieceCountEstimate
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyOut, ToyPiecesUpdate
 from app.services.desk_cv_service import estimate_pieces_service
+from app.services.toy_cv_learner import learn_from_photo_service
 from app.services.toy_service import update_toy_pieces_service
 
 router = APIRouter()
@@ -60,3 +61,36 @@ async def identify_pieces(
             detail="Toy not found or catalog is not loaded in the database yet.",
         )
     return estimate
+
+
+@router.post("/learn-from-photo", response_model=LearnFromPhotoResult)
+async def learn_from_photo_endpoint(
+    toy_id: str = Form(...),
+    confirmed_piece_count: int = Form(...),
+    image: UploadFile = File(...),
+    _: Principal = Depends(_require_on_duty),
+) -> LearnFromPhotoResult:
+    """Train per-toy baseline from a volunteer-confirmed check-in photo."""
+    if confirmed_piece_count <= 0:
+        raise HTTPException(status_code=422, detail="confirmed_piece_count must be positive.")
+    data = await image.read()
+    if not data:
+        raise HTTPException(status_code=422, detail="Empty image upload.")
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large.")
+    result = learn_from_photo_service(toy_id, data, confirmed_piece_count)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Toy not found, catalog unavailable, or photo could not be analysed.",
+        )
+    samples, learned_count = result
+    return LearnFromPhotoResult(
+        toy_id=toy_id.strip(),
+        learn_samples=samples,
+        learned_piece_count=learned_count,
+        message=(
+            f"Learned from photo ({samples} sample{'s' if samples != 1 else ''}). "
+            "Reference and future counts for this toy will improve."
+        ),
+    )

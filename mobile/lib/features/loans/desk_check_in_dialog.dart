@@ -38,16 +38,24 @@ class _DeskCheckInDialog extends StatefulWidget {
 class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
   final ImagePicker _picker = ImagePicker();
   late final TextEditingController _missingController;
+  late int _piecesReturned;
   String? _validationError;
   String? _estimateMessage;
   bool _estimating = false;
-
+  String? _lastPhotoPath;
   @override
   void initState() {
     super.initState();
-    final initial = widget.loan.toyMissingPieces;
+    final loan = widget.loan;
+    final total = loan.toyTotalPieces;
+    final missing = loan.toyMissingPieces ?? 0;
+    if (total != null) {
+      _piecesReturned = (total - missing).clamp(0, total);
+    } else {
+      _piecesReturned = 0;
+    }
     _missingController = TextEditingController(
-      text: initial?.toString() ?? "",
+      text: loan.toyMissingPieces?.toString() ?? "",
     );
   }
 
@@ -57,14 +65,66 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
     super.dispose();
   }
 
+  int? get _missingFromStepper {
+    final total = widget.loan.toyTotalPieces;
+    if (total == null) return null;
+    return total - _piecesReturned;
+  }
+
+  void _applyEstimate(int? estimatedCount, int? suggestedMissing) {
+    final total = widget.loan.toyTotalPieces;
+    if (total != null) {
+      // Trust backend snap: when photo is close, treat as full set.
+      if (suggestedMissing == 0) {
+        _piecesReturned = total;
+      } else if (estimatedCount != null) {
+        _piecesReturned = estimatedCount.clamp(0, total);
+      }
+    } else if (suggestedMissing != null) {
+      _missingController.text = suggestedMissing.toString();
+    }
+  }
+
+  Future<bool> _confirmPhotoTips() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Photo tips"),
+        content: const Text(
+          "For a better count:\n"
+          "• Take pieces out of the box/tray\n"
+          "• Spread them on a plain background\n"
+          "• Shoot from directly above\n"
+          "• Use even lighting",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Open camera"),
+          ),
+        ],
+      ),
+    ).then((value) => value ?? false);
+  }
+
   Future<void> _estimateFromPhoto() async {
     if (_estimating) return;
+    if (!mounted) return;
+
+    final proceed = await _confirmPhotoTips();
+    if (!proceed || !mounted) return;
+
     final XFile? shot = await _picker.pickImage(
       source: ImageSource.camera,
-      maxWidth: 1600,
-      imageQuality: 85,
+      maxWidth: 2048,
+      imageQuality: 95,
     );
     if (shot == null || !mounted) return;
+    _lastPhotoPath = shot.path;
 
     final controller = context.read<LoansController>();
     setState(() {
@@ -78,9 +138,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       );
       if (!mounted) return;
       setState(() {
-        if (estimate.suggestedMissing != null) {
-          _missingController.text = estimate.suggestedMissing.toString();
-        }
+        _applyEstimate(estimate.estimatedCount, estimate.suggestedMissing);
         _estimateMessage = estimate.message;
         _validationError = null;
       });
@@ -88,7 +146,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       if (mounted) {
         setState(() {
           _estimateMessage =
-              "Couldn't estimate from the photo. Enter missing pieces manually.";
+              "Couldn't analyse the photo. Adjust the count manually.";
         });
       }
     } finally {
@@ -98,39 +156,99 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
 
   void _confirm() {
     final loan = widget.loan;
-    final raw = _missingController.text.trim();
+    final total = loan.toyTotalPieces;
     int? missingPieces;
 
-    if (raw.isEmpty) {
-      missingPieces = null;
+    if (total != null) {
+      missingPieces = _missingFromStepper;
+      if (missingPieces == (loan.toyMissingPieces ?? 0)) {
+        missingPieces = null;
+      }
     } else {
-      final parsed = int.tryParse(raw);
-      if (parsed == null || parsed < 0) {
-        setState(() {
-          _validationError = "Enter a whole number of missing pieces.";
-        });
-        return;
-      }
-      if (loan.toyTotalPieces != null && parsed > loan.toyTotalPieces!) {
-        setState(() {
-          _validationError =
-              "Missing pieces cannot exceed ${loan.toyTotalPieces}.";
-        });
-        return;
-      }
-      if (parsed == loan.toyMissingPieces) {
+      final raw = _missingController.text.trim();
+      if (raw.isEmpty) {
         missingPieces = null;
       } else {
-        missingPieces = parsed;
+        final parsed = int.tryParse(raw);
+        if (parsed == null || parsed < 0) {
+          setState(() {
+            _validationError = "Enter a whole number of missing pieces.";
+          });
+          return;
+        }
+        if (parsed == loan.toyMissingPieces) {
+          missingPieces = null;
+        } else {
+          missingPieces = parsed;
+        }
       }
+    }
+
+    final photoPath = _lastPhotoPath;
+    if (photoPath != null && total != null && _piecesReturned > 0) {
+      context.read<LoansController>().learnFromPhoto(
+        toyId: loan.toyId,
+        imagePath: photoPath,
+        confirmedPieceCount: _piecesReturned,
+      ).ignore();
     }
 
     Navigator.pop(context, DeskCheckInResult(missingPieces: missingPieces));
   }
 
+  Widget _buildPiecesStepper(BuildContext context, int total) {
+    final missing = _missingFromStepper ?? 0;
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          "Pieces returned",
+          style: fieldHelperStyle(context).copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            IconButton.filledTonal(
+              onPressed: _piecesReturned > 0
+                  ? () => setState(() => _piecesReturned -= 1)
+                  : null,
+              icon: const Icon(Icons.remove),
+            ),
+            Expanded(
+              child: Text(
+                "$_piecesReturned of $total",
+                textAlign: TextAlign.center,
+                style: context.screenTitle.copyWith(fontSize: 22),
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: _piecesReturned < total
+                  ? () => setState(() => _piecesReturned += 1)
+                  : null,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          missing == 0 ? "All $total pieces returned" : "$missing missing",
+          textAlign: TextAlign.center,
+          style: fieldHelperStyle(context).copyWith(
+            color: missing == 0 ? colors.primary : colors.error,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final loan = widget.loan;
+    final total = loan.toyTotalPieces;
     return AlertDialog(
       title: Text("Confirm check-in", style: context.screenTitle),
       content: SingleChildScrollView(
@@ -147,25 +265,6 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
               loadPhoto: false,
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _missingController,
-              style: fieldTextStyle(context),
-              cursorColor: fieldCursorColor(context),
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: labeledInputDecoration(
-                context,
-                labelText: "Missing pieces",
-                helperText: "Update if changed.",
-                errorText: _validationError,
-              ),
-              onChanged: (_) {
-                if (_validationError != null) {
-                  setState(() => _validationError = null);
-                }
-              },
-            ),
-            const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
@@ -177,7 +276,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.camera_alt_outlined, size: 18),
-                label: Text(_estimating ? "Checking…" : "Estimate from photo"),
+                label: Text(_estimating ? "Analysing…" : "Count from photo"),
               ),
             ),
             if (_estimateMessage != null) ...[
@@ -185,8 +284,31 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
               Text(_estimateMessage!, style: fieldHelperStyle(context)),
             ],
             const SizedBox(height: 12),
+            if (total != null)
+              _buildPiecesStepper(context, total)
+            else
+              TextField(
+                controller: _missingController,
+                style: fieldTextStyle(context),
+                cursorColor: fieldCursorColor(context),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: labeledInputDecoration(
+                  context,
+                  labelText: "Missing pieces",
+                  helperText: "No expected count on file — enter missing pieces.",
+                  errorText: _validationError,
+                ),
+                onChanged: (_) {
+                  if (_validationError != null) {
+                    setState(() => _validationError = null);
+                  }
+                },
+              ),
+            const SizedBox(height: 12),
             Text(
-              "Confirm the toy matches what is being returned, then check it in.",
+              "Spread pieces on a plain background. Use +/− to correct the count — "
+              "the app learns each toy after you check in.",
               style: fieldHelperStyle(context),
             ),
             const SizedBox(height: 20),

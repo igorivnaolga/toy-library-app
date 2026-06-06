@@ -31,6 +31,27 @@ def _apply_schema_patches(engine) -> None:
                 "ADD COLUMN IF NOT EXISTS rental_price_cents integer"
             )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE public.toys "
+                "ADD COLUMN IF NOT EXISTS cv_learn_piece_count integer, "
+                "ADD COLUMN IF NOT EXISTS cv_learn_fg_pixels integer, "
+                "ADD COLUMN IF NOT EXISTS cv_learn_peak_count integer, "
+                "ADD COLUMN IF NOT EXISTS cv_learn_samples integer NOT NULL DEFAULT 0"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE public.toys "
+                "ADD COLUMN IF NOT EXISTS cv_ref_piece_count integer, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_fg_pixels integer, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_peak_count integer, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_blob_count integer, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_image_area integer, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_layout text, "
+                "ADD COLUMN IF NOT EXISTS cv_ref_source varchar(16)"
+            )
+        )
 
 
 @asynccontextmanager
