@@ -1,8 +1,12 @@
+import "dart:async";
+import "dart:io";
+
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
+import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/modal_action_buttons.dart";
@@ -120,13 +124,22 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
 
     final XFile? shot = await _picker.pickImage(
       source: ImageSource.camera,
-      maxWidth: 2048,
-      imageQuality: 95,
+      maxWidth: 1600,
+      imageQuality: 85,
     );
     if (shot == null || !mounted) return;
-    _lastPhotoPath = shot.path;
+    // Keep a stable copy — the camera temp file can disappear before upload.
+    try {
+      final cached = File("${shot.path}.desk_learn.jpg");
+      await File(shot.path).copy(cached.path);
+      _lastPhotoPath = cached.path;
+    } catch (_) {
+      _lastPhotoPath = shot.path;
+    }
 
+    if (!mounted) return;
     final controller = context.read<LoansController>();
+    final photoPath = _lastPhotoPath!;
     setState(() {
       _estimating = true;
       _estimateMessage = null;
@@ -134,7 +147,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
     try {
       final estimate = await controller.estimatePieces(
         toyId: widget.loan.toyId,
-        imagePath: shot.path,
+        imagePath: photoPath,
       );
       if (!mounted) return;
       setState(() {
@@ -142,11 +155,24 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
         _estimateMessage = estimate.message;
         _validationError = null;
       });
-    } catch (_) {
+    } on ApiException catch (error) {
+      if (mounted) {
+        final status = error.statusCode;
+        final hint = status == 403
+            ? "You must be on duty to use photo counting."
+            : status == 0
+                ? error.message
+                : error.message;
+        setState(() {
+          _estimateMessage =
+              "Couldn't analyse the photo ($hint). Adjust the count manually.";
+        });
+      }
+    } catch (error) {
       if (mounted) {
         setState(() {
           _estimateMessage =
-              "Couldn't analyse the photo. Adjust the count manually.";
+              "Couldn't analyse the photo ($error). Adjust the count manually.";
         });
       }
     } finally {
@@ -154,7 +180,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
     }
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
     final loan = widget.loan;
     final total = loan.toyTotalPieces;
     int? missingPieces;
@@ -185,15 +211,57 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
     }
 
     final photoPath = _lastPhotoPath;
-    if (photoPath != null && total != null && _piecesReturned > 0) {
-      context.read<LoansController>().learnFromPhoto(
-        toyId: loan.toyId,
-        imagePath: photoPath,
-        confirmedPieceCount: _piecesReturned,
-      ).ignore();
+    final missing = _missingFromStepper;
+    final shouldLearn = photoPath != null &&
+        total != null &&
+        missing == 0 &&
+        _piecesReturned >= total;
+
+    List<int>? learnBytes;
+    if (shouldLearn && File(photoPath).existsSync()) {
+      learnBytes = await File(photoPath).readAsBytes();
     }
 
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = context.read<LoansController>();
     Navigator.pop(context, DeskCheckInResult(missingPieces: missingPieces));
+
+    if (learnBytes != null && learnBytes.isNotEmpty) {
+      final toyId = loan.toyId;
+      final confirmed = _piecesReturned;
+      controller
+          .learnFromPhoto(
+            toyId: toyId,
+            imageBytes: learnBytes,
+            confirmedPieceCount: confirmed,
+            isCompleteSet: true,
+          )
+          .then((_) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text("Saved photo baseline for this toy."),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }).catchError((Object error) {
+        final hint = error is ApiException
+            ? (error.statusCode == 404
+                ? "restart the backend server"
+                : error.message)
+            : error is TimeoutException
+                ? "connection too slow"
+                : error.toString();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              "Check-in completed. Photo baseline not saved ($hint).",
+            ),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      });
+    }
   }
 
   Widget _buildPiecesStepper(BuildContext context, int total) {

@@ -41,13 +41,13 @@ _RESULT_CACHE_MAX = 48
 
 def _load_toy_orm(toy_id: str):
     from app.db.session import get_engine, session_scope
-    from app.models.toy import Toy
+    from app.repositories.toy_repo import resolve_toy_orm
 
     if get_engine() is None:
         return None
     session = session_scope()
     try:
-        return session.get(Toy, toy_id.strip())
+        return resolve_toy_orm(session, toy_id)
     finally:
         session.close()
 
@@ -64,6 +64,43 @@ def extract_photo_features(image_bytes: bytes, expected: int | None = None):
     return _pick_best_photo_features(bgr, expected)
 
 
+def extract_photo_features_for_learn(
+    image_bytes: bytes,
+    confirmed_piece_count: int,
+):
+    """Features for training — always returns something for a valid image."""
+    if not image_bytes:
+        return None
+
+    features = extract_photo_features(image_bytes, confirmed_piece_count)
+    if features is not None:
+        return features
+
+    if _HAS_CV2:
+        bgr = _decode_bgr(image_bytes)
+        if bgr is not None:
+            fallback = _fallback_photo_features(bgr, confirmed_piece_count)
+            if fallback is not None:
+                return fallback
+            return _minimal_learn_features(bgr, confirmed_piece_count)
+
+    return _minimal_learn_features_pillow(image_bytes, confirmed_piece_count)
+
+
+def extract_photo_features_for_learn_fast(
+    image_bytes: bytes,
+    confirmed_piece_count: int,
+):
+    """Fast path for check-in learning — trusts the volunteer's confirmed count."""
+    if not image_bytes:
+        return None
+    if _HAS_CV2:
+        bgr = _decode_bgr(image_bytes)
+        if bgr is not None:
+            return _minimal_learn_features(bgr, confirmed_piece_count)
+    return _minimal_learn_features_pillow(image_bytes, confirmed_piece_count)
+
+
 def _pick_best_photo_features(bgr: np.ndarray, expected: int | None = None):
     from app.services.toy_cv_learner import PhotoFeatures
 
@@ -77,6 +114,87 @@ def _pick_best_photo_features(bgr: np.ndarray, expected: int | None = None):
             best_peak = features.peak_count
             best = features
     return best
+
+
+def _fallback_photo_features(bgr: np.ndarray, confirmed_piece_count: int):
+    """Use foreground + layout when peak counts are unreliable (e.g. jigsaws)."""
+    from app.services.toy_cv_learner import PhotoFeatures
+
+    assert np is not None
+    image_area = bgr.shape[0] * bgr.shape[1]
+    best_fg = 0
+    best_mask: np.ndarray | None = None
+    for mask in _generate_masks(bgr):
+        fg_pixels = int(np.count_nonzero(mask))
+        if fg_pixels > best_fg:
+            best_fg = fg_pixels
+            best_mask = mask
+
+    if best_mask is None or best_fg < 30:
+        return None
+
+    return PhotoFeatures(
+        fg_pixels=best_fg,
+        peak_count=max(1, confirmed_piece_count),
+        subdiv_count=0,
+        fg_ratio=best_fg / max(1, image_area),
+        blob_count=_blob_count(best_mask),
+        layout=_layout_signature(best_mask),
+    )
+
+
+def _minimal_learn_features(bgr: np.ndarray, confirmed_piece_count: int):
+    """Last-resort desk baseline from any decodable check-in photo."""
+    from app.services.toy_cv_learner import PhotoFeatures
+
+    assert np is not None
+    height, width = bgr.shape[:2]
+    image_area = max(1, height * width)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    fg_pixels = int(np.count_nonzero(mask))
+    if fg_pixels < 30:
+        fg_pixels = max(100, image_area // 8)
+        layout = tuple([1 / 64] * 64)
+        blob_count = 1
+    else:
+        layout = _layout_signature(mask)
+        blob_count = max(1, _blob_count(mask))
+
+    return PhotoFeatures(
+        fg_pixels=fg_pixels,
+        peak_count=max(1, confirmed_piece_count),
+        subdiv_count=0,
+        fg_ratio=fg_pixels / image_area,
+        blob_count=blob_count,
+        layout=layout,
+    )
+
+
+def _minimal_learn_features_pillow(image_bytes: bytes, confirmed_piece_count: int):
+    """Pillow-only baseline when OpenCV cannot decode the upload."""
+    from app.services.toy_cv_learner import PhotoFeatures
+
+    if Image is None:
+        return None
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        width, height = img.size
+    except Exception:
+        return None
+    if width <= 0 or height <= 0:
+        return None
+
+    image_area = width * height
+    fg_pixels = max(100, image_area // 6)
+    return PhotoFeatures(
+        fg_pixels=fg_pixels,
+        peak_count=max(1, confirmed_piece_count),
+        subdiv_count=0,
+        fg_ratio=fg_pixels / image_area,
+        blob_count=1,
+        layout=tuple([1 / 64] * 64),
+    )
 
 
 def _features_from_mask(
@@ -167,6 +285,7 @@ def estimate_pieces_service(
         ensure_catalog_reference_service,
         has_reference,
         predict_from_reference,
+        should_trust_catalog_reference,
     )
 
     toy = get_toy_service(toy_id)
@@ -198,7 +317,7 @@ def estimate_pieces_service(
         f"{expected}:"
         f"{learn_samples}:"
         f"{ref_key}:"
-        f"{hashlib.sha256(image_bytes).hexdigest()}:v6"
+        f"{hashlib.sha256(image_bytes).hexdigest()}:v8"
     )
     cached = _RESULT_CACHE.get(cache_key)
     features = extract_photo_features(image_bytes, expected)
@@ -207,11 +326,22 @@ def estimate_pieces_service(
         estimated, confidence = cached
     else:
         cv_est, cv_conf = _estimate_count(image_bytes, expected)
-        ref_pred = (
-            predict_from_reference(toy_orm, features, expected)
-            if toy_orm and features
-            else None
-        )
+        ref_pred = None
+        if (
+            toy_orm
+            and features
+            and has_reference(toy_orm)
+            and should_trust_catalog_reference(toy_orm)
+        ):
+            ref_pred = predict_from_reference(toy_orm, features, expected)
+        elif (
+            toy_orm
+            and features
+            and has_reference(toy_orm)
+            and (toy_orm.cv_ref_source or "").lower() == "checkin"
+        ):
+            ref_pred = predict_from_reference(toy_orm, features, expected)
+
         baseline_est = (
             predict_from_baseline(toy_orm, features)
             if toy_orm and features
@@ -219,7 +349,19 @@ def estimate_pieces_service(
         )
         model_est = predict_from_model(toy.toy_id, features) if features else None
 
-        if ref_pred is not None and ref_pred.layout_similarity >= 0.55:
+        if learn_samples >= 2 and baseline_est is not None:
+            estimated = baseline_est
+            confidence = 0.86
+            used_learned = True
+        elif learn_samples >= 5 and model_est is not None:
+            estimated = model_est
+            confidence = 0.86
+            used_learned = True
+        elif (
+            ref_pred is not None
+            and ref_pred.source == "checkin"
+            and ref_pred.layout_similarity >= 0.4
+        ):
             estimated = ref_pred.estimated
             confidence = ref_pred.confidence
             used_reference = True
@@ -229,20 +371,21 @@ def estimate_pieces_service(
                 estimated = max(estimated, baseline_est)
                 if expected is not None:
                     estimated = min(estimated, expected)
-        elif learn_samples >= 2 and baseline_est is not None:
-            estimated = baseline_est
-            confidence = 0.84
-            used_learned = True
-        elif learn_samples >= 5 and model_est is not None:
-            estimated = model_est
-            confidence = 0.86
-            used_learned = True
-        elif ref_pred is not None:
+        elif (
+            ref_pred is not None
+            and ref_pred.source == "setls"
+            and learn_samples == 0
+            and ref_pred.layout_similarity >= 0.55
+        ):
             estimated = ref_pred.estimated
             confidence = ref_pred.confidence
             used_reference = True
             reference_source = ref_pred.source
             layout_similarity = ref_pred.layout_similarity
+        elif learn_samples >= 1 and baseline_est is not None:
+            estimated = baseline_est
+            confidence = 0.8
+            used_learned = True
         elif baseline_est is not None and cv_est is not None:
             estimated = max(baseline_est, cv_est)
             if expected is not None:
@@ -251,6 +394,16 @@ def estimate_pieces_service(
             used_learned = learn_samples >= 1
         else:
             estimated, confidence = cv_est, cv_conf
+
+        if estimated is None:
+            estimated, confidence = _recover_estimate(
+                image_bytes,
+                expected,
+                baseline_est=baseline_est,
+                ref_pred=ref_pred,
+                features=features,
+                cv_conf=cv_conf,
+            )
 
         estimated, confidence, _ = _snap_near_complete(estimated, expected, confidence)
         if len(_RESULT_CACHE) >= _RESULT_CACHE_MAX:
@@ -289,6 +442,34 @@ def estimate_pieces_service(
         reference_source=reference_source,
         layout_similarity=layout_similarity,
     )
+
+
+def _recover_estimate(
+    image_bytes: bytes,
+    expected: int | None,
+    *,
+    baseline_est: int | None,
+    ref_pred,
+    features,
+    cv_conf: float,
+) -> tuple[int | None, float]:
+    """Fallbacks when peak counting returns nothing."""
+    if baseline_est is not None:
+        return baseline_est, max(0.68, cv_conf)
+    if ref_pred is not None:
+        return ref_pred.estimated, min(0.82, ref_pred.confidence * 0.9)
+    if features is not None:
+        est = max(1, features.peak_count)
+        if expected is not None:
+            est = min(est, expected)
+        return est, 0.58
+    learn_feat = extract_photo_features_for_learn(image_bytes, expected or 1)
+    if learn_feat is not None:
+        est = max(1, learn_feat.peak_count)
+        if expected is not None:
+            est = min(est, expected)
+        return est, 0.52
+    return None, 0.0
 
 
 def _snap_near_complete(
@@ -762,7 +943,7 @@ def _message(
 ) -> str:
     if estimated is None:
         return "Could not analyse the photo. Adjust the count manually."
-    conf_pct = (confidence * 100).round()
+    conf_pct = round(confidence * 100)
     learn_hint = (
         " Check in with +/− once — the app learns this toy for next time."
         if learn_samples == 0 and suggested_missing and suggested_missing > 0

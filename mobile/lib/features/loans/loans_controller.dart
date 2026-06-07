@@ -148,6 +148,7 @@ class LoansController extends ChangeNotifier {
       fileField: "image",
       filePath: imagePath,
       fields: {"toy_id": toyId},
+      timeout: const Duration(seconds: 90),
     );
     return PieceEstimate.fromJson(json);
   }
@@ -155,17 +156,20 @@ class LoansController extends ChangeNotifier {
   /// Fire-and-forget training from a volunteer-confirmed check-in photo.
   Future<void> learnFromPhoto({
     required String toyId,
-    required String imagePath,
+    required List<int> imageBytes,
     required int confirmedPieceCount,
+    bool isCompleteSet = false,
   }) async {
-    await _client.postMultipartImage(
+    await _client.postMultipartBytes(
       "/api/v1/desk/learn-from-photo",
       fileField: "image",
-      filePath: imagePath,
+      bytes: imageBytes,
       fields: {
         "toy_id": toyId,
         "confirmed_piece_count": confirmedPieceCount.toString(),
+        if (isCompleteSet) "is_complete_set": "true",
       },
+      timeout: const Duration(seconds: 90),
     );
   }
 

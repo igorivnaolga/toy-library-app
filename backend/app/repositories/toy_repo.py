@@ -328,6 +328,19 @@ def update_toy_pieces_in_db(
     )
 
 
+def resolve_toy_orm(session, toy_id: str) -> ToyORM | None:
+    """Match toy_id case-insensitively (desk loans may send j146 vs J146)."""
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
+    toy = session.get(ToyORM, toy_id_norm)
+    if toy is not None:
+        return toy
+    return session.scalar(
+        select(ToyORM).where(func.lower(ToyORM.toy_id) == toy_id_norm.lower())
+    )
+
+
 def get_toy_by_id(toy_id: str) -> ToyOut | None:
     toy_id_norm = toy_id.strip()
     if not toy_id_norm:
@@ -342,6 +355,8 @@ def get_toy_by_id(toy_id: str) -> ToyOut | None:
                 .options(joinedload(ToyORM.image))
                 .where(ToyORM.toy_id == toy_id_norm)
             )
+            if toy is None:
+                toy = resolve_toy_orm(session, toy_id_norm)
             return _toy_row_to_out(toy) if toy else None
         finally:
             session.close()

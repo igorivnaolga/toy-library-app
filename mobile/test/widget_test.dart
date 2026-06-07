@@ -71,6 +71,18 @@ class _FakeBackend implements BackendClient {
     required String fileField,
     required String filePath,
     Map<String, String>? fields,
+    Duration? timeout,
+  }) {
+    throw UnsupportedError(path);
+  }
+
+  @override
+  Future<Map<String, dynamic>> postMultipartBytes(
+    String path, {
+    required String fileField,
+    required List<int> bytes,
+    Map<String, String>? fields,
+    Duration? timeout,
   }) {
     throw UnsupportedError(path);
   }

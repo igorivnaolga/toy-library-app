@@ -1,4 +1,5 @@
 import "dart:convert";
+import "dart:io";
 
 import "package:http/http.dart" as http;
 
@@ -21,6 +22,15 @@ abstract class BackendClient {
     required String fileField,
     required String filePath,
     Map<String, String>? fields,
+    Duration? timeout,
+  });
+
+  Future<Map<String, dynamic>> postMultipartBytes(
+    String path, {
+    required String fileField,
+    required List<int> bytes,
+    Map<String, String>? fields,
+    Duration? timeout,
   });
 
   Future<Map<String, dynamic>> deleteJson(String path);
@@ -65,12 +75,29 @@ class ApiClient implements BackendClient {
     return _decodeObject(response);
   }
 
+  String _errorMessageFromBody(String body) {
+    if (body.isEmpty) return "Request failed (empty response).";
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final detail = decoded["detail"];
+        if (detail is String && detail.isNotEmpty) return detail;
+        if (detail is List && detail.isNotEmpty) {
+          return detail.map((item) => item.toString()).join("; ");
+        }
+      }
+    } catch (_) {
+      // Fall back to raw body below.
+    }
+    return body.length > 200 ? "${body.substring(0, 200)}…" : body;
+  }
+
   Map<String, dynamic> _decodeObject(http.Response response) {
     final code = response.statusCode;
     if (code < 200 || code >= 300) {
       final body = response.body;
-      final snippet = body.length > 200 ? "${body.substring(0, 200)}…" : body;
-      throw ApiException("Request failed: $snippet", statusCode: code);
+      final message = _errorMessageFromBody(body);
+      throw ApiException(message, statusCode: code);
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
@@ -120,6 +147,32 @@ class ApiClient implements BackendClient {
     required String fileField,
     required String filePath,
     Map<String, String>? fields,
+    Duration? timeout,
+  }) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw ApiException("Photo file not found on device.", statusCode: 0);
+    }
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw ApiException("Photo file is empty.", statusCode: 0);
+    }
+    return postMultipartBytes(
+      path,
+      fileField: fileField,
+      bytes: bytes,
+      fields: fields,
+      timeout: timeout,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> postMultipartBytes(
+    String path, {
+    required String fileField,
+    required List<int> bytes,
+    Map<String, String>? fields,
+    Duration? timeout,
   }) async {
     final uri = _uri(path, null);
     final request = http.MultipartRequest("POST", uri);
@@ -127,10 +180,17 @@ class ApiClient implements BackendClient {
     if (fields != null) {
       request.fields.addAll(fields);
     }
-    request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
-    final streamed =
-        await _http.send(request).timeout(const Duration(seconds: 30));
-    final response = await http.Response.fromStream(streamed);
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        fileField,
+        bytes,
+        filename: "desk_photo.jpg",
+      ),
+    );
+    final effectiveTimeout = timeout ?? const Duration(seconds: 60);
+    final streamed = await _http.send(request).timeout(effectiveTimeout);
+    final response =
+        await http.Response.fromStream(streamed).timeout(effectiveTimeout);
     return _decodeObject(response);
   }
 

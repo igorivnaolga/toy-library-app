@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.core.auth_deps import require_on_duty_desk
@@ -54,7 +56,13 @@ async def identify_pieces(
         raise HTTPException(status_code=422, detail="Empty image upload.")
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large.")
-    estimate = estimate_pieces_service(toy_id, data)
+    try:
+        estimate = estimate_pieces_service(toy_id, data)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Photo analysis error: {exc}",
+        ) from exc
     if estimate is None:
         raise HTTPException(
             status_code=404,
@@ -68,6 +76,7 @@ async def learn_from_photo_endpoint(
     toy_id: str = Form(...),
     confirmed_piece_count: int = Form(...),
     image: UploadFile = File(...),
+    is_complete_set: str = Form(default="false"),
     _: Principal = Depends(_require_on_duty),
 ) -> LearnFromPhotoResult:
     """Train per-toy baseline from a volunteer-confirmed check-in photo."""
@@ -78,15 +87,25 @@ async def learn_from_photo_endpoint(
         raise HTTPException(status_code=422, detail="Empty image upload.")
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large.")
-    result = learn_from_photo_service(toy_id, data, confirmed_piece_count)
+    volunteer_complete = is_complete_set.strip().lower() in {"1", "true", "yes"}
+    result = await asyncio.to_thread(
+        learn_from_photo_service,
+        toy_id,
+        data,
+        confirmed_piece_count,
+        volunteer_complete=volunteer_complete,
+    )
     if result is None:
         raise HTTPException(
-            status_code=404,
-            detail="Toy not found, catalog unavailable, or photo could not be analysed.",
+            status_code=422,
+            detail=(
+                "Could not save photo learning. Take the photo again with Count from photo, "
+                "confirm the full set (0 missing), then check in."
+            ),
         )
-    samples, learned_count = result
+    canonical_id, samples, learned_count = result
     return LearnFromPhotoResult(
-        toy_id=toy_id.strip(),
+        toy_id=canonical_id,
         learn_samples=samples,
         learned_piece_count=learned_count,
         message=(

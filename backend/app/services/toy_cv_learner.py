@@ -54,10 +54,13 @@ class PhotoFeatures:
 
 def effective_piece_count(toy: Toy) -> int | None:
     """Catalog total, or learned count when we have enough samples."""
-    if (
-        toy.cv_learn_piece_count is not None
-        and (toy.cv_learn_samples or 0) >= _MIN_SAMPLES_FOR_TRUST
-    ):
+    samples = toy.cv_learn_samples or 0
+    min_samples = (
+        1
+        if (toy.cv_ref_source or "").lower() == "checkin"
+        else _MIN_SAMPLES_FOR_TRUST
+    )
+    if toy.cv_learn_piece_count is not None and samples >= min_samples:
         return toy.cv_learn_piece_count
     return toy.total_pieces
 
@@ -88,14 +91,24 @@ def learn_from_photo(
     toy_id: str,
     image_bytes: bytes,
     confirmed_piece_count: int,
+    *,
+    volunteer_complete: bool = False,
 ) -> Toy | None:
-    from app.services.desk_cv_service import extract_photo_features
+    from app.repositories.toy_repo import resolve_toy_orm
+    from app.services.desk_cv_service import extract_photo_features_for_learn_fast
 
-    toy = session.get(Toy, toy_id.strip())
+    from app.services.toy_cv_reference import is_complete_return
+
+    toy = resolve_toy_orm(session, toy_id)
     if toy is None or confirmed_piece_count <= 0:
         return None
 
-    features = extract_photo_features(image_bytes)
+    if not volunteer_complete and not is_complete_return(toy, confirmed_piece_count):
+        return None
+
+    features = extract_photo_features_for_learn_fast(
+        image_bytes, confirmed_piece_count
+    )
     if features is None:
         return None
 
@@ -129,10 +142,11 @@ def learn_from_photo(
         toy,
         features,
         confirmed_piece_count,
+        volunteer_complete=volunteer_complete,
     )
 
-    _append_sample(toy_id, features, confirmed_piece_count)
-    _MODEL_CACHE.pop(toy_id, None)
+    _append_sample(toy.toy_id, features, confirmed_piece_count)
+    _MODEL_CACHE.pop(toy.toy_id, None)
     return toy
 
 
@@ -202,8 +216,10 @@ def learn_from_photo_service(
     toy_id: str,
     image_bytes: bytes,
     confirmed_piece_count: int,
-) -> tuple[int, int | None] | None:
-    """Persist a confirmed count and return (samples, learned_piece_count)."""
+    *,
+    volunteer_complete: bool = False,
+) -> tuple[str, int, int | None] | None:
+    """Persist a confirmed count and return (toy_id, samples, learned_piece_count)."""
     from app.db.session import get_engine, session_scope
 
     if get_engine() is None:
@@ -215,6 +231,6 @@ def learn_from_photo_service(
         if toy is None:
             return None
         session.commit()
-        return toy.cv_learn_samples, toy.cv_learn_piece_count
+        return toy.toy_id, toy.cv_learn_samples, toy.cv_learn_piece_count
     finally:
         session.close()

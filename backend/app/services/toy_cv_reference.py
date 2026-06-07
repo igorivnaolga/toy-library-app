@@ -148,7 +148,9 @@ def ensure_catalog_reference_service(toy_id: str) -> None:
 
     session = session_scope()
     try:
-        toy = session.get(Toy, toy_id.strip())
+        from app.repositories.toy_repo import resolve_toy_orm
+
+        toy = resolve_toy_orm(session, toy_id)
         if toy is None:
             return
         if ensure_catalog_reference(session, toy):
@@ -157,20 +159,37 @@ def ensure_catalog_reference_service(toy_id: str) -> None:
         session.close()
 
 
+def is_complete_return(toy: Toy, confirmed_piece_count: int) -> bool:
+    """True when the volunteer returned the full catalog set."""
+    target = toy.total_pieces
+    if target is None or target <= 0:
+        return False
+    return confirmed_piece_count >= target - _COMPLETE_TOLERANCE
+
+
+def should_trust_catalog_reference(toy: Toy) -> bool:
+    """SETLS photos are often boxed product shots — skip once we have desk learning."""
+    if not has_reference(toy):
+        return False
+    if (toy.cv_ref_source or "").lower() != "setls":
+        return True
+    return (toy.cv_learn_samples or 0) == 0
+
+
 def maybe_update_reference_from_checkin(
     session: Session,
     toy: Toy,
     features: PhotoFeatures,
     confirmed_piece_count: int,
+    *,
+    volunteer_complete: bool = False,
 ) -> None:
     """Store or refine a check-in reference when the volunteer confirms a full set."""
-    target = toy.total_pieces or expected
-    if target is None or target <= 0:
-        return
-    if confirmed_piece_count < target - _COMPLETE_TOLERANCE:
+    if not volunteer_complete and not is_complete_return(toy, confirmed_piece_count):
         return
 
     current_source = (toy.cv_ref_source or "").lower()
+    # Replace a weak SETLS box photo with the first real desk spread.
     ema = current_source == "checkin" and has_reference(toy)
     _write_reference(
         session,
