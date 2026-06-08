@@ -76,6 +76,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
 
     final controller = context.read<LoansController>();
     final catalog = context.read<CatalogController>();
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await controller.checkIn(
         loan.loanId,
@@ -83,12 +84,18 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
       );
       await catalog.refresh();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text("Checked in ${loan.toyName ?? loan.toyId}")),
       );
+      if (kDeskCheckInCvEnabled) {
+        final photoLearn = result.photoLearn;
+        if (photoLearn != null) {
+          runDeskPhotoLearnInBackground(controller, messenger, photoLearn);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(loanActionErrorMessage(e))),
       );
     }
@@ -289,8 +296,10 @@ class _CheckInTabState extends State<_CheckInTab> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
-              const SizedBox(height: 16),
+              if (kDeskToyIdScanEnabled) ...[
+                AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
+                const SizedBox(height: 16),
+              ],
               if (all.isNotEmpty) ...[
                 TextField(
                   controller: _searchController,

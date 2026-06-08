@@ -4,6 +4,9 @@ import "package:image_picker/image_picker.dart";
 import "../../core/app_text_styles.dart";
 import "../loans/toy_id_ocr_service.dart";
 
+/// OCR scan of toy ID label at desk check-in. `false` = hidden (code kept).
+const bool kDeskToyIdScanEnabled = false;
+
 /// Scan a toy's ID label to jump straight to its check-in.
 class AdminCvScanPanel extends StatefulWidget {
   const AdminCvScanPanel({super.key, required this.onToyIdScanned});

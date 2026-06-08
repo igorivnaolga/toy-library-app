@@ -14,10 +14,65 @@ import "loan_desk_summary.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
 
+/// Desk photo count + learn at check-in. `false` = manual +/− only (CV code kept).
+const bool kDeskCheckInCvEnabled = false;
+
+class DeskCheckInPhotoLearn {
+  const DeskCheckInPhotoLearn({
+    required this.toyId,
+    required this.imageBytes,
+    required this.confirmedPieceCount,
+  });
+
+  final String toyId;
+  final List<int> imageBytes;
+  final int confirmedPieceCount;
+}
+
 class DeskCheckInResult {
-  const DeskCheckInResult({this.missingPieces});
+  const DeskCheckInResult({this.missingPieces, this.photoLearn});
 
   final int? missingPieces;
+  final DeskCheckInPhotoLearn? photoLearn;
+}
+
+/// Run after [LoansController.checkIn] so toy row updates do not race learning.
+void runDeskPhotoLearnInBackground(
+  LoansController controller,
+  ScaffoldMessengerState messenger,
+  DeskCheckInPhotoLearn learn,
+) {
+  controller
+      .learnFromPhoto(
+        toyId: learn.toyId,
+        imageBytes: learn.imageBytes,
+        confirmedPieceCount: learn.confirmedPieceCount,
+        isCompleteSet: true,
+      )
+      .then((_) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text("Saved photo baseline for this toy."),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }).catchError((Object error) {
+    final hint = error is ApiException
+        ? (error.statusCode == 404
+            ? "restart the backend server"
+            : error.message)
+        : error is TimeoutException
+            ? "connection too slow"
+            : error.toString();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          "Check-in completed. Photo baseline not saved ($hint).",
+        ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  });
 }
 
 Future<DeskCheckInResult?> showDeskCheckInDialog(
@@ -124,8 +179,8 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
 
     final XFile? shot = await _picker.pickImage(
       source: ImageSource.camera,
-      maxWidth: 1600,
-      imageQuality: 85,
+      maxWidth: 1000,
+      imageQuality: 75,
     );
     if (shot == null || !mounted) return;
     // Keep a stable copy — the camera temp file can disappear before upload.
@@ -210,58 +265,36 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       }
     }
 
-    final photoPath = _lastPhotoPath;
-    final missing = _missingFromStepper;
-    final shouldLearn = photoPath != null &&
-        total != null &&
-        missing == 0 &&
-        _piecesReturned >= total;
+    DeskCheckInPhotoLearn? photoLearn;
+    if (kDeskCheckInCvEnabled) {
+      final photoPath = _lastPhotoPath;
+      final missing = _missingFromStepper;
+      final shouldLearn = photoPath != null &&
+          total != null &&
+          missing == 0 &&
+          _piecesReturned >= total;
 
-    List<int>? learnBytes;
-    if (shouldLearn && File(photoPath).existsSync()) {
-      learnBytes = await File(photoPath).readAsBytes();
+      List<int>? learnBytes;
+      if (shouldLearn && File(photoPath).existsSync()) {
+        learnBytes = await File(photoPath).readAsBytes();
+      }
+      if (learnBytes != null && learnBytes.isNotEmpty) {
+        photoLearn = DeskCheckInPhotoLearn(
+          toyId: loan.toyId,
+          imageBytes: learnBytes,
+          confirmedPieceCount: _piecesReturned,
+        );
+      }
     }
 
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final controller = context.read<LoansController>();
-    Navigator.pop(context, DeskCheckInResult(missingPieces: missingPieces));
-
-    if (learnBytes != null && learnBytes.isNotEmpty) {
-      final toyId = loan.toyId;
-      final confirmed = _piecesReturned;
-      controller
-          .learnFromPhoto(
-            toyId: toyId,
-            imageBytes: learnBytes,
-            confirmedPieceCount: confirmed,
-            isCompleteSet: true,
-          )
-          .then((_) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text("Saved photo baseline for this toy."),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }).catchError((Object error) {
-        final hint = error is ApiException
-            ? (error.statusCode == 404
-                ? "restart the backend server"
-                : error.message)
-            : error is TimeoutException
-                ? "connection too slow"
-                : error.toString();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              "Check-in completed. Photo baseline not saved ($hint).",
-            ),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      });
-    }
+    Navigator.pop(
+      context,
+      DeskCheckInResult(
+        missingPieces: missingPieces,
+        photoLearn: photoLearn,
+      ),
+    );
   }
 
   Widget _buildPiecesStepper(BuildContext context, int total) {
@@ -332,26 +365,29 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
               piecesAfterMember: false,
               loadPhoto: false,
             ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _estimating ? null : _estimateFromPhoto,
-                icon: _estimating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.camera_alt_outlined, size: 18),
-                label: Text(_estimating ? "Analysing…" : "Count from photo"),
+            if (kDeskCheckInCvEnabled) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _estimating ? null : _estimateFromPhoto,
+                  icon: _estimating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.camera_alt_outlined, size: 18),
+                  label: Text(_estimating ? "Analysing…" : "Count from photo"),
+                ),
               ),
-            ),
-            if (_estimateMessage != null) ...[
-              const SizedBox(height: 6),
-              Text(_estimateMessage!, style: fieldHelperStyle(context)),
-            ],
-            const SizedBox(height: 12),
+              if (_estimateMessage != null) ...[
+                const SizedBox(height: 6),
+                Text(_estimateMessage!, style: fieldHelperStyle(context)),
+              ],
+              const SizedBox(height: 12),
+            ] else
+              const SizedBox(height: 16),
             if (total != null)
               _buildPiecesStepper(context, total)
             else
@@ -364,7 +400,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                 decoration: labeledInputDecoration(
                   context,
                   labelText: "Missing pieces",
-                  helperText: "No expected count on file — enter missing pieces.",
+                  helperText: "Enter missing pieces.",
                   errorText: _validationError,
                 ),
                 onChanged: (_) {
@@ -373,12 +409,14 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                   }
                 },
               ),
-            const SizedBox(height: 12),
-            Text(
-              "Spread pieces on a plain background. Use +/− to correct the count — "
-              "the app learns each toy after you check in.",
-              style: fieldHelperStyle(context),
-            ),
+            if (kDeskCheckInCvEnabled) ...[
+              const SizedBox(height: 12),
+              Text(
+                "Spread pieces on a plain background. Use +/− to correct the count — "
+                "the app learns each toy after you check in.",
+                style: fieldHelperStyle(context),
+              ),
+            ],
             const SizedBox(height: 20),
             ModalEqualWidthButtonRow(
               secondaryLabel: "Cancel",

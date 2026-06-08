@@ -62,6 +62,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
 
     final controller = context.read<LoansController>();
     final catalog = context.read<CatalogController>();
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await controller.checkIn(
         loan.loanId,
@@ -69,14 +70,20 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
       );
       await catalog.refresh();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text("Checked in ${loan.toyName ?? loan.toyId}"),
         ),
       );
+      if (kDeskCheckInCvEnabled) {
+        final photoLearn = result.photoLearn;
+        if (photoLearn != null) {
+          runDeskPhotoLearnInBackground(controller, messenger, photoLearn);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text(loanActionErrorMessage(e))),
       );
     }
