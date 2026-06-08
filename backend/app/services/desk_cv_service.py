@@ -30,11 +30,11 @@ try:
 except ImportError:
     Image = None  # type: ignore[assignment]
 
-_MAX_DIM = 1400
+_MAX_DIM = 900
 _MIN_BLOB_FRACTION = 0.0002
 _LAYOUT_GRID = 8
 _MIN_BLOB_AREA = 40
-_NMS_RADIUS_FACTORS = (0.16, 0.22, 0.30, 0.38, 0.46, 0.54, 0.62)
+_NMS_RADIUS_FACTORS = (0.22, 0.30, 0.38, 0.46, 0.54)
 _RESULT_CACHE: dict[str, tuple[int | None, float]] = {}
 _RESULT_CACHE_MAX = 48
 
@@ -271,6 +271,68 @@ def _decode_bgr(image_bytes: bytes):
     return bgr
 
 
+def _reference_compare_features(bgr: np.ndarray, piece_hint: int):
+    """Same lightweight fingerprint used when saving a desk check-in reference."""
+    return _minimal_learn_features(bgr, max(1, piece_hint))
+
+
+def _estimate_from_checkin_reference(
+    toy_orm,
+    bgr: np.ndarray,
+    expected: int | None,
+) -> tuple[int, float, float] | None:
+    """Fast desk estimate using the saved check-in photo (no heavy peak CV)."""
+    from app.services.toy_cv_reference import has_reference, predict_from_reference
+
+    if toy_orm is None or not has_reference(toy_orm):
+        return None
+    if (toy_orm.cv_ref_source or "").lower() != "checkin":
+        return None
+
+    ref_count = toy_orm.cv_ref_piece_count or expected
+    ref_fg = toy_orm.cv_ref_fg_pixels or 0
+    if not ref_count or ref_fg <= 0:
+        return None
+
+    piece_hint = max(1, expected or ref_count)
+    features = _reference_compare_features(bgr, piece_hint)
+    if features is None:
+        return None
+
+    ref_pred = predict_from_reference(toy_orm, features, expected)
+    layout_sim = ref_pred.layout_similarity if ref_pred else 0.0
+    learn_samples = toy_orm.cv_learn_samples or 0
+    fg_delta = abs(features.fg_pixels - ref_fg) / ref_fg
+
+    def _full_set(confidence: float) -> tuple[int, float, float]:
+        target = min(ref_count, expected) if expected else ref_count
+        return target, confidence, layout_sim
+
+    # Volunteer saved a confirmed full-set desk photo — trust unless tray is nearly empty.
+    if learn_samples >= 1 and features.fg_pixels >= ref_fg * 0.18:
+        return _full_set(0.9)
+
+    if layout_sim >= 0.5:
+        return _full_set(0.88)
+
+    if ref_pred is not None and layout_sim >= 0.3:
+        estimated, confidence, _ = _snap_near_complete(
+            ref_pred.estimated, expected, ref_pred.confidence
+        )
+        if estimated is not None:
+            return estimated, confidence, layout_sim
+
+    if fg_delta <= 0.4:
+        ratio_est = max(1, int(round((features.fg_pixels / ref_fg) * ref_count)))
+        if expected is not None:
+            ratio_est = min(ratio_est, expected)
+        estimated, confidence, _ = _snap_near_complete(ratio_est, expected, 0.78)
+        if estimated is not None:
+            return estimated, confidence, layout_sim
+
+    return None
+
+
 def estimate_pieces_service(
     toy_id: str,
     image_bytes: bytes,
@@ -288,13 +350,26 @@ def estimate_pieces_service(
         should_trust_catalog_reference,
     )
 
-    toy = get_toy_service(toy_id)
-    if toy is None:
-        return None
-
-    ensure_catalog_reference_service(toy_id)
     toy_orm = _load_toy_orm(toy_id)
-    catalog_expected = toy.total_pieces
+    if toy_orm is None:
+        toy = get_toy_service(toy_id)
+        if toy is None:
+            return None
+        catalog_expected = toy.total_pieces
+        canonical_id = toy.toy_id
+    else:
+        catalog_expected = toy_orm.total_pieces
+        canonical_id = toy_orm.toy_id
+
+    has_checkin_ref = (
+        toy_orm is not None
+        and has_reference(toy_orm)
+        and (toy_orm.cv_ref_source or "").lower() == "checkin"
+    )
+    if toy_orm is not None and not has_checkin_ref:
+        ensure_catalog_reference_service(toy_id)
+        toy_orm = _load_toy_orm(toy_id)
+
     expected = effective_piece_count(toy_orm) if toy_orm else catalog_expected
     learn_samples = (toy_orm.cv_learn_samples or 0) if toy_orm else 0
     learned_total = (
@@ -313,99 +388,101 @@ def estimate_pieces_service(
         else "none"
     )
     cache_key = (
-        f"{toy.toy_id}:"
+        f"{canonical_id}:"
         f"{expected}:"
         f"{learn_samples}:"
         f"{ref_key}:"
-        f"{hashlib.sha256(image_bytes).hexdigest()}:v8"
+        f"{hashlib.sha256(image_bytes).hexdigest()}:v12"
     )
     cached = _RESULT_CACHE.get(cache_key)
-    features = extract_photo_features(image_bytes, expected)
 
     if cached is not None:
         estimated, confidence = cached
     else:
-        cv_est, cv_conf = _estimate_count(image_bytes, expected)
-        ref_pred = None
-        if (
-            toy_orm
-            and features
-            and has_reference(toy_orm)
-            and should_trust_catalog_reference(toy_orm)
-        ):
-            ref_pred = predict_from_reference(toy_orm, features, expected)
-        elif (
-            toy_orm
-            and features
-            and has_reference(toy_orm)
-            and (toy_orm.cv_ref_source or "").lower() == "checkin"
-        ):
-            ref_pred = predict_from_reference(toy_orm, features, expected)
-
-        baseline_est = (
-            predict_from_baseline(toy_orm, features)
-            if toy_orm and features
+        bgr = _decode_bgr(image_bytes) if _HAS_CV2 else None
+        checkin_est = (
+            _estimate_from_checkin_reference(toy_orm, bgr, expected)
+            if bgr is not None
             else None
         )
-        model_est = predict_from_model(toy.toy_id, features) if features else None
-
-        if learn_samples >= 2 and baseline_est is not None:
-            estimated = baseline_est
-            confidence = 0.86
-            used_learned = True
-        elif learn_samples >= 5 and model_est is not None:
-            estimated = model_est
-            confidence = 0.86
-            used_learned = True
-        elif (
-            ref_pred is not None
-            and ref_pred.source == "checkin"
-            and ref_pred.layout_similarity >= 0.4
-        ):
-            estimated = ref_pred.estimated
-            confidence = ref_pred.confidence
+        if checkin_est is not None:
+            estimated, confidence, layout_similarity = checkin_est
             used_reference = True
-            reference_source = ref_pred.source
-            layout_similarity = ref_pred.layout_similarity
-            if baseline_est is not None:
-                estimated = max(estimated, baseline_est)
-                if expected is not None:
-                    estimated = min(estimated, expected)
-        elif (
-            ref_pred is not None
-            and ref_pred.source == "setls"
-            and learn_samples == 0
-            and ref_pred.layout_similarity >= 0.55
-        ):
-            estimated = ref_pred.estimated
-            confidence = ref_pred.confidence
-            used_reference = True
-            reference_source = ref_pred.source
-            layout_similarity = ref_pred.layout_similarity
-        elif learn_samples >= 1 and baseline_est is not None:
-            estimated = baseline_est
-            confidence = 0.8
-            used_learned = True
-        elif baseline_est is not None and cv_est is not None:
-            estimated = max(baseline_est, cv_est)
-            if expected is not None:
-                estimated = min(estimated, expected)
-            confidence = max(cv_conf, 0.72)
-            used_learned = learn_samples >= 1
+            reference_source = "checkin"
         else:
-            estimated, confidence = cv_est, cv_conf
+            cv_est, cv_conf = (
+                _estimate_count_light(bgr, expected)
+                if bgr is not None
+                else (None, 0.0)
+            )
+            if cv_est is None:
+                cv_est, cv_conf = _estimate_count(image_bytes, expected, bgr=bgr)
 
-        if estimated is None:
-            estimated, confidence = _recover_estimate(
-                image_bytes,
-                expected,
-                baseline_est=baseline_est,
-                ref_pred=ref_pred,
-                features=features,
-                cv_conf=cv_conf,
+            features = None
+            ref_pred = None
+            baseline_est = None
+            if bgr is not None and not has_checkin_ref:
+                features = _pick_best_photo_features(bgr, expected)
+                if toy_orm and features and has_reference(toy_orm):
+                    if should_trust_catalog_reference(toy_orm):
+                        ref_pred = predict_from_reference(toy_orm, features, expected)
+                baseline_est = (
+                    predict_from_baseline(toy_orm, features)
+                    if toy_orm and features
+                    else None
+                )
+            model_est = (
+                predict_from_model(canonical_id, features) if features else None
             )
 
-        estimated, confidence, _ = _snap_near_complete(estimated, expected, confidence)
+            if (
+                ref_pred is not None
+                and ref_pred.source == "setls"
+                and learn_samples == 0
+                and ref_pred.layout_similarity >= 0.55
+            ):
+                estimated = ref_pred.estimated
+                confidence = ref_pred.confidence
+                used_reference = True
+                reference_source = ref_pred.source
+                layout_similarity = ref_pred.layout_similarity
+            elif learn_samples >= 2 and baseline_est is not None:
+                estimated = baseline_est
+                confidence = 0.86
+                used_learned = True
+            elif learn_samples >= 5 and model_est is not None:
+                estimated = model_est
+                confidence = 0.86
+                used_learned = True
+            elif learn_samples >= 1 and baseline_est is not None:
+                estimated = max(baseline_est, cv_est or 0)
+                if expected is not None:
+                    estimated = min(estimated, expected)
+                confidence = max(cv_conf, 0.8)
+                used_learned = True
+            elif baseline_est is not None and cv_est is not None:
+                estimated = max(baseline_est, cv_est)
+                if expected is not None:
+                    estimated = min(estimated, expected)
+                confidence = max(cv_conf, 0.72)
+                used_learned = learn_samples >= 1
+            else:
+                estimated, confidence = cv_est, cv_conf
+
+            if estimated is None:
+                estimated, confidence = _recover_estimate(
+                    image_bytes,
+                    expected,
+                    baseline_est=baseline_est,
+                    ref_pred=ref_pred,
+                    features=features,
+                    cv_conf=cv_conf,
+                )
+
+            estimated, confidence, _ = _snap_near_complete(
+                estimated, expected, confidence
+            )
+
         if len(_RESULT_CACHE) >= _RESULT_CACHE_MAX:
             _RESULT_CACHE.pop(next(iter(_RESULT_CACHE)))
         _RESULT_CACHE[cache_key] = (estimated, confidence)
@@ -419,7 +496,7 @@ def estimate_pieces_service(
         suggested_missing = max(0, expected - estimated)
 
     return PieceCountEstimate(
-        toy_id=toy.toy_id,
+        toy_id=canonical_id,
         expected_total=expected,
         estimated_count=estimated,
         suggested_missing=suggested_missing,
@@ -494,28 +571,32 @@ def _snap_near_complete(
 def _estimate_count(
     image_bytes: bytes,
     expected: int | None,
+    *,
+    bgr: np.ndarray | None = None,
 ) -> tuple[int | None, float]:
     if _HAS_CV2:
-        result = _estimate_count_opencv(image_bytes, expected)
-        if result[0] is not None:
-            return result
+        if bgr is None:
+            bgr = _decode_bgr(image_bytes)
+        if bgr is not None:
+            light = _estimate_count_light(bgr, expected)
+            if light[0] is not None:
+                return light
     return _estimate_count_pillow(image_bytes, expected)
 
 
-def _estimate_count_opencv(
-    image_bytes: bytes,
+def _estimate_count_light(
+    bgr: np.ndarray,
     expected: int | None,
 ) -> tuple[int | None, float]:
+    """Single-mask peak count — fast default for toys without a desk reference."""
     assert cv2 is not None and np is not None
-    cv2.setNumThreads(1)
-
-    bgr = _decode_bgr(image_bytes)
-    if bgr is None:
-        return None, 0.0
-
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
     all_counts: list[int] = []
-    for mask in _generate_masks(bgr):
-        all_counts.extend(_count_from_mask(mask, expected))
+    for invert in (False, True):
+        flag = cv2.THRESH_BINARY_INV if invert else cv2.THRESH_BINARY
+        _, mask = cv2.threshold(blur, 0, 255, flag + cv2.THRESH_OTSU)
+        all_counts.extend(_count_from_mask(_refine_mask(mask), expected))
 
     if not all_counts:
         return None, 0.0

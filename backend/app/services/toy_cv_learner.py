@@ -227,7 +227,13 @@ def learn_from_photo_service(
 
     session = session_scope()
     try:
-        toy = learn_from_photo(session, toy_id, image_bytes, confirmed_piece_count)
+        toy = learn_from_photo(
+            session,
+            toy_id,
+            image_bytes,
+            confirmed_piece_count,
+            volunteer_complete=volunteer_complete,
+        )
         if toy is None:
             return None
         session.commit()

@@ -57,7 +57,7 @@ async def identify_pieces(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large.")
     try:
-        estimate = estimate_pieces_service(toy_id, data)
+        estimate = await asyncio.to_thread(estimate_pieces_service, toy_id, data)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -88,13 +88,19 @@ async def learn_from_photo_endpoint(
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Image is too large.")
     volunteer_complete = is_complete_set.strip().lower() in {"1", "true", "yes"}
-    result = await asyncio.to_thread(
-        learn_from_photo_service,
-        toy_id,
-        data,
-        confirmed_piece_count,
-        volunteer_complete=volunteer_complete,
-    )
+    try:
+        result = await asyncio.to_thread(
+            learn_from_photo_service,
+            toy_id,
+            data,
+            confirmed_piece_count,
+            volunteer_complete=volunteer_complete,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Photo learning error: {exc}",
+        ) from exc
     if result is None:
         raise HTTPException(
             status_code=422,

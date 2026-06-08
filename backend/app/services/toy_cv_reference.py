@@ -101,6 +101,14 @@ def predict_from_reference(
     ):
         estimated = ref_count
         confidence = 0.9 if source == "checkin" else 0.8
+    elif (
+        source == "checkin"
+        and layout_sim >= 0.45
+        and ref_fg_ratio is not None
+        and abs(features.fg_ratio - ref_fg_ratio) <= 0.18
+    ):
+        estimated = ref_count
+        confidence = 0.86
     elif layout_sim >= 0.68 and ratio_estimates:
         spread = max(ratio_estimates) - min(ratio_estimates)
         if spread <= max(2.5, ref_count * 0.12):
