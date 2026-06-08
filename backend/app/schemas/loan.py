@@ -80,6 +80,7 @@ def loan_out_from_model(
     loan: Loan,
     *,
     max_renewals: int | None = None,
+    renewals_remaining: int | None = None,
 ) -> LoanOut:
     toy = getattr(loan, "toy", None)
     toy_name = toy.name if toy is not None else None
@@ -93,8 +94,7 @@ def loan_out_from_model(
     profile = getattr(loan, "profile", None)
     if profile is not None and profile.full_name:
         member_name = profile.full_name
-    renewals_remaining = None
-    if max_renewals is not None:
+    if renewals_remaining is None and max_renewals is not None:
         renewals_remaining = max(0, max_renewals - loan.renewal_count)
     return LoanOut(
         loan_id=str(loan.id),

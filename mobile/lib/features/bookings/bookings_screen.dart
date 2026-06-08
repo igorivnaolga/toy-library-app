@@ -55,6 +55,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
         context,
         controller,
         title: "Change pickup day",
+        toyId: item.toyId,
       );
       if (selected == null || !mounted) return;
       await controller.rescheduleBooking(item.bookingId, selected.date);

@@ -5,6 +5,9 @@ from app.core.library_sessions import (
     LIBRARY_TIMEZONE,
     allowed_pickup_dates,
     earliest_bookable_date,
+    first_session_after_loan_due,
+    first_session_after_reservation_hold,
+    first_session_on_or_after,
     format_pickup_label,
     is_allowed_pickup_date,
     session_end_datetime,
@@ -29,14 +32,14 @@ def test_earliest_bookable_skips_today_after_session_end() -> None:
     assert earliest_bookable_date(now=now) == date(2026, 5, 23)
 
 
-def test_allowed_pickup_dates_four_week_horizon() -> None:
-    # Monday 18 May 2026 — horizon through 15 June; Wed/Sat only.
+def test_allowed_pickup_dates_six_month_horizon() -> None:
+    # Monday 18 May 2026 — horizon through 18 November; Wed/Sat only.
     now = _dt(2026, 5, 18, 9, 0)
     dates = allowed_pickup_dates(now=now)
     assert dates[0] == date(2026, 5, 20)  # Wed
     assert all(d.weekday() in (2, 5) for d in dates)
-    assert dates[-1] <= date(2026, 6, 15)
-    assert len(dates) >= 7
+    assert dates[-1] <= date(2026, 11, 18)
+    assert len(dates) >= 40
 
 
 def test_is_allowed_rejects_non_session_weekday() -> None:
@@ -51,3 +54,29 @@ def test_format_pickup_label() -> None:
 def test_session_end_datetime() -> None:
     end = session_end_datetime(date(2026, 5, 23))
     assert end.hour == 14 and end.minute == 0
+
+
+def test_first_session_on_or_after_due_on_wednesday() -> None:
+    assert first_session_on_or_after(date(2026, 5, 20)) == date(2026, 5, 20)
+
+
+def test_first_session_on_or_after_due_on_friday() -> None:
+    assert first_session_on_or_after(date(2026, 5, 22)) == date(2026, 5, 23)
+
+
+def test_first_session_after_loan_due_on_session_day() -> None:
+    # Saturday due date → next Wednesday, not the same Saturday.
+    assert first_session_after_loan_due(date(2026, 7, 11)) == date(2026, 7, 15)
+
+
+def test_first_session_after_loan_due_before_next_session() -> None:
+    # Friday due date → following Saturday session.
+    assert first_session_after_loan_due(date(2026, 7, 10)) == date(2026, 7, 11)
+
+
+def test_first_session_after_reservation_hold() -> None:
+    # Reserved Monday 8 June → first pickup from Wednesday 24 June.
+    assert first_session_after_reservation_hold(
+        date(2026, 6, 8),
+        hold_days=14,
+    ) == date(2026, 6, 24)

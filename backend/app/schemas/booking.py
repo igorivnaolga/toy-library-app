@@ -21,7 +21,7 @@ class BookingCreate(BaseModel):
 
     toy_id: str = Field(min_length=1, max_length=32, description="Catalog toy_id.")
     pickup_date: date = Field(
-        description="Library session day for pickup (Wednesday or Saturday, within 4 weeks).",
+        description="Library session day for pickup (Wednesday or Saturday, within 6 months).",
     )
 
 
@@ -29,7 +29,7 @@ class BookingReschedule(BaseModel):
     """Member changes pickup day on a pending booking."""
 
     pickup_date: date = Field(
-        description="New library session day (Wednesday or Saturday, within 4 weeks).",
+        description="New library session day (Wednesday or Saturday, within 6 months).",
     )
 
 

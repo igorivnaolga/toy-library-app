@@ -29,6 +29,7 @@ from app.services.loan_service import (
     list_active_loans_service,
     list_my_loans_service,
     renew_loan_for_user,
+    renewals_remaining_for_loan,
 )
 
 router = APIRouter()
@@ -48,11 +49,21 @@ def _http_error(exc: LoanError) -> HTTPException:
         "loan_not_active",
         "loan_not_renewable",
         "renewals_exhausted",
+        "toy_booked_by_other",
         "pickup_not_due",
         "invalid_missing_pieces",
     }:
         status = 409
     return HTTPException(status_code=status, detail=exc.message)
+
+
+def _loan_out(db: Session, loan) -> LoanOut:
+    max_renewals = _max_renewals_for_loan(db, loan)
+    return loan_out_from_model(
+        loan,
+        max_renewals=max_renewals,
+        renewals_remaining=renewals_remaining_for_loan(db, loan, max_renewals),
+    )
 
 
 def _max_renewals_for_loan(db: Session, loan) -> int | None:
@@ -74,12 +85,7 @@ def list_my_loans(
     active_only: bool = Query(False, description="Return only active loans."),
 ) -> LoansListResponse:
     rows = list_my_loans_service(db, principal.id, active_only=active_only)
-    return LoansListResponse(
-        data=[
-            loan_out_from_model(row, max_renewals=_max_renewals_for_loan(db, row))
-            for row in rows
-        ],
-    )
+    return LoansListResponse(data=[_loan_out(db, row) for row in rows])
 
 
 @router.get("/active", response_model=LoansListResponse)
@@ -89,12 +95,7 @@ def list_active_loans(
 ) -> LoansListResponse:
     """Volunteer desk: all toys currently on loan."""
     rows = list_active_loans_service(db)
-    return LoansListResponse(
-        data=[
-            loan_out_from_model(row, max_renewals=_max_renewals_for_loan(db, row))
-            for row in rows
-        ],
-    )
+    return LoansListResponse(data=[_loan_out(db, row) for row in rows])
 
 
 @router.post("/check-out/booking", response_model=LoanOut)
@@ -110,7 +111,7 @@ def check_out_booking(
     except ValueError as e:
         raise HTTPException(status_code=422, detail="Invalid booking_id") from e
     db.commit()
-    return loan_out_from_model(loan, max_renewals=_max_renewals_for_loan(db, loan))
+    return _loan_out(db, loan)
 
 
 @router.post("/check-out/walk-in", response_model=LoanOut)
@@ -130,7 +131,7 @@ def check_out_walk_in(
     except ValueError as e:
         raise HTTPException(status_code=422, detail="Invalid user_id") from e
     db.commit()
-    return loan_out_from_model(loan, max_renewals=_max_renewals_for_loan(db, loan))
+    return _loan_out(db, loan)
 
 
 @router.post("/{loan_id}/check-in", response_model=LoanOut)
@@ -146,7 +147,7 @@ def check_in(
     except LoanError as e:
         raise _http_error(e) from e
     db.commit()
-    return loan_out_from_model(loan, max_renewals=_max_renewals_for_loan(db, loan))
+    return _loan_out(db, loan)
 
 
 @router.post("/{loan_id}/renew", response_model=LoanOut)
@@ -160,4 +161,4 @@ def renew_loan(
     except LoanError as e:
         raise _http_error(e) from e
     db.commit()
-    return loan_out_from_model(loan, max_renewals=_max_renewals_for_loan(db, loan))
+    return _loan_out(db, loan)

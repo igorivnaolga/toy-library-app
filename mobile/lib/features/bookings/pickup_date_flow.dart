@@ -9,8 +9,9 @@ Future<PickupDateOption?> choosePickupDate(
   BuildContext context,
   BookingsController bookings, {
   String title = "Choose pickup day",
+  String? toyId,
 }) async {
-  final options = await bookings.loadPickupDates();
+  final options = await bookings.loadPickupDates(toyId: toyId);
   if (!context.mounted) return null;
   if (options.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(

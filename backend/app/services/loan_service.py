@@ -15,6 +15,7 @@ from app.models.loan import DEFAULT_LOAN_DAYS, LOAN_STATUS_ACTIVE, Loan
 from app.models.toy import Toy
 from app.repositories.booking_repo import (
     get_booking_by_id,
+    get_pending_booking_for_toy,
     mark_booking_completed,
 )
 from app.repositories.loan_repo import (
@@ -30,6 +31,7 @@ from app.repositories.toy_repo import get_toy_by_id
 
 _TOY_STATUS_IN_LIBRARY = "In library"
 _TOY_STATUS_ON_LOAN = "On loan"
+_TOY_STATUS_RESERVED = "Reserved"
 
 
 class LoanError(Exception):
@@ -57,6 +59,21 @@ def _is_overdue(loan: Loan, today: date | None = None) -> bool:
         return False
     ref = today or library_now().date()
     return loan.due_date < ref
+
+
+def renewals_remaining_for_loan(
+    session: Session,
+    loan: Loan,
+    max_renewals: int | None,
+) -> int | None:
+    """Category renewals left, or zero when another member booked this toy."""
+    if max_renewals is None:
+        return None
+    remaining = max(0, max_renewals - loan.renewal_count)
+    pending = get_pending_booking_for_toy(session, loan.toy_id)
+    if pending is not None and pending.user_id != loan.user_id:
+        return 0
+    return remaining
 
 
 def _max_renewals_for_toy(session: Session, toy: Toy) -> int:
@@ -189,7 +206,10 @@ def check_in_loan(
         toy.missing_pieces = missing_pieces
     mark_loan_returned(session, loan)
     if toy is not None:
-        toy.status = _TOY_STATUS_IN_LIBRARY
+        if get_pending_booking_for_toy(session, toy.toy_id) is not None:
+            toy.status = _TOY_STATUS_RESERVED
+        else:
+            toy.status = _TOY_STATUS_IN_LIBRARY
     session.flush()
 
     loaded = get_loan_by_id(session, loan.id)
@@ -224,6 +244,13 @@ def renew_loan_for_user(
         raise LoanError(
             "renewals_exhausted",
             f"This toy category allows at most {max_renewals} renewal(s).",
+        )
+
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    if pending is not None and pending.user_id != loan.user_id:
+        raise LoanError(
+            "toy_booked_by_other",
+            "Someone has booked this toy after your due date — renewal is not available.",
         )
 
     new_due = loan.due_date + timedelta(days=DEFAULT_LOAN_DAYS)

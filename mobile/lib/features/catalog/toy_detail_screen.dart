@@ -67,7 +67,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
 
   Future<void> _startBookFlow(ToyItem toy) async {
     final bookings = context.read<BookingsController>();
-    final selected = await choosePickupDate(context, bookings);
+    final selected = await choosePickupDate(context, bookings, toyId: toy.toyId);
     if (selected == null || !mounted) return;
 
     setState(() => _bookingInProgress = true);
@@ -98,6 +98,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
       context,
       bookings,
       title: "Change pickup day",
+      toyId: toy.toyId,
     );
     if (selected == null || !mounted) return;
 

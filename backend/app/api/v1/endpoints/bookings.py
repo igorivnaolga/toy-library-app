@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_booking_member, require_on_duty_desk
@@ -44,19 +44,28 @@ def _http_error(exc: BookingError) -> HTTPException:
         "toy_already_reserved",
         "booking_not_cancellable",
         "booking_not_reschedulable",
+        "toy_on_loan_to_you",
     }:
         status = 409
-    elif exc.code == "invalid_pickup_date":
+    elif exc.code in {"invalid_pickup_date", "pickup_before_loan_due"}:
         status = 422
     return HTTPException(status_code=status, detail=exc.message)
 
 
 @router.get("/pickup-dates", response_model=PickupDatesResponse)
 def list_pickup_dates(
+    db: Session = Depends(get_db),
     _: Principal = Depends(_require_member),
+    toy_id: str | None = Query(
+        None,
+        description=(
+            "When set, adjusts the window for on-loan toys (first session after loan ends) "
+            "and reserved toys (later of loan-end or two-week hold, plus booked pickup)."
+        ),
+    ),
 ) -> PickupDatesResponse:
-    """Wed/Sat session dates available for new bookings (4-week horizon)."""
-    rows = list_pickup_date_options()
+    """Wed/Sat session dates available for new bookings (6-month horizon)."""
+    rows = list_pickup_date_options(db, toy_id=toy_id)
     return PickupDatesResponse(
         data=[PickupDateOption.model_validate(row) for row in rows],
     )

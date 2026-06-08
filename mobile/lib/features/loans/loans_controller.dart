@@ -264,6 +264,9 @@ String loanActionErrorMessage(Object error) {
   if (error is ApiException) {
     switch (error.statusCode) {
       case 409:
+        if (error.message.toLowerCase().contains("booked")) {
+          return error.message;
+        }
         return "This toy is not available for that action right now.";
       case 404:
         return "Loan or booking not found.";

@@ -38,7 +38,9 @@ class ToyDetailActionBar extends StatelessWidget {
   final VoidCallback onCancelBooking;
   final LoanItem? myActiveLoan;
 
-  bool get _isAvailable => toy.availability == "available";
+  bool get _canBook =>
+      toy.availability == "available" ||
+      (toy.availability == "on_loan" && myActiveLoan == null);
 
   @override
   Widget build(BuildContext context) {
@@ -99,13 +101,20 @@ class ToyDetailActionBar extends StatelessWidget {
                         ? null
                         : onCancelBooking,
                   ),
-                ] else if (_isAvailable)
+                ] else if (_canBook) ...[
+                  if (toy.availability == "on_loan") ...[
+                    const ToyBookingHintBanner(
+                      message:
+                          "This toy is on loan — choose a pickup day from the next open session after it is due back.",
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   BrandChipButton(
                     label: "Book this toy",
                     large: true,
                     onPressed: onBook,
-                  )
-                else
+                  ),
+                ] else
                   ToyUnavailableBanner(
                     availability: toy.availability,
                     myActiveLoan: myActiveLoan,

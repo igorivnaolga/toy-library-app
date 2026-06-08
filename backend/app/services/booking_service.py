@@ -3,22 +3,31 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.availability import AVAILABLE, RESERVED, normalize_availability
+from app.core.availability import AVAILABLE, ON_LOAN, RESERVED, normalize_availability
 from app.core.library_sessions import (
+    LIBRARY_TIMEZONE,
     allowed_pickup_dates,
+    bookable_horizon_end,
+    earliest_bookable_date,
+    first_session_after_loan_due,
+    first_session_after_reservation_hold,
+    first_session_on_or_after,
     format_pickup_label,
-    is_allowed_pickup_date,
     is_library_session_day,
+    latest_bookable_date,
     library_now,
     session_end_datetime,
+    session_pickup_dates_between,
 )
+from app.repositories.loan_repo import get_active_loan_for_toy
 from app.models.booking import BOOKING_STATUS_PENDING, Booking
+from app.models.loan import DEFAULT_LOAN_DAYS
 from app.models.toy import Toy
 from app.repositories.booking_repo import (
     create_booking,
@@ -36,6 +45,7 @@ from app.repositories.toy_repo import _db_toy_count, get_toy_by_id
 
 # Match seed CSV labels; ``normalize_availability`` maps these to available/reserved.
 _TOY_STATUS_IN_LIBRARY = "In library"
+_TOY_STATUS_ON_LOAN = "On loan"
 _TOY_STATUS_RESERVED = "Reserved"
 
 
@@ -57,8 +67,123 @@ def _get_toy_row(session: Session, toy_id: str) -> Toy | None:
 
 def _release_toy_if_reserved(session: Session, toy_id: str) -> None:
     toy = _get_toy_row(session, toy_id)
-    if toy is not None and normalize_availability(toy.status) == RESERVED:
+    if toy is None:
+        return
+    if normalize_availability(toy.status) != RESERVED:
+        return
+    if get_active_loan_for_toy(session, toy_id) is not None:
+        toy.status = _TOY_STATUS_ON_LOAN
+    else:
         toy.status = _TOY_STATUS_IN_LIBRARY
+
+
+def _earliest_pickup_after_active_loan(session: Session, toy: Toy) -> date | None:
+    """First session after loan due date when the toy still has an active loan."""
+    loan = get_active_loan_for_toy(session, toy.toy_id)
+    if loan is None:
+        return None
+    return first_session_after_loan_due(loan.due_date)
+
+
+def _reservation_day_for_toy(session: Session, toy: Toy) -> date | None:
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    if pending is None:
+        return None
+    created_at = getattr(pending, "created_at", None)
+    if not isinstance(created_at, datetime):
+        return None
+    return created_at.astimezone(LIBRARY_TIMEZONE).date()
+
+
+def _earliest_pickup_after_reservation(session: Session, toy: Toy) -> date | None:
+    """First session after the two-week hold from when the toy was reserved."""
+    reservation_day = _reservation_day_for_toy(session, toy)
+    if reservation_day is None:
+        return None
+    return first_session_after_reservation_hold(
+        reservation_day,
+        hold_days=DEFAULT_LOAN_DAYS,
+    )
+
+
+def _earliest_pickup_for_toy(session: Session, toy: Toy) -> date | None:
+    """Earliest allowed pickup from loan-end and/or reservation-hold rules."""
+    candidates: list[date] = []
+
+    availability = normalize_availability(toy.status)
+    if availability in {ON_LOAN, RESERVED}:
+        loan_earliest = _earliest_pickup_after_active_loan(session, toy)
+        if loan_earliest is not None:
+            candidates.append(loan_earliest)
+
+    if availability == RESERVED or (
+        availability == ON_LOAN
+        and get_pending_booking_for_toy(session, toy.toy_id) is not None
+    ):
+        reservation_earliest = _earliest_pickup_after_reservation(session, toy)
+        if reservation_earliest is not None:
+            candidates.append(reservation_earliest)
+
+    if not candidates:
+        return None
+    return max(candidates)
+
+
+def _validate_pickup_for_toy(
+    session: Session,
+    toy: Toy,
+    pickup_date: date,
+) -> None:
+    """Enforce loan-end and reservation-hold pickup constraints."""
+    earliest = _earliest_pickup_for_toy(session, toy)
+    if earliest is not None and pickup_date < earliest:
+        raise BookingError(
+            "pickup_before_loan_due",
+            f"Pickup day must be on or after {format_pickup_label(earliest)}.",
+        )
+
+
+def _anchor_pickup_for_pending_booking(session: Session, toy: Toy) -> date | None:
+    """Session anchor for a reserved toy's existing pending booking."""
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    if pending is None or pending.pickup_date is None:
+        return None
+    return first_session_on_or_after(pending.pickup_date)
+
+
+def _pickup_window_for_toy(
+    session: Session,
+    toy: Toy | None,
+    *,
+    now: datetime | None = None,
+) -> tuple[date, date]:
+    """Bookable pickup range; extends 6 months from loan end or reserved pickup when needed."""
+    now = now or library_now()
+    start = earliest_bookable_date(now=now)
+    end = latest_bookable_date(now=now)
+    if toy is None:
+        return start, end
+
+    earliest = _earliest_pickup_for_toy(session, toy)
+    if earliest is not None:
+        start = max(start, earliest)
+        end = max(end, bookable_horizon_end(earliest))
+
+    if normalize_availability(toy.status) == RESERVED:
+        anchor = _anchor_pickup_for_pending_booking(session, toy)
+        if anchor is not None:
+            end = max(end, bookable_horizon_end(anchor))
+    return start, end
+
+
+def _pickup_dates_for_toy(
+    session: Session,
+    toy: Toy | None,
+    *,
+    now: datetime | None = None,
+) -> list[date]:
+    start, end = _pickup_window_for_toy(session, toy, now=now)
+    return session_pickup_dates_between(start, end)
 
 
 def _run_booking_maintenance(session: Session) -> None:
@@ -79,10 +204,22 @@ def expire_missed_pickup_bookings(session: Session) -> None:
     session.flush()
 
 
-def list_pickup_date_options() -> list[dict[str, str | date]]:
-    """Public pickup choices for the booking UI (next 4 weeks of Wed/Sat)."""
+def list_pickup_date_options(
+    session: Session | None = None,
+    *,
+    toy_id: str | None = None,
+) -> list[dict[str, str | date]]:
+    """Public pickup choices for the booking UI (Wed/Sat within the bookable window)."""
+    toy = None
+    if session is not None and toy_id:
+        toy = _get_toy_row(session, toy_id.strip())
+    if session is not None:
+        dates = _pickup_dates_for_toy(session, toy)
+    else:
+        dates = allowed_pickup_dates()
+
     options: list[dict[str, str | date]] = []
-    for day in allowed_pickup_dates():
+    for day in dates:
         weekday = "wednesday" if day.weekday() == 2 else "saturday"
         options.append(
             {
@@ -94,16 +231,28 @@ def list_pickup_date_options() -> list[dict[str, str | date]]:
     return options
 
 
-def _validate_pickup_date(pickup_date: date) -> None:
+def _validate_pickup_date(
+    pickup_date: date,
+    *,
+    session: Session | None = None,
+    toy: Toy | None = None,
+) -> None:
     if not is_library_session_day(pickup_date):
         raise BookingError(
             "invalid_pickup_date",
             "Pickup day must be a library session (Wednesday or Saturday).",
         )
-    if not is_allowed_pickup_date(pickup_date):
+    if session is not None and toy is not None:
+        _validate_pickup_for_toy(session, toy, pickup_date)
+    allowed = (
+        _pickup_dates_for_toy(session, toy)
+        if session is not None
+        else allowed_pickup_dates()
+    )
+    if pickup_date not in allowed:
         raise BookingError(
             "invalid_pickup_date",
-            "Pickup day must be within the next 4 weeks on an open library session.",
+            "Pickup day must be within the booking window on an open library session.",
         )
 
 
@@ -116,8 +265,6 @@ def create_booking_for_user(
     """Reserve an available toy for the member; updates toy status to reserved."""
     _run_booking_maintenance(session)
 
-    _validate_pickup_date(pickup_date)
-
     toy = _get_toy_row(session, toy_id)
     if toy is None:
         if _db_toy_count() == 0 and get_toy_by_id(toy_id) is not None:
@@ -128,7 +275,8 @@ def create_booking_for_user(
             )
         raise BookingError("toy_not_found", "Toy not found.")
 
-    if normalize_availability(toy.status) != AVAILABLE:
+    availability = normalize_availability(toy.status)
+    if availability not in {AVAILABLE, ON_LOAN}:
         raise BookingError(
             "toy_not_available",
             "This toy is not available for booking right now.",
@@ -140,6 +288,21 @@ def create_booking_for_user(
             "This toy already has a pending booking.",
         )
 
+    if availability == ON_LOAN:
+        loan = get_active_loan_for_toy(session, toy.toy_id)
+        if loan is None:
+            raise BookingError(
+                "toy_not_available",
+                "This toy is not available for booking right now.",
+            )
+        if loan.user_id == user_id:
+            raise BookingError(
+                "toy_on_loan_to_you",
+                "Return this toy before booking it again.",
+            )
+
+    _validate_pickup_date(pickup_date, session=session, toy=toy)
+
     try:
         booking = create_booking(
             session,
@@ -147,7 +310,8 @@ def create_booking_for_user(
             toy_id=toy.toy_id,
             pickup_date=pickup_date,
         )
-        toy.status = _TOY_STATUS_RESERVED
+        if availability == AVAILABLE:
+            toy.status = _TOY_STATUS_RESERVED
         session.flush()
     except IntegrityError as e:
         session.rollback()
@@ -197,7 +361,6 @@ def reschedule_booking_for_user(
 ) -> Booking:
     """Change pickup day on a pending booking owned by the member."""
     _run_booking_maintenance(session)
-    _validate_pickup_date(pickup_date)
 
     booking = get_booking_for_user(session, booking_id, user_id)
     if booking is None:
@@ -208,6 +371,9 @@ def reschedule_booking_for_user(
             "booking_not_reschedulable",
             "Only pending bookings can change pickup day.",
         )
+
+    toy = booking.toy or _get_toy_row(session, booking.toy_id)
+    _validate_pickup_date(pickup_date, session=session, toy=toy)
 
     booking.pickup_date = pickup_date
     session.flush()

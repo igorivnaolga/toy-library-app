@@ -43,8 +43,16 @@ class BookingsController extends ChangeNotifier {
     }
   }
 
-  Future<List<PickupDateOption>> loadPickupDates() async {
-    final json = await _client.getJson("/api/v1/bookings/pickup-dates");
+  Future<List<PickupDateOption>> loadPickupDates({String? toyId}) async {
+    final query = <String, String>{};
+    final id = toyId?.trim();
+    if (id != null && id.isNotEmpty) {
+      query["toy_id"] = id;
+    }
+    final json = await _client.getJson(
+      "/api/v1/bookings/pickup-dates",
+      query.isEmpty ? null : query,
+    );
     final raw = json["data"];
     if (raw is! List<dynamic>) {
       return const [];
