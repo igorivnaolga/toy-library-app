@@ -13,25 +13,39 @@ import "catalog_provider.dart";
 Future<ToyItem?> showToyEditSheet(
   BuildContext context, {
   required ToyItem toy,
+}) {
+  return showToyFormSheet(context, toy: toy);
+}
+
+/// Admin form to add a toy via `POST /api/v1/admin/toys`.
+Future<ToyItem?> showToyCreateSheet(BuildContext context) {
+  return showToyFormSheet(context);
+}
+
+Future<ToyItem?> showToyFormSheet(
+  BuildContext context, {
+  ToyItem? toy,
 }) async {
   return showModalBottomSheet<ToyItem>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => _ToyEditSheet(toy: toy),
+    builder: (context) => _ToyFormSheet(toy: toy),
   );
 }
 
-class _ToyEditSheet extends StatefulWidget {
-  const _ToyEditSheet({required this.toy});
+class _ToyFormSheet extends StatefulWidget {
+  const _ToyFormSheet({this.toy});
 
-  final ToyItem toy;
+  final ToyItem? toy;
+
+  bool get isCreate => toy == null;
 
   @override
-  State<_ToyEditSheet> createState() => _ToyEditSheetState();
+  State<_ToyFormSheet> createState() => _ToyFormSheetState();
 }
 
-class _ToyEditSheetState extends State<_ToyEditSheet> {
+class _ToyFormSheetState extends State<_ToyFormSheet> {
   late final TextEditingController _name;
   late final TextEditingController _category;
   late final TextEditingController _ageRange;
@@ -40,23 +54,28 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
   late final TextEditingController _description;
   late final TextEditingController _totalPieces;
   late final TextEditingController _missingPieces;
+  late final TextEditingController _hireCharge;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     final t = widget.toy;
-    _name = TextEditingController(text: t.name);
-    _category = TextEditingController(text: t.category ?? "");
-    _ageRange = TextEditingController(text: t.ageRange ?? "");
-    _status = TextEditingController(text: t.status ?? "");
-    _manufacturer = TextEditingController(text: t.manufacturer ?? "");
-    _description = TextEditingController(text: t.description ?? "");
+    _name = TextEditingController(text: t?.name ?? "");
+    _category = TextEditingController(text: t?.category ?? "");
+    _ageRange = TextEditingController(text: t?.ageRange ?? "");
+    _status = TextEditingController(text: t?.status ?? "In library");
+    _manufacturer = TextEditingController(text: t?.manufacturer ?? "");
+    _description = TextEditingController(text: t?.description ?? "");
     _totalPieces = TextEditingController(
-      text: t.totalPieces?.toString() ?? "",
+      text: t?.totalPieces?.toString() ?? "",
     );
     _missingPieces = TextEditingController(
-      text: t.missingPieces?.toString() ?? "",
+      text: t?.missingPieces?.toString() ?? "",
+    );
+    final cents = t?.rentalPriceCents;
+    _hireCharge = TextEditingController(
+      text: cents == null ? "" : (cents / 100).toStringAsFixed(2),
     );
   }
 
@@ -70,6 +89,7 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
     _description.dispose();
     _totalPieces.dispose();
     _missingPieces.dispose();
+    _hireCharge.dispose();
     super.dispose();
   }
 
@@ -84,6 +104,20 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
       return -1;
     }
     return parsed;
+  }
+
+  int? _parseHireChargeCents() {
+    final raw = _hireCharge.text.trim();
+    if (raw.isEmpty) return null;
+    final normalized = raw.replaceAll("\$", "").trim();
+    final parsed = double.tryParse(normalized);
+    if (parsed == null || parsed < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Hire charge must be a dollar amount.")),
+      );
+      return -1;
+    }
+    return (parsed * 100).round();
   }
 
   Future<void> _save() async {
@@ -109,23 +143,41 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
       );
       return;
     }
+    final rentalPriceCents = _parseHireChargeCents();
+    if (rentalPriceCents == -1) return;
 
     setState(() => _saving = true);
     final catalog = context.read<CatalogController>();
     try {
-      final updated = await catalog.updateToy(
-        widget.toy.toyId,
-        name: _name.text.trim(),
-        category: _category.text.trim(),
-        ageRange: _ageRange.text.trim(),
-        status: _status.text.trim(),
-        manufacturer: _manufacturer.text.trim(),
-        description: _description.text.trim(),
-        totalPieces: totalPieces,
-        missingPieces: missingPieces,
-      );
+      final ToyItem saved;
+      if (widget.isCreate) {
+        saved = await catalog.createToy(
+          name: _name.text.trim(),
+          category: _category.text.trim(),
+          ageRange: _ageRange.text.trim(),
+          status: _status.text.trim(),
+          manufacturer: _manufacturer.text.trim(),
+          description: _description.text.trim(),
+          totalPieces: totalPieces,
+          missingPieces: missingPieces,
+          rentalPriceCents: rentalPriceCents,
+        );
+      } else {
+        saved = await catalog.updateToy(
+          widget.toy!.toyId,
+          name: _name.text.trim(),
+          category: _category.text.trim(),
+          ageRange: _ageRange.text.trim(),
+          status: _status.text.trim(),
+          manufacturer: _manufacturer.text.trim(),
+          description: _description.text.trim(),
+          totalPieces: totalPieces,
+          missingPieces: missingPieces,
+          rentalPriceCents: rentalPriceCents,
+        );
+      }
       if (!mounted) return;
-      Navigator.pop(context, updated);
+      Navigator.pop(context, saved);
     } catch (e) {
       if (!mounted) return;
       final message = e is ApiException ? e.message : e.toString();
@@ -149,14 +201,16 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Edit toy",
+              widget.isCreate ? "Add toy" : "Edit toy",
               style: context.screenTitle,
             ),
-            const SizedBox(height: 4),
-            Text(
-              widget.toy.toyId,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            if (!widget.isCreate) ...[
+              const SizedBox(height: 4),
+              Text(
+                widget.toy!.toyId,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 16),
             TextField(
               controller: _name,
@@ -239,9 +293,24 @@ class _ToyEditSheetState extends State<_ToyEditSheet> {
                 helperText: "Leave blank if none or unknown",
               ),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _hireCharge,
+              style: fieldTextStyle(context),
+              cursorColor: fieldCursorColor(context),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: labeledInputDecoration(
+                context,
+                labelText: "Hire charge (NZD)",
+                helperText: "e.g. 1.00 — shown on shelf labels",
+              ),
+            ),
             const SizedBox(height: 20),
             BrandChipButton(
-              label: _saving ? "Saving…" : "Save changes",
+              label: _saving
+                  ? (widget.isCreate ? "Adding…" : "Saving…")
+                  : (widget.isCreate ? "Add toy" : "Save changes"),
               large: true,
               onPressed: _saving ? null : _save,
             ),

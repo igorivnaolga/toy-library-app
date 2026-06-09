@@ -57,6 +57,20 @@ class ToysListResponse(BaseModel):
     meta: ToysListMeta
 
 
+class ToyCreate(BaseModel):
+    """Admin creates a new DB-backed toy (toy_id assigned by the server)."""
+
+    name: str = Field(min_length=1)
+    category: str | None = None
+    age_range: str | None = None
+    status: str | None = Field(default="In library")
+    manufacturer: str | None = None
+    description: str | None = None
+    total_pieces: int | None = Field(default=None, ge=0)
+    missing_pieces: int | None = Field(default=None, ge=0)
+    rental_price_cents: int | None = Field(default=None, ge=0)
+
+
 class ToyUpdate(BaseModel):
     """Admin edits to catalog metadata (DB-backed toys only)."""
 
@@ -68,6 +82,7 @@ class ToyUpdate(BaseModel):
     description: str | None = None
     total_pieces: int | None = Field(default=None, ge=0)
     missing_pieces: int | None = Field(default=None, ge=0)
+    rental_price_cents: int | None = Field(default=None, ge=0)
 
 
 class ToyPiecesUpdate(BaseModel):

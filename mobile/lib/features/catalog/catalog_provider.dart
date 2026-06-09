@@ -107,6 +107,38 @@ class CatalogController extends ChangeNotifier {
     return ToyItem.fromJson(json);
   }
 
+  Future<ToyItem> createToy({
+    required String name,
+    String? category,
+    String? ageRange,
+    String? status,
+    String? manufacturer,
+    String? description,
+    int? totalPieces,
+    int? missingPieces,
+    int? rentalPriceCents,
+  }) async {
+    final body = <String, dynamic>{
+      "name": name,
+      if (category != null && category.isNotEmpty) "category": category,
+      if (ageRange != null && ageRange.isNotEmpty) "age_range": ageRange,
+      if (status != null && status.isNotEmpty) "status": status,
+      if (manufacturer != null && manufacturer.isNotEmpty)
+        "manufacturer": manufacturer,
+      if (description != null && description.isNotEmpty)
+        "description": description,
+      if (totalPieces != null) "total_pieces": totalPieces,
+      if (missingPieces != null) "missing_pieces": missingPieces,
+      if (rentalPriceCents != null) "rental_price_cents": rentalPriceCents,
+    };
+    final json = await _client.postJson("/api/v1/admin/toys", body);
+    final created = ToyItem.fromJson(json);
+    toys = [created, ...toys];
+    total += 1;
+    notifyListeners();
+    return created;
+  }
+
   Future<ToyItem> updateToy(
     String toyId, {
     required String name,
@@ -117,6 +149,7 @@ class CatalogController extends ChangeNotifier {
     String? description,
     int? totalPieces,
     int? missingPieces,
+    int? rentalPriceCents,
   }) async {
     final body = <String, dynamic>{
       "name": name,
@@ -127,6 +160,7 @@ class CatalogController extends ChangeNotifier {
       if (description != null) "description": description,
       if (totalPieces != null) "total_pieces": totalPieces,
       if (missingPieces != null) "missing_pieces": missingPieces,
+      if (rentalPriceCents != null) "rental_price_cents": rentalPriceCents,
     };
     final json =
         await _client.patchJson("/api/v1/admin/toys/$toyId", body);

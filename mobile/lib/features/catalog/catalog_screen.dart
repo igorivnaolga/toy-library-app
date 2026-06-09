@@ -12,6 +12,7 @@ import "../loans/loans_controller.dart";
 import "catalog_provider.dart";
 import "toy_catalog_list_tile.dart";
 import "toy_detail_screen.dart";
+import "toy_edit_sheet.dart";
 
 /// Catalog: loads `GET /api/v1/categories` and paged `GET /api/v1/toys` via [CatalogController].
 class CatalogScreen extends StatefulWidget {
@@ -258,10 +259,45 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
+  Future<void> _addToy(BuildContext context) async {
+    final created = await showToyCreateSheet(context);
+    if (!context.mounted || created == null) return;
+    await context.read<CatalogController>().refresh();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Toy ${created.toyId} added."),
+        action: SnackBarAction(
+          label: "Open",
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ToyDetailScreen(toyId: created.toyId),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
+    final isAdmin = context.watch<AuthStore>().isAdmin;
+
+    return Scaffold(
+      primary: false,
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => _addToy(context),
+              backgroundColor: kBrandYellow,
+              foregroundColor: kBrandOnYellow,
+              icon: const Icon(Icons.add),
+              label: const Text("Add toy"),
+            )
+          : null,
+      body: Column(
+        children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: TextField(
@@ -483,7 +519,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
             },
           ),
         ],
-      );
+      ),
+    );
   }
 }
 

@@ -49,6 +49,7 @@ def load_all_toys() -> tuple[ToyOut, ...]:
 
     toys: list[ToyOut] = []
     pieces_by_toy = load_pieces_summary()
+    rental_by_toy = load_rental_prices()
     with CSV_PATH.open("r", encoding="utf-8-sig", newline="") as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
@@ -257,6 +258,59 @@ def list_toys(
     return items[start:end], total
 
 
+def _next_toy_id(session) -> str:
+    """Next numeric toy id (CSV/SETLS ids are mostly digits)."""
+    ids = session.scalars(select(ToyORM.toy_id)).all()
+    max_num = 0
+    for tid in ids:
+        stripped = tid.strip()
+        if stripped.isdigit():
+            max_num = max(max_num, int(stripped))
+    return str(max_num + 1)
+
+
+def create_toy_in_db(
+    *,
+    name: str,
+    category_label: str | None = None,
+    age_range: str | None = None,
+    status: str | None = "In library",
+    manufacturer: str | None = None,
+    description: str | None = None,
+    total_pieces: int | None = None,
+    missing_pieces: int | None = None,
+    rental_price_cents: int | None = None,
+) -> ToyOut | None:
+    """Insert a new toy row; returns None when the database is not configured."""
+    if get_engine() is None:
+        return None
+    cleaned_name = name.strip()
+    if not cleaned_name:
+        return None
+    _validate_toy_pieces(total_pieces, missing_pieces)
+    session = session_scope()
+    try:
+        toy_id = _next_toy_id(session)
+        toy = ToyORM(
+            toy_id=toy_id,
+            name=cleaned_name,
+            category_label=category_label.strip() or None if category_label else None,
+            age_range=age_range.strip() or None if age_range else None,
+            status=(status or "In library").strip() or "In library",
+            manufacturer=manufacturer.strip() or None if manufacturer else None,
+            description=description.strip() or None if description else None,
+            total_pieces=total_pieces,
+            missing_pieces=missing_pieces,
+            rental_price_cents=rental_price_cents,
+        )
+        session.add(toy)
+        session.commit()
+        session.refresh(toy)
+        return _toy_row_to_out(toy)
+    finally:
+        session.close()
+
+
 def update_toy_in_db(
     toy_id: str,
     *,
@@ -268,6 +322,7 @@ def update_toy_in_db(
     description: str | None = None,
     total_pieces: int | None = None,
     missing_pieces: int | None = None,
+    rental_price_cents: int | None = None,
 ) -> ToyOut | None:
     """Update a DB-backed toy row; returns None when catalog is CSV-only or toy missing."""
     if _db_toy_count() == 0:
@@ -302,6 +357,8 @@ def update_toy_in_db(
             toy.total_pieces = total_pieces
         if missing_pieces is not None:
             toy.missing_pieces = missing_pieces
+        if rental_price_cents is not None:
+            toy.rental_price_cents = rental_price_cents
         _validate_toy_pieces(toy.total_pieces, toy.missing_pieces)
         session.commit()
         return _toy_row_to_out(toy)

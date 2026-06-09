@@ -15,6 +15,7 @@ import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_edit_sheet.dart";
+import "toy_label_pdf.dart";
 import "toy_availability_badge.dart";
 import "toy_id_badge.dart";
 import "toy_detail_action_bar.dart";
@@ -204,7 +205,23 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
           appBar: AppBar(
             title: const Text("Toy details"),
             actions: [
-              if (auth.isAdmin)
+              if (auth.isAdmin) ...[
+                IconButton(
+                  tooltip: "Shelf label PDF",
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  onPressed: () async {
+                    try {
+                      await shareToyLabelPdf(t);
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      final message =
+                          e is ApiException ? e.message : e.toString();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(message)),
+                      );
+                    }
+                  },
+                ),
                 IconButton(
                   tooltip: "Edit toy",
                   icon: const Icon(Icons.edit_outlined),
@@ -217,6 +234,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                     }
                   },
                 ),
+              ],
             ],
           ),
           bottomNavigationBar: auth.isAdmin
