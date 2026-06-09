@@ -39,9 +39,9 @@ from app.schemas.admin import (
 from app.schemas.booking import booking_out_from_model
 from app.schemas.duty import DutySessionOut, duty_session_out_from_model
 from app.schemas.principal import Principal
-from app.schemas.toy import ToyOut, ToyUpdate
+from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
-from app.services.toy_service import update_toy_service
+from app.services.toy_service import create_toy_service, update_toy_service
 
 router = APIRouter()
 
@@ -286,6 +286,31 @@ def update_member_profile(
     return _member_detail_out(db, profile)
 
 
+@router.post("/toys", response_model=ToyOut, status_code=201)
+def create_toy(
+    body: ToyCreate,
+    _: Principal = Depends(require_admin),
+) -> ToyOut:
+    """Add a new toy to the DB-backed catalog."""
+    created = create_toy_service(
+        name=body.name,
+        category=body.category,
+        age_range=body.age_range,
+        status=body.status,
+        manufacturer=body.manufacturer,
+        description=body.description,
+        total_pieces=body.total_pieces,
+        missing_pieces=body.missing_pieces,
+        rental_price_cents=body.rental_price_cents,
+    )
+    if created is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Catalog database is not configured; cannot create toys.",
+        )
+    return created
+
+
 @router.patch("/toys/{toy_id}", response_model=ToyOut)
 def update_toy(
     toy_id: str,
@@ -306,6 +331,7 @@ def update_toy(
         description=payload.get("description"),
         total_pieces=payload.get("total_pieces"),
         missing_pieces=payload.get("missing_pieces"),
+        rental_price_cents=payload.get("rental_price_cents"),
     )
     if updated is None:
         raise HTTPException(

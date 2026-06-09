@@ -13,6 +13,7 @@ class BookingItem {
     this.cancelledAt,
     this.memberName,
     this.memberEmail,
+    this.rentalPriceCents,
   });
 
   final String bookingId;
@@ -27,6 +28,7 @@ class BookingItem {
   final DateTime? cancelledAt;
   final String? memberName;
   final String? memberEmail;
+  final int? rentalPriceCents;
 
   bool get isPending => status.toLowerCase() == "pending";
   bool get isCancelled => status.toLowerCase() == "cancelled";
@@ -48,8 +50,11 @@ class BookingItem {
           : DateTime.tryParse(json["cancelled_at"].toString()),
       memberName: json["member_name"]?.toString(),
       memberEmail: json["member_email"]?.toString(),
+      rentalPriceCents: (json["rental_price_cents"] as num?)?.toInt(),
     );
   }
+
+  String? get rentalPriceLabel => formatRentalPriceCents(rentalPriceCents);
 
   String get statusLabel {
     switch (status.toLowerCase()) {
@@ -72,6 +77,14 @@ class BookingItem {
     return statusLabel;
   }
 
+  /// Subtitle when pickup date is shown in the section header.
+  String get groupedListSubtitle {
+    if (!isPending) {
+      return statusLabel;
+    }
+    return "";
+  }
+
   String get memberLabel {
     if (memberName != null && memberName!.isNotEmpty) {
       return memberName!;
@@ -89,13 +102,44 @@ class BookingItem {
 /// Upcoming (pending) vs past (completed/cancelled) for the bookings screen.
 class BookingSections {
   const BookingSections({
-    required this.upcoming,
+    required this.upcomingByPickupDate,
     required this.past,
   });
 
-  final List<BookingItem> upcoming;
+  final List<BookingPickupDateGroup> upcomingByPickupDate;
   final List<BookingItem> past;
 }
+
+class BookingPickupDateGroup {
+  const BookingPickupDateGroup({
+    required this.pickupDate,
+    required this.pickupLabel,
+    required this.bookings,
+  });
+
+  final DateTime pickupDate;
+  final String? pickupLabel;
+  final List<BookingItem> bookings;
+
+  int? get totalRentalCents => totalRentalCentsForBookings(bookings);
+
+  int get unpricedBookingCount => unpricedBookingCountForBookings(bookings);
+}
+
+int? totalRentalCentsForBookings(List<BookingItem> bookings) {
+  var total = 0;
+  var hasPrice = false;
+  for (final booking in bookings) {
+    final cents = booking.rentalPriceCents;
+    if (cents == null) continue;
+    total += cents;
+    hasPrice = true;
+  }
+  return hasPrice ? total : null;
+}
+
+int unpricedBookingCountForBookings(List<BookingItem> bookings) =>
+    bookings.where((booking) => booking.rentalPriceCents == null).length;
 
 BookingSections groupBookingsBySection(List<BookingItem> items) {
   final upcoming = <BookingItem>[];
@@ -107,7 +151,65 @@ BookingSections groupBookingsBySection(List<BookingItem> items) {
       past.add(item);
     }
   }
-  return BookingSections(upcoming: upcoming, past: past);
+  sortBookingsList(past);
+  return BookingSections(
+    upcomingByPickupDate: groupBookingsByPickupDate(upcoming),
+    past: past,
+  );
+}
+
+List<BookingPickupDateGroup> groupBookingsByPickupDate(List<BookingItem> items) {
+  final byDay = <DateTime, List<BookingItem>>{};
+  final labels = <DateTime, String?>{};
+
+  for (final item in items) {
+    final pickup = item.pickupDate;
+    if (pickup == null) continue;
+    final day = calendarDay(pickup);
+    byDay.putIfAbsent(day, () => []).add(item);
+    labels.putIfAbsent(day, () => item.pickupLabel);
+  }
+
+  final groups = byDay.entries
+      .map(
+        (entry) => BookingPickupDateGroup(
+          pickupDate: entry.key,
+          pickupLabel: labels[entry.key],
+          bookings: List<BookingItem>.from(entry.value)
+            ..sort(
+              (a, b) => (a.toyName ?? a.toyId)
+                  .toLowerCase()
+                  .compareTo((b.toyName ?? b.toyId).toLowerCase()),
+            ),
+        ),
+      )
+      .toList();
+
+  groups.sort((a, b) => a.pickupDate.compareTo(b.pickupDate));
+  return groups;
+}
+
+String formatDisplayDate(DateTime date) {
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return "${date.day} ${months[date.month - 1]} ${date.year}";
+}
+
+String? formatRentalPriceCents(int? cents) {
+  if (cents == null) return null;
+  return "\$${(cents / 100).toStringAsFixed(2)}";
 }
 
 /// Wed/Sat pickup option from `GET /api/v1/bookings/pickup-dates`.

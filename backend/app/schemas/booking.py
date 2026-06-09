@@ -58,6 +58,10 @@ class BookingOut(BaseModel):
         None,
         description='Display label, e.g. "Wednesday 21 May".',
     )
+    rental_price_cents: int | None = Field(
+        None,
+        description="Toy rental price in NZD cents when known.",
+    )
     created_at: datetime
     cancelled_at: datetime | None = None
 
@@ -110,6 +114,7 @@ def booking_out_from_model(
         status=booking.status,
         pickup_date=booking.pickup_date,
         pickup_label=pickup_label,
+        rental_price_cents=toy.rental_price_cents if toy is not None else None,
         created_at=booking.created_at,
         cancelled_at=booking.cancelled_at,
     )

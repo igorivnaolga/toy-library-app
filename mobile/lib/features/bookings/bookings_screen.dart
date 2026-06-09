@@ -7,6 +7,7 @@ import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "booking_list_tile.dart";
 import "booking_models.dart";
+import "booking_pickup_date_header.dart";
 import "bookings_controller.dart";
 import "pickup_date_flow.dart";
 
@@ -169,14 +170,24 @@ class _BookingsScreenState extends State<BookingsScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              if (sections.upcoming.isNotEmpty) ...[
-                const SectionHeader("Upcoming"),
-                for (var i = 0; i < sections.upcoming.length; i++) ...[
+              for (var g = 0; g < sections.upcomingByPickupDate.length; g++) ...[
+                if (g > 0) const SizedBox(height: 20),
+                BookingPickupDateHeader(
+                  group: sections.upcomingByPickupDate[g],
+                ),
+                for (var i = 0;
+                    i < sections.upcomingByPickupDate[g].bookings.length;
+                    i++) ...[
                   if (i > 0) const SizedBox(height: 8),
-                  _bookingTile(context, c, sections.upcoming[i]),
+                  _bookingTile(
+                    context,
+                    c,
+                    sections.upcomingByPickupDate[g].bookings[i],
+                  ),
                 ],
               ],
-              if (sections.upcoming.isNotEmpty && sections.past.isNotEmpty)
+              if (sections.upcomingByPickupDate.isNotEmpty &&
+                  sections.past.isNotEmpty)
                 const SizedBox(height: 20),
               if (sections.past.isNotEmpty) ...[
                 const SectionHeader("Past"),

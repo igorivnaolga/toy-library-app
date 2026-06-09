@@ -200,6 +200,113 @@ List<BookingItem> parseAdminBookingList(Map<String, dynamic> json) {
   return items;
 }
 
+class AdminBookingMemberSection {
+  const AdminBookingMemberSection({
+    required this.memberLabel,
+    required this.memberEmail,
+    required this.bookings,
+  });
+
+  final String memberLabel;
+  final String? memberEmail;
+  final List<BookingItem> bookings;
+
+  int get toyCount => bookings.length;
+
+  int? get totalRentalCents => totalRentalCentsForBookings(bookings);
+
+  int get unpricedBookingCount => unpricedBookingCountForBookings(bookings);
+}
+
+class AdminBookingDateGroup {
+  const AdminBookingDateGroup({
+    required this.pickupDate,
+    required this.pickupLabel,
+    required this.members,
+  });
+
+  final DateTime pickupDate;
+  final String? pickupLabel;
+  final List<AdminBookingMemberSection> members;
+
+  BookingPickupDateGroup get pickupSummary => BookingPickupDateGroup(
+        pickupDate: pickupDate,
+        pickupLabel: pickupLabel,
+        bookings: members.expand((member) => member.bookings).toList(),
+      );
+}
+
+class AdminBookingsGrouped {
+  const AdminBookingsGrouped({
+    required this.byPickupDate,
+    required this.withoutPickupDate,
+  });
+
+  final List<AdminBookingDateGroup> byPickupDate;
+  final List<AdminBookingMemberSection> withoutPickupDate;
+}
+
+AdminBookingsGrouped groupAdminBookingsByDateAndMember(List<BookingItem> items) {
+  final withPickup = items.where((item) => item.pickupDate != null).toList();
+  final withoutPickup =
+      items.where((item) => item.pickupDate == null).toList();
+
+  final byDay = <DateTime, List<BookingItem>>{};
+  final labels = <DateTime, String?>{};
+  for (final item in withPickup) {
+    final day = calendarDay(item.pickupDate!);
+    byDay.putIfAbsent(day, () => []).add(item);
+    labels.putIfAbsent(day, () => item.pickupLabel);
+  }
+
+  final dateGroups = byDay.entries
+      .map(
+        (entry) => AdminBookingDateGroup(
+          pickupDate: entry.key,
+          pickupLabel: labels[entry.key],
+          members: _memberSectionsForBookings(entry.value),
+        ),
+      )
+      .toList()
+    ..sort((a, b) => a.pickupDate.compareTo(b.pickupDate));
+
+  return AdminBookingsGrouped(
+    byPickupDate: dateGroups,
+    withoutPickupDate: _memberSectionsForBookings(withoutPickup),
+  );
+}
+
+List<AdminBookingMemberSection> _memberSectionsForBookings(
+  List<BookingItem> items,
+) {
+  final byMember = <String, List<BookingItem>>{};
+  for (final item in items) {
+    final key = item.userId.isNotEmpty ? item.userId : item.memberLabel;
+    byMember.putIfAbsent(key, () => []).add(item);
+  }
+
+  final sections = byMember.entries.map((entry) {
+    final memberItems = List<BookingItem>.from(entry.value)
+      ..sort(
+        (a, b) => (a.toyName ?? a.toyId)
+            .toLowerCase()
+            .compareTo((b.toyName ?? b.toyId).toLowerCase()),
+      );
+    final first = memberItems.first;
+    return AdminBookingMemberSection(
+      memberLabel: first.memberLabel,
+      memberEmail: first.memberEmail,
+      bookings: memberItems,
+    );
+  }).toList();
+
+  sections.sort(
+    (a, b) =>
+        a.memberLabel.toLowerCase().compareTo(b.memberLabel.toLowerCase()),
+  );
+  return sections;
+}
+
 List<AdminMember> parseAdminMemberList(Map<String, dynamic> json) {
   final raw = json["data"];
   if (raw is! List<dynamic>) return [];

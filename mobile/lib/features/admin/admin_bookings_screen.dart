@@ -8,6 +8,8 @@ import "../../core/search_field.dart";
 import "../../core/section_header.dart";
 import "../bookings/booking_list_tile.dart";
 import "../bookings/booking_models.dart";
+import "../bookings/booking_pickup_date_header.dart";
+import "admin_models.dart";
 import "../catalog/toy_detail_screen.dart";
 import "admin_controller.dart";
 import "admin_date_filters.dart";
@@ -185,23 +187,192 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                 );
               }
 
+              final groups =
+                  groupAdminBookingsByDateAndMember(admin.bookings);
+
               return RefreshIndicator(
                 onRefresh: _reload,
-                child: ListView.separated(
+                child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                  itemCount: admin.bookings.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    final item = admin.bookings[i];
-                    return _AdminBookingTile(item: item);
-                  },
+                  children: [
+                    for (var d = 0; d < groups.byPickupDate.length; d++) ...[
+                      if (d > 0) const SizedBox(height: 20),
+                      BookingPickupDateHeader(
+                        group: groups.byPickupDate[d].pickupSummary,
+                        showTotalRental: false,
+                      ),
+                      for (var m = 0;
+                          m < groups.byPickupDate[d].members.length;
+                          m++) ...[
+                        if (m > 0) const SizedBox(height: 12),
+                        _AdminMemberHeader(
+                          section: groups.byPickupDate[d].members[m],
+                          nested: true,
+                        ),
+                        for (var i = 0;
+                            i <
+                                groups
+                                    .byPickupDate[d].members[m].bookings.length;
+                            i++) ...[
+                          if (i > 0) const SizedBox(height: 8),
+                          _AdminBookingTile(
+                            item: groups
+                                .byPickupDate[d].members[m].bookings[i],
+                          ),
+                        ],
+                      ],
+                    ],
+                    if (groups.withoutPickupDate.isNotEmpty) ...[
+                      if (groups.byPickupDate.isNotEmpty)
+                        const SizedBox(height: 20),
+                      const SectionHeader("No pickup date"),
+                      for (var m = 0;
+                          m < groups.withoutPickupDate.length;
+                          m++) ...[
+                        if (m > 0) const SizedBox(height: 12),
+                        _AdminMemberHeader(
+                          section: groups.withoutPickupDate[m],
+                          nested: true,
+                        ),
+                        for (var i = 0;
+                            i < groups.withoutPickupDate[m].bookings.length;
+                            i++) ...[
+                          if (i > 0) const SizedBox(height: 8),
+                          _AdminBookingTile(
+                            item: groups.withoutPickupDate[m].bookings[i],
+                          ),
+                        ],
+                      ],
+                    ],
+                  ],
                 ),
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AdminMemberHeader extends StatelessWidget {
+  const _AdminMemberHeader({
+    required this.section,
+    this.nested = false,
+  });
+
+  final AdminBookingMemberSection section;
+  final bool nested;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final email = section.memberEmail?.trim();
+    final totalLabel = formatRentalPriceCents(section.totalRentalCents);
+    final toyLabel = section.toyCount == 1
+        ? "1 toy"
+        : "${section.toyCount} toys";
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(0, 4, 0, nested ? 8 : 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.65),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.person_outline,
+                  size: 22,
+                  color: colors.onSurface.withValues(alpha: 0.72),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Member", style: context.formSectionLabel),
+                      const SizedBox(height: 2),
+                      Text(
+                        section.memberLabel,
+                        style: context.cardTitle.copyWith(fontSize: 17),
+                      ),
+                      if (email != null &&
+                          email.isNotEmpty &&
+                          email.toLowerCase() !=
+                              section.memberLabel.toLowerCase()) ...[
+                        const SizedBox(height: 2),
+                        Text(email, style: context.listSubtitle),
+                      ],
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    toyLabel,
+                    style: TextStyle(
+                      color: colors.onSurface.withValues(alpha: 0.82),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (totalLabel != null) ...[
+              const SizedBox(height: 10),
+              Divider(
+                height: 1,
+                color: colors.outlineVariant.withValues(alpha: 0.45),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(
+                    "Total rental",
+                    style: context.listSubtitle.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurface.withValues(alpha: 0.72),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    totalLabel,
+                    style: context.cardTitle.copyWith(fontSize: 16),
+                  ),
+                ],
+              ),
+              if (section.unpricedBookingCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    section.unpricedBookingCount == 1
+                        ? "Excludes 1 toy without a listed price"
+                        : "Excludes ${section.unpricedBookingCount} toys without listed prices",
+                    style: context.listSubtitle.copyWith(fontSize: 12),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -213,30 +384,18 @@ class _AdminBookingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-          child: Text(
-            item.memberLabel,
-            style: context.groupLabel,
+    return BookingListTile(
+      item: item,
+      loading: false,
+      onOpen: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ToyDetailScreen(toyId: item.toyId),
           ),
-        ),
-        BookingListTile(
-          item: item,
-          loading: false,
-          onOpen: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => ToyDetailScreen(toyId: item.toyId),
-              ),
-            );
-          },
-          onChangeDate: null,
-          onCancel: null,
-        ),
-      ],
+        );
+      },
+      onChangeDate: null,
+      onCancel: null,
     );
   }
 }

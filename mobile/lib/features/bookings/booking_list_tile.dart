@@ -27,7 +27,8 @@ class BookingListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final subtitleStyle = context.listSubtitle;
-    final subtitle = item.listSubtitle;
+    final subtitle =
+        item.isPending ? item.groupedListSubtitle : item.listSubtitle;
 
     return Opacity(
       opacity: item.isCancelled ? 0.72 : 1,
