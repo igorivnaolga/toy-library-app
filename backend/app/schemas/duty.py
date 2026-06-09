@@ -39,6 +39,8 @@ class DutySessionOut(BaseModel):
     volunteer_id: str | None = None
     volunteer_name: str | None = None
     volunteer_email: str | None = None
+    admin_confirmed: bool = False
+    admin_confirmed_at: datetime | None = None
     created_at: datetime
 
 
@@ -81,5 +83,7 @@ def duty_session_out_from_model(row: DutySession, db: Session | None = None) -> 
         volunteer_id=str(row.volunteer_id) if row.volunteer_id else None,
         volunteer_name=volunteer_name,
         volunteer_email=volunteer_email,
+        admin_confirmed=row.admin_confirmed_at is not None,
+        admin_confirmed_at=row.admin_confirmed_at,
         created_at=row.created_at,
     )

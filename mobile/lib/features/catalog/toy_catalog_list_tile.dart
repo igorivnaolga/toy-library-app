@@ -1,6 +1,8 @@
 import "package:flutter/material.dart";
+import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "toy_availability_badge.dart";
 import "toy_id_badge.dart";
@@ -21,6 +23,8 @@ class ToyCatalogListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final category = toy.category?.trim();
+    final isMyLoan = toy.availability == "on_loan" &&
+        context.watch<LoansController>().activeLoanForToy(toy.toyId) != null;
 
     return Material(
       color: colors.surfaceContainerLowest,
@@ -69,7 +73,10 @@ class ToyCatalogListTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              ToyAvailabilityBadge(availability: toy.availability),
+              ToyAvailabilityBadge(
+                availability: toy.availability,
+                isMyLoan: isMyLoan,
+              ),
             ],
           ),
         ),

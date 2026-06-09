@@ -48,4 +48,5 @@ class Profile(Base):
     loans: Mapped[list["Loan"]] = relationship(back_populates="profile")
     duty_sessions: Mapped[list["DutySession"]] = relationship(
         back_populates="volunteer",
+        foreign_keys="DutySession.volunteer_id",
     )

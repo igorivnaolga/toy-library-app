@@ -17,6 +17,10 @@ class AdminNotificationsOut(BaseModel):
         ge=0,
         description="Duty-tier members waiting for volunteer approval.",
     )
+    pending_duty_confirmations: int = Field(
+        ge=0,
+        description="Today's booked duty shifts waiting for admin confirmation.",
+    )
     new_members_count: int = Field(
         ge=0,
         description="Members who joined in the last 30 days (excludes pending duty approvals).",

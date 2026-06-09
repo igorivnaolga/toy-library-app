@@ -98,6 +98,22 @@ class AdminController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<TodaysDutyShift>> loadTodaysDutyShifts() async {
+    final json = await _client.getJson("/api/v1/admin/todays-duty-shifts");
+    final raw = json["data"];
+    if (raw is! List<dynamic>) return [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(TodaysDutyShift.fromJson)
+        .toList();
+  }
+
+  Future<void> confirmDutyShift(String sessionId) async {
+    await _client.postJson("/api/v1/duty/sessions/$sessionId/confirm");
+    await loadNotifications(silent: true);
+    notifyListeners();
+  }
+
   Future<void> loadBookings({
     DateTime? pickupFrom,
     DateTime? pickupTo,

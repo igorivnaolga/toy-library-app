@@ -4,6 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../catalog/toy_detail_screen.dart";
+import "loan_due_date_header.dart";
 import "loan_list_tile.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
@@ -141,21 +142,29 @@ class _MyLoansView extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              if (sections.active.isNotEmpty) ...[
-                const SectionHeader("Active"),
-                for (var i = 0; i < sections.active.length; i++) ...[
+              for (var g = 0; g < sections.activeByDueDate.length; g++) ...[
+                if (g > 0) const SizedBox(height: 20),
+                LoanDueDateHeader(
+                  dueDate: sections.activeByDueDate[g].dueDate,
+                  isOverdue: sections.activeByDueDate[g].isOverdue,
+                ),
+                for (var i = 0;
+                    i < sections.activeByDueDate[g].loans.length;
+                    i++) ...[
                   if (i > 0) const SizedBox(height: 8),
                   LoanListTile(
-                    item: sections.active[i],
+                    item: sections.activeByDueDate[g].loans[i],
                     loading: c.myLoansLoading,
-                    onOpen: () => onOpenToy(sections.active[i].toyId),
-                    onRenew: sections.active[i].canRenew
-                        ? () => onRenew(sections.active[i])
+                    onOpen: () =>
+                        onOpenToy(sections.activeByDueDate[g].loans[i].toyId),
+                    onRenew: sections.activeByDueDate[g].loans[i].canRenew
+                        ? () => onRenew(sections.activeByDueDate[g].loans[i])
                         : null,
                   ),
                 ],
               ],
-              if (sections.active.isNotEmpty && sections.returned.isNotEmpty)
+              if (sections.activeByDueDate.isNotEmpty &&
+                  sections.returned.isNotEmpty)
                 const SizedBox(height: 20),
               if (sections.returned.isNotEmpty) ...[
                 const SectionHeader("Returned"),

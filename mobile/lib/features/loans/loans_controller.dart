@@ -254,7 +254,12 @@ class LoansController extends ChangeNotifier {
       return "Please sign in again to use the volunteer desk.";
     }
     if (e.statusCode == 403) {
-      return "Book a duty shift on the Duty tab, then return to the desk.";
+      final lower = e.message.toLowerCase();
+      if (lower.contains("30 minutes") || lower.contains("duty desk opens")) {
+        return e.message;
+      }
+      return "Book a duty shift from the duty roster (calendar icon), "
+          "then return to the desk on your shift day.";
     }
     return e.message;
   }

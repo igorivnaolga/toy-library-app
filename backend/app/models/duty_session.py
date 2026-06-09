@@ -30,6 +30,15 @@ class DutySession(Base):
         nullable=True,
         index=True,
     )
+    admin_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    admin_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -42,4 +51,7 @@ class DutySession(Base):
         onupdate=func.now(),
     )
 
-    volunteer: Mapped["Profile | None"] = relationship(back_populates="duty_sessions")
+    volunteer: Mapped["Profile | None"] = relationship(
+        back_populates="duty_sessions",
+        foreign_keys=[volunteer_id],
+    )

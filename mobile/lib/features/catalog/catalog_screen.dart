@@ -6,7 +6,9 @@ import "package:provider/provider.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/app_input_field.dart";
+import "../../core/auth_store.dart";
 import "../../core/search_field.dart";
+import "../loans/loans_controller.dart";
 import "catalog_provider.dart";
 import "toy_catalog_list_tile.dart";
 import "toy_detail_screen.dart";
@@ -41,6 +43,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       catalog.loadInitial();
+      if (context.read<AuthStore>().canBookToys) {
+        context.read<LoansController>().loadMyLoans(activeOnly: true);
+      }
     });
   }
 

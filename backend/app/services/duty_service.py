@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.core.library_sessions import SESSION_END, SESSION_START, is_library_session_day
 from app.models.duty_session import DutySession
-from app.repositories.duty_repo import create_duty_session, list_duty_sessions
+from app.core.library_sessions import library_now
+from app.repositories.duty_repo import (
+    confirm_duty_session,
+    create_duty_session,
+    list_duty_sessions,
+)
 from app.repositories.profile_repo import get_profile_by_id
 
 
@@ -81,5 +86,24 @@ def assign_volunteer_to_session(
 
 def clear_session_assignment(session: Session, row: DutySession) -> DutySession:
     row.volunteer_id = None
+    row.admin_confirmed_at = None
+    row.admin_confirmed_by = None
     session.flush()
     return row
+
+
+def confirm_duty_session_for_admin(
+    session: Session,
+    row: DutySession,
+    admin_id: uuid.UUID,
+) -> DutySession:
+    if row.volunteer_id is None:
+        raise DutyError("slot_unbooked", "No volunteer is booked for this duty slot.")
+    if row.session_date != library_now().date():
+        raise DutyError(
+            "not_duty_day",
+            "Duty can only be confirmed on the day of the shift.",
+        )
+    if row.admin_confirmed_at is not None:
+        return row
+    return confirm_duty_session(session, row, admin_id)

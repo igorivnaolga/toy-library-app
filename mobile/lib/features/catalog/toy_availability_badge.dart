@@ -7,9 +7,11 @@ class ToyAvailabilityBadge extends StatelessWidget {
   const ToyAvailabilityBadge({
     super.key,
     required this.availability,
+    this.isMyLoan = false,
   });
 
   final String availability;
+  final bool isMyLoan;
 
   @override
   Widget build(BuildContext context) {
@@ -21,11 +23,13 @@ class ToyAvailabilityBadge extends StatelessWidget {
           const Color(0xFFC8E6C9),
           const Color(0xFF2E7D32),
         ),
-      "on_loan" => (
-          "On loan",
-          kStatusOnLoanBg,
-          kStatusOnLoanFg,
-        ),
+      "on_loan" => isMyLoan
+          ? ("My loan", kBrandYellow, kBrandOnYellow)
+          : (
+              "On loan",
+              kStatusOnLoanBg,
+              kStatusOnLoanFg,
+            ),
       "reserved" => (
           "Reserved",
           colors.primaryContainer,

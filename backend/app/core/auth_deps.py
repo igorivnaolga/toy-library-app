@@ -19,7 +19,10 @@ from app.core.config import get_settings
 from app.core.roles import Role, parse_role
 from app.core.supabase_jwt import decode_supabase_access_token
 from app.db.session import get_db
-from app.repositories.duty_repo import is_volunteer_on_duty_now
+from app.repositories.duty_repo import (
+    is_volunteer_on_duty_now,
+    volunteer_has_booked_slot_today,
+)
 from app.repositories.profile_repo import get_profile_by_id, kids_from_profile
 from app.schemas.principal import Principal
 
@@ -157,10 +160,16 @@ def require_on_duty_desk():
         if principal.role == Role.ADMIN:
             return principal
         if not is_volunteer_on_duty_now(db, principal.id):
-            raise HTTPException(
-                status_code=403,
-                detail="You must be on duty to use the volunteer desk.",
-            )
+            if volunteer_has_booked_slot_today(db, principal.id):
+                detail = (
+                    "The duty desk opens 30 minutes before your session starts."
+                )
+            else:
+                detail = (
+                    "Book a duty shift from the duty roster, then return "
+                    "to the desk on your shift day."
+                )
+            raise HTTPException(status_code=403, detail=detail)
         return principal
 
     return _guard

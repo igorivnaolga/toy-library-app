@@ -42,6 +42,14 @@ def _apply_schema_patches(engine) -> None:
         )
         conn.execute(
             text(
+                "ALTER TABLE public.duty_sessions "
+                "ADD COLUMN IF NOT EXISTS admin_confirmed_at timestamptz, "
+                "ADD COLUMN IF NOT EXISTS admin_confirmed_by uuid "
+                "REFERENCES public.profiles (id) ON DELETE SET NULL"
+            )
+        )
+        conn.execute(
+            text(
                 "ALTER TABLE public.toys "
                 "ADD COLUMN IF NOT EXISTS cv_ref_piece_count integer, "
                 "ADD COLUMN IF NOT EXISTS cv_ref_fg_pixels integer, "

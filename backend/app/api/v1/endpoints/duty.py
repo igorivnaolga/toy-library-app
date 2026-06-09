@@ -26,6 +26,7 @@ from app.services.duty_service import (
     DutyError,
     assign_volunteer_to_session,
     clear_session_assignment,
+    confirm_duty_session_for_admin,
     ensure_roster_sessions,
 )
 from app.schemas.duty import (
@@ -53,6 +54,8 @@ def _duty_http_error(exc: DutyError) -> HTTPException:
     elif exc.code == "invalid_assignee":
         status = 422
     elif exc.code == "slot_already_assigned":
+        status = 409
+    elif exc.code in {"slot_unbooked", "not_duty_day"}:
         status = 409
     return HTTPException(status_code=status, detail=exc.message)
 
@@ -202,6 +205,25 @@ def book_session(
     if row.session_date < library_now().date():
         raise HTTPException(status_code=409, detail="Past duty slots cannot be booked.")
     book_duty_session(db, row, principal.id)
+    db.commit()
+    row = get_duty_session_by_id(db, session_id) or row
+    return duty_session_out_from_model(row, db)
+
+
+@router.post("/sessions/{session_id}/confirm", response_model=DutySessionOut)
+def confirm_session(
+    session_id: uuid.UUID,
+    principal: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> DutySessionOut:
+    """Admin confirms a volunteer's booked shift on the duty day."""
+    row = get_duty_session_by_id(db, session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Duty session not found.")
+    try:
+        confirm_duty_session_for_admin(db, row, principal.id)
+    except DutyError as e:
+        raise _duty_http_error(e) from e
     db.commit()
     row = get_duty_session_by_id(db, session_id) or row
     return duty_session_out_from_model(row, db)

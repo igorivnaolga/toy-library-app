@@ -80,20 +80,6 @@ class LoanItem {
         missingPieces: toyMissingPieces,
       );
 
-  String get statusLabel {
-    if (isOverdue && isActive) {
-      return "Overdue";
-    }
-    switch (status.toLowerCase()) {
-      case "active":
-        return "On loan";
-      case "returned":
-        return "Returned";
-      default:
-        return status;
-    }
-  }
-
   String get listSubtitle {
     if (isReturned && returnedAt != null) {
       return "Returned ${formatDisplayDate(returnedAt!)}";
@@ -102,6 +88,20 @@ class LoanItem {
     if (isOverdue) {
       parts.add("Overdue");
     }
+    parts.addAll(_renewalSubtitleParts);
+    return parts.join(" · ");
+  }
+
+  /// Subtitle for tiles inside a due-date group (due date is in the section header).
+  String get groupedListSubtitle {
+    if (isReturned && returnedAt != null) {
+      return "Returned ${formatDisplayDate(returnedAt!)}";
+    }
+    return _renewalSubtitleParts.join(" · ");
+  }
+
+  List<String> get _renewalSubtitleParts {
+    final parts = <String>[];
     if (renewalCount > 0) {
       parts.add(
         renewalCount == 1 ? "Renewed once" : "Renewed $renewalCount times",
@@ -114,7 +114,7 @@ class LoanItem {
             : "No renewals left",
       );
     }
-    return parts.join(" · ");
+    return parts;
   }
 
   String get memberLabel {
@@ -129,12 +129,24 @@ class LoanItem {
 
 class LoanSections {
   const LoanSections({
-    required this.active,
+    required this.activeByDueDate,
     required this.returned,
   });
 
-  final List<LoanItem> active;
+  final List<LoanDueDateGroup> activeByDueDate;
   final List<LoanItem> returned;
+}
+
+class LoanDueDateGroup {
+  const LoanDueDateGroup({
+    required this.dueDate,
+    required this.loans,
+  });
+
+  final DateTime dueDate;
+  final List<LoanItem> loans;
+
+  bool get isOverdue => dueDate.isBefore(_todayDate());
 }
 
 LoanSections groupLoansBySection(List<LoanItem> items) {
@@ -147,9 +159,49 @@ LoanSections groupLoansBySection(List<LoanItem> items) {
       returned.add(item);
     }
   }
-  sortLoansList(active);
   sortLoansList(returned);
-  return LoanSections(active: active, returned: returned);
+  return LoanSections(
+    activeByDueDate: groupActiveLoansByDueDate(active),
+    returned: returned,
+  );
+}
+
+List<LoanDueDateGroup> groupActiveLoansByDueDate(List<LoanItem> active) {
+  final byDay = <DateTime, List<LoanItem>>{};
+  for (final item in active) {
+    final day = _dateOnly(item.dueDate);
+    byDay.putIfAbsent(day, () => []).add(item);
+  }
+
+  final groups = byDay.entries
+      .map(
+        (entry) => LoanDueDateGroup(
+          dueDate: entry.key,
+          loans: List<LoanItem>.from(entry.value)
+            ..sort(
+              (a, b) => (a.toyName ?? a.toyId)
+                  .toLowerCase()
+                  .compareTo((b.toyName ?? b.toyId).toLowerCase()),
+            ),
+        ),
+      )
+      .toList();
+
+  groups.sort((a, b) {
+    if (a.isOverdue != b.isOverdue) {
+      return a.isOverdue ? -1 : 1;
+    }
+    return a.dueDate.compareTo(b.dueDate);
+  });
+  return groups;
+}
+
+DateTime _dateOnly(DateTime date) =>
+    DateTime(date.year, date.month, date.day);
+
+DateTime _todayDate() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
 }
 
 void sortLoansList(List<LoanItem> items) {

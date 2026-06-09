@@ -7,10 +7,12 @@ import "../profile/kid_profile.dart";
 class AdminNotifications {
   const AdminNotifications({
     required this.pendingVolunteerApprovals,
+    required this.pendingDutyConfirmations,
     required this.newMembersCount,
   });
 
   final int pendingVolunteerApprovals;
+  final int pendingDutyConfirmations;
   final int newMembersCount;
 
   int get badgeCount => pendingVolunteerApprovals + newMembersCount;
@@ -19,8 +21,66 @@ class AdminNotifications {
     return AdminNotifications(
       pendingVolunteerApprovals:
           (json["pending_volunteer_approvals"] as num?)?.toInt() ?? 0,
+      pendingDutyConfirmations:
+          (json["pending_duty_confirmations"] as num?)?.toInt() ?? 0,
       newMembersCount: (json["new_members_count"] as num?)?.toInt() ?? 0,
     );
+  }
+}
+
+class TodaysDutyShift {
+  const TodaysDutyShift({
+    required this.sessionId,
+    required this.sessionDate,
+    required this.startTime,
+    required this.endTime,
+    this.volunteerName,
+    this.volunteerEmail,
+  });
+
+  final String sessionId;
+  final DateTime sessionDate;
+  final String startTime;
+  final String endTime;
+  final String? volunteerName;
+  final String? volunteerEmail;
+
+  factory TodaysDutyShift.fromJson(Map<String, dynamic> json) {
+    final rawDate = json["session_date"]?.toString() ?? "";
+    final parsedDate = DateTime.tryParse(rawDate) ??
+        DateTime.parse("${rawDate}T00:00:00");
+    return TodaysDutyShift(
+      sessionId: json["session_id"]?.toString() ?? "",
+      sessionDate: parsedDate,
+      startTime: json["start_time"]?.toString() ?? "",
+      endTime: json["end_time"]?.toString() ?? "",
+      volunteerName: json["volunteer_name"]?.toString(),
+      volunteerEmail: json["volunteer_email"]?.toString(),
+    );
+  }
+
+  String get volunteerDisplayName {
+    final name = volunteerName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final email = volunteerEmail?.trim();
+    if (email != null && email.isNotEmpty) return email;
+    return "Volunteer";
+  }
+
+  String get timeRangeLabel {
+    String fmt(String raw) {
+      final parts = raw.split(":");
+      if (parts.length < 2) return raw;
+      var hour = int.tryParse(parts[0]) ?? 0;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      final period = hour >= 12 ? "pm" : "am";
+      if (hour > 12) hour -= 12;
+      if (hour == 0) hour = 12;
+      if (minute == 0) return "$hour $period";
+      return "$hour:${minute.toString().padLeft(2, "0")} $period";
+    }
+
+    return "${fmt(startTime)} – ${fmt(endTime)}";
   }
 }
 

@@ -12,6 +12,7 @@ class DutySessionItem {
     this.volunteerId,
     this.volunteerName,
     this.volunteerEmail,
+    this.adminConfirmed = false,
   });
 
   final String sessionId;
@@ -22,6 +23,7 @@ class DutySessionItem {
   final String? volunteerName;
   final String? volunteerEmail;
   final DateTime createdAt;
+  final bool adminConfirmed;
 
   bool get isOpen => volunteerId == null || volunteerId!.isEmpty;
 
@@ -39,6 +41,7 @@ class DutySessionItem {
       volunteerId: json["volunteer_id"]?.toString(),
       volunteerName: json["volunteer_name"]?.toString(),
       volunteerEmail: json["volunteer_email"]?.toString(),
+      adminConfirmed: json["admin_confirmed"] == true,
       createdAt: DateTime.parse(json["created_at"] as String),
     );
   }
@@ -53,13 +56,18 @@ class DutySessionItem {
         email: volunteerEmail,
       );
 
-  String statusLabel({required String? currentUserId}) {
+  bool isMine(String? currentUserId) =>
+      currentUserId != null &&
+      currentUserId.isNotEmpty &&
+      volunteerId == currentUserId;
+
+  String statusLabel({
+    required String? currentUserId,
+    bool isAdmin = false,
+  }) {
     if (isOpen) return "Open slot";
-    if (currentUserId != null &&
-        currentUserId.isNotEmpty &&
-        volunteerId == currentUserId) {
-      return "Your shift";
-    }
+    if (isMine(currentUserId)) return "Your shift";
+    if (!isAdmin) return "Booked";
     return assigneeDisplayName;
   }
 }

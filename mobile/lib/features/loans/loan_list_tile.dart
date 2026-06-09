@@ -1,7 +1,6 @@
 import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
-import "../../core/app_theme.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/toy_photo_tile.dart";
 import "loan_models.dart";
@@ -23,9 +22,9 @@ class LoanListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
     final subtitleStyle = context.listSubtitle;
+    final subtitle = item.isActive ? item.groupedListSubtitle : item.listSubtitle;
 
     return Opacity(
       opacity: item.isReturned ? 0.72 : 1,
@@ -40,96 +39,53 @@ class LoanListTile extends StatelessWidget {
           onTap: onOpen,
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ToyPhotoTile(toyId: item.toyId),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.toyName ?? item.toyId,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.cardTitle,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item.listSubtitle,
-                            style: subtitleStyle.copyWith(
-                              color: item.isOverdue
-                                  ? colors.error
-                                  : subtitleStyle.color,
-                            ),
-                          ),
-                        ],
+                ToyPhotoTile(
+                  toyId: item.toyId,
+                  photoFile: item.photoFile,
+                  size: 56,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.toyName ?? item.toyId,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.cardTitle,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    LoanStatusChip(
-                      label: item.statusLabel,
-                      isOverdue: item.isOverdue && item.isActive,
-                    ),
-                  ],
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: subtitleStyle.copyWith(
+                            color: item.isOverdue
+                                ? colors.error
+                                : subtitleStyle.color,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 if (item.canRenew && onRenew != null) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(width: 8),
                   BrandChipButton(
                     label: "Renew",
                     variant: BrandChipButtonVariant.outlined,
+                    fixedWidth: 100,
                     onPressed: loading ? null : onRenew,
                   ),
                 ],
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class LoanStatusChip extends StatelessWidget {
-  const LoanStatusChip({
-    super.key,
-    required this.label,
-    this.isOverdue = false,
-  });
-
-  final String label;
-  final bool isOverdue;
-
-  @override
-  Widget build(BuildContext context) {
-    final (bg, fg) = isOverdue
-        ? (const Color(0xFFFFCDD2), const Color(0xFFC62828))
-        : switch (label.toLowerCase()) {
-            "on loan" => (kBrandYellow, kBrandOnYellow),
-            "returned" => (
-                const Color(0xFFC8E6C9),
-                const Color(0xFF2E7D32),
-              ),
-            _ => (Colors.grey.shade300, kBrandOnYellow),
-          };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: fg,
-          fontWeight: FontWeight.w600,
-          fontSize: 10,
-          decoration: TextDecoration.none,
         ),
       ),
     );

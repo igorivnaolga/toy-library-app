@@ -13,6 +13,9 @@ LIBRARY_WEEKDAYS = frozenset({2, 5})  # Wednesday, Saturday
 
 MAX_PICKUP_MONTHS_AHEAD = 6
 
+# Volunteers may use the desk this many minutes before the duty session starts.
+DUTY_DESK_EARLY_ACCESS_MINUTES = 30
+
 # Session times from organisation opening hours (local time).
 SESSION_START: dict[int, time] = {
     2: time(13, 0),  # Wed 1:00 pm
@@ -141,3 +144,23 @@ def is_allowed_pickup_date(pickup_date: date, *, now: datetime | None = None) ->
 def format_pickup_label(pickup_date: date) -> str:
     """Human label, e.g. ``Wednesday 21 May``."""
     return pickup_date.strftime("%A %d %B")
+
+
+def duty_desk_opens_at(start_time: time) -> time:
+    """When the volunteer desk unlocks before a duty session."""
+    ref = datetime.combine(date(2000, 1, 1), start_time) - timedelta(
+        minutes=DUTY_DESK_EARLY_ACCESS_MINUTES
+    )
+    return ref.time()
+
+
+def is_within_duty_desk_window(
+    start_time: time,
+    end_time: time,
+    current_time: time,
+) -> bool:
+    """True when ``current_time`` is in the duty desk window for a session."""
+    opens = duty_desk_opens_at(start_time)
+    if opens <= end_time:
+        return opens <= current_time <= end_time
+    return current_time >= opens or current_time <= end_time

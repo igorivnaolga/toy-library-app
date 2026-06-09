@@ -18,7 +18,10 @@ import "admin_cv_scan_panel.dart";
 
 /// Admin desk: separate check-out and check-in flows (CV-ready check-in).
 class AdminLoansScreen extends StatefulWidget {
-  const AdminLoansScreen({super.key});
+  const AdminLoansScreen({super.key, this.volunteerDeskMode = false});
+
+  /// When true, desk access requires an admin-confirmed duty shift today.
+  final bool volunteerDeskMode;
 
   @override
   State<AdminLoansScreen> createState() => _AdminLoansScreenState();
@@ -111,6 +114,42 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.volunteerDeskMode) {
+      return Consumer<LoansController>(
+        builder: (context, c, _) {
+          final offDuty = c.deskError != null &&
+              c.pendingCheckouts.isEmpty &&
+              c.activeLoans.isEmpty;
+          if (offDuty) {
+            return RefreshIndicator(
+              onRefresh: c.loadVolunteerDesk,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const SizedBox(height: 80),
+                  Icon(
+                    Icons.event_busy,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    c.deskError!,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+          return _deskTabs(context);
+        },
+      );
+    }
+    return _deskTabs(context);
+  }
+
+  Widget _deskTabs(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -139,6 +178,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
                   onToyIdScanned: _handleScannedToyId,
                   onRefresh: () =>
                       context.read<LoansController>().loadVolunteerDesk(),
+                  enableToyIdScan: !widget.volunteerDeskMode,
                 ),
               ],
             ),
@@ -249,12 +289,14 @@ class _CheckInTab extends StatefulWidget {
     required this.onOpenToy,
     required this.onToyIdScanned,
     required this.onRefresh,
+    this.enableToyIdScan = true,
   });
 
   final Future<void> Function(LoanItem loan) onCheckIn;
   final ValueChanged<String> onOpenToy;
   final Future<void> Function(String toyId) onToyIdScanned;
   final Future<void> Function() onRefresh;
+  final bool enableToyIdScan;
 
   @override
   State<_CheckInTab> createState() => _CheckInTabState();
@@ -296,7 +338,7 @@ class _CheckInTabState extends State<_CheckInTab> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
-              if (kDeskToyIdScanEnabled) ...[
+              if (kDeskToyIdScanEnabled && widget.enableToyIdScan) ...[
                 AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
                 const SizedBox(height: 16),
               ],

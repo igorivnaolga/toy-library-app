@@ -191,6 +191,12 @@ class _RoleHomeState extends State<_RoleHome> {
                         icon: const Icon(Icons.event_available_outlined),
                         onPressed: () => _openDuty(context),
                       ),
+                    ] else if (auth.isVolunteer) ...[
+                      IconButton(
+                        tooltip: "Duty roster",
+                        icon: const Icon(Icons.event_available_outlined),
+                        onPressed: () => _openDuty(context),
+                      ),
                     ],
                     if (!auth.isLoggedIn)
                       _guestAuthActions()
@@ -260,7 +266,7 @@ class _RoleHomeState extends State<_RoleHome> {
     const bookings = ("Bookings", Icons.event_note);
     const members = ("Members", Icons.people_outline);
     const loans = ("Loans", Icons.autorenew);
-    const duty = ("Duty", Icons.event_available);
+    const duty = ("Duty", Icons.desk_outlined);
 
     switch (role) {
       case AppRole.admin:

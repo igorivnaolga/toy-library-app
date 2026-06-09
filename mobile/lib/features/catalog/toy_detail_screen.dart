@@ -290,7 +290,10 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ToyIdBadge(toyId: t.toyId, compact: false),
-                        ToyAvailabilityBadge(availability: t.availability),
+                        ToyAvailabilityBadge(
+                          availability: t.availability,
+                          isMyLoan: myActiveLoan != null,
+                        ),
                       ],
                     ),
                     if (t.category != null ||

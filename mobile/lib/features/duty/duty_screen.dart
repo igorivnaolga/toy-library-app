@@ -13,10 +13,13 @@ import "duty_session_models.dart";
 
 /// Volunteer duty roster: Wed/Sat slots, book shifts, admin assign members.
 class DutyScreen extends StatefulWidget {
-  const DutyScreen({super.key, this.useTabs = false});
+  const DutyScreen({super.key, this.useTabs = false, this.hidePast = false});
 
   /// When true, upcoming and past slots appear in separate tabs (admin sheet).
   final bool useTabs;
+
+  /// When true, past slots are hidden (volunteer roster view).
+  final bool hidePast;
 
   @override
   State<DutyScreen> createState() => _DutyScreenState();
@@ -43,40 +46,53 @@ Future<void> showDutyRosterSheet(BuildContext context) {
   );
 }
 
-/// Duty roster content for the admin bottom sheet (light background, no on-duty banner).
+/// Duty roster content for the app-bar sheet (admin: tabs; volunteer: upcoming only).
 class _DutyRosterSheet extends StatelessWidget {
   const _DutyRosterSheet();
 
   @override
   Widget build(BuildContext context) {
+    final isAdmin = context.watch<AuthStore>().isAdmin;
+
     return ColoredBox(
       color: Colors.white,
-      child: DefaultTabController(
-        length: 2,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Text(
-                "Duty roster",
-                style: context.screenTitle,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+            child: Text(
+              "Duty roster",
+              style: context.screenTitle,
             ),
-            Material(
-              color: Theme.of(context).colorScheme.surface,
-              child: const TabBar(
-                tabs: [
-                  Tab(text: "Upcoming slots"),
-                  Tab(text: "Past slots"),
-                ],
+          ),
+          if (isAdmin)
+            Expanded(
+              child: DefaultTabController(
+                length: 2,
+                child: Column(
+                  children: [
+                    Material(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: const TabBar(
+                        tabs: [
+                          Tab(text: "Upcoming slots"),
+                          Tab(text: "Past slots"),
+                        ],
+                      ),
+                    ),
+                    const Expanded(
+                      child: DutyScreen(useTabs: true),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            )
+          else
             const Expanded(
-              child: DutyScreen(useTabs: true),
+              child: DutyScreen(hidePast: true),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -226,6 +242,7 @@ class _DutyScreenState extends State<DutyScreen> {
           child: _DutyBody(
             auth: auth,
             controller: controller,
+            hidePast: widget.hidePast,
             onBook: _book,
             onCancel: _cancel,
             onAssign: auth.isAdmin ? _openAssign : null,
@@ -245,6 +262,7 @@ class _DutyBody extends StatelessWidget {
     required this.onCancel,
     this.sessions,
     this.isPast = false,
+    this.hidePast = false,
     this.showFindDate = false,
     this.pastSectionTitle,
     this.onAssign,
@@ -258,6 +276,7 @@ class _DutyBody extends StatelessWidget {
   final Future<void> Function(DutySessionItem session)? onAssign;
   final List<DutySessionItem>? sessions;
   final bool isPast;
+  final bool hidePast;
   final bool showFindDate;
   final String? pastSectionTitle;
   final GlobalKey Function(String sessionId)? sessionKeyFor;
@@ -327,11 +346,13 @@ class _DutyBody extends StatelessWidget {
           )
         else
           ..._slotTiles(context, sections.upcoming, isPast: false),
-        if (sections.upcoming.isNotEmpty && sections.past.isNotEmpty)
-          const SizedBox(height: 20),
-        if (sections.past.isNotEmpty) ...[
-          const SectionHeader("Past slots"),
-          ..._slotTiles(context, sections.past, isPast: true),
+        if (!hidePast) ...[
+          if (sections.upcoming.isNotEmpty && sections.past.isNotEmpty)
+            const SizedBox(height: 20),
+          if (sections.past.isNotEmpty) ...[
+            const SectionHeader("Past slots"),
+            ..._slotTiles(context, sections.past, isPast: true),
+          ],
         ],
       ],
     );
@@ -438,6 +459,33 @@ class _DutySlotsSectionHeader extends StatelessWidget {
   }
 }
 
+class _MyShiftStatusBadge extends StatelessWidget {
+  const _MyShiftStatusBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFF43A047)),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: const Color(0xFF1B5E20),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _DutySessionTile extends StatelessWidget {
   const _DutySessionTile({
     super.key,
@@ -469,7 +517,12 @@ class _DutySessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final status = session.statusLabel(currentUserId: currentUserId);
+    final status = session.statusLabel(
+      currentUserId: currentUserId,
+      isAdmin: isAdmin,
+    );
+    final showMyShiftBadge =
+        !isAdmin && _isMine && !session.isOpen && !isPast;
 
     Widget? trailing;
     if (!isPast && !isAdmin && session.isOpen) {
@@ -507,15 +560,19 @@ class _DutySessionTile extends StatelessWidget {
                   session.timeRangeLabel,
                   style: context.listSecondary(muted: isPast),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  status,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: _isMine
-                        ? colors.primary
-                        : colors.onSurface.withValues(alpha: kTextMutedAlpha),
+                const SizedBox(height: 6),
+                if (showMyShiftBadge)
+                  _MyShiftStatusBadge(label: status)
+                else
+                  Text(
+                    status,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _isMine
+                          ? colors.primary
+                          : colors.onSurface.withValues(alpha: kTextMutedAlpha),
+                      fontWeight: _isMine ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
-                ),
               ],
             ),
           ),

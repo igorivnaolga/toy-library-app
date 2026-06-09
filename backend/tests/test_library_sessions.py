@@ -1,15 +1,17 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from app.core.library_sessions import (
     LIBRARY_TIMEZONE,
     allowed_pickup_dates,
+    duty_desk_opens_at,
     earliest_bookable_date,
     first_session_after_loan_due,
     first_session_after_reservation_hold,
     first_session_on_or_after,
     format_pickup_label,
     is_allowed_pickup_date,
+    is_within_duty_desk_window,
     session_end_datetime,
 )
 
@@ -80,3 +82,10 @@ def test_first_session_after_reservation_hold() -> None:
         date(2026, 6, 8),
         hold_days=14,
     ) == date(2026, 6, 24)
+
+
+def test_duty_desk_opens_thirty_minutes_before_session() -> None:
+    assert duty_desk_opens_at(time(13, 0)) == time(12, 30)
+    assert is_within_duty_desk_window(time(13, 0), time(14, 30), time(12, 30))
+    assert not is_within_duty_desk_window(time(13, 0), time(14, 30), time(12, 29))
+    assert is_within_duty_desk_window(time(13, 0), time(14, 30), time(14, 0))

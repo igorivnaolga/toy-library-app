@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_admin
 from app.db.session import get_db
+from app.repositories.duty_repo import list_todays_unconfirmed_duty_sessions
 from app.repositories.profile_repo import (
     RECENT_MEMBERS_DAYS,
     approve_duty_volunteer,
@@ -36,6 +37,7 @@ from app.schemas.admin import (
     AdminNotificationsOut,
 )
 from app.schemas.booking import booking_out_from_model
+from app.schemas.duty import DutySessionOut, duty_session_out_from_model
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
@@ -54,6 +56,10 @@ class PendingDutyVolunteersOut(BaseModel):
     data: list[PendingDutyVolunteerOut]
 
 
+class TodaysDutyShiftsOut(BaseModel):
+    data: list[DutySessionOut]
+
+
 @router.get("/notifications", response_model=AdminNotificationsOut)
 def admin_notifications(
     _: Principal = Depends(require_admin),
@@ -61,7 +67,20 @@ def admin_notifications(
 ) -> AdminNotificationsOut:
     return AdminNotificationsOut(
         pending_volunteer_approvals=count_pending_duty_members(db),
+        pending_duty_confirmations=0,
         new_members_count=count_recent_members(db),
+    )
+
+
+@router.get("/todays-duty-shifts", response_model=TodaysDutyShiftsOut)
+def todays_duty_shifts(
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> TodaysDutyShiftsOut:
+    """Booked duty shifts today that still need admin confirmation."""
+    rows = list_todays_unconfirmed_duty_sessions(db)
+    return TodaysDutyShiftsOut(
+        data=[duty_session_out_from_model(row, db) for row in rows],
     )
 
 
