@@ -5,15 +5,33 @@ FastAPI application entrypoint.
 production deployments should use migrations instead of `create_all`.
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_engine
+
+logger = logging.getLogger(__name__)
+
+
+def _database_startup_hint(exc: OperationalError) -> str | None:
+    message = str(exc).lower()
+    if "getaddrinfo failed" in message or "network is unreachable" in message:
+        return (
+            "Cannot reach Supabase Postgres. Direct URLs "
+            "(db.<project>.supabase.co) are IPv6-only; many Windows networks "
+            "cannot use them. In Supabase → Settings → Database, copy the "
+            "**Session pooler** URI (aws-<region>.pooler.supabase.com) into "
+            "DATABASE_URL using the postgresql+psycopg:// scheme. "
+            "Catalog-only local dev: leave DATABASE_URL empty."
+        )
+    return None
 
 
 def _apply_schema_patches(engine) -> None:
@@ -67,10 +85,17 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     engine = get_engine()
     if settings.database_url and engine is not None:
-        _apply_schema_patches(engine)
-        if settings.create_tables_on_startup:
-            # Dev-only convenience: create ORM tables if they don't exist yet.
-            Base.metadata.create_all(bind=engine)
+        try:
+            _apply_schema_patches(engine)
+            if settings.create_tables_on_startup:
+                # Dev-only convenience: create ORM tables if they don't exist yet.
+                Base.metadata.create_all(bind=engine)
+        except OperationalError as exc:
+            hint = _database_startup_hint(exc)
+            if hint:
+                logger.error(hint)
+                raise RuntimeError(hint) from exc
+            raise
     yield
 
 
