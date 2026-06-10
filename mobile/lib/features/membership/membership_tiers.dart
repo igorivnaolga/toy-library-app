@@ -1,3 +1,5 @@
+import "../info/library_info_copy.dart";
+
 /// Membership tier labels shown in onboarding and the Membership tab.
 class MembershipTierOption {
   const MembershipTierOption({
@@ -13,21 +15,19 @@ class MembershipTierOption {
 
 const membershipTierOptions = [
   MembershipTierOption(
-    tier: "casual",
-    title: "Casual",
-    subtitle: "Browse and borrow with a standard member account.",
+    tier: "duty",
+    title: "Duty membership",
+    subtitle: LibraryInfoCopy.dutyMembershipDescription,
   ),
   MembershipTierOption(
     tier: "non_duty",
-    title: "Non-duty member",
-    subtitle: "Member without volunteer shifts.",
+    title: "Non-duty membership",
+    subtitle: LibraryInfoCopy.nonDutyMembershipDescription,
   ),
   MembershipTierOption(
-    tier: "duty",
-    title: "Duty volunteer",
-    subtitle:
-        "You intend to take volunteer shifts. An admin will confirm "
-        "before volunteer tools unlock.",
+    tier: "casual",
+    title: "Casual membership",
+    subtitle: LibraryInfoCopy.casualMembershipDescription,
   ),
 ];
 
@@ -41,7 +41,7 @@ String membershipTierCardTitle(
   if (option.tier == "duty" &&
       currentTier == "duty" &&
       !volunteerConfirmed) {
-    return "Duty volunteer (pending)";
+    return "${option.title} (pending)";
   }
   return option.title;
 }

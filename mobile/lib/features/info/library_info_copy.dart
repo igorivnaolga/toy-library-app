@@ -1,7 +1,7 @@
 /// Static copy for Church Corner Toy Library (from organisation materials).
 abstract final class LibraryInfoCopy {
   static const libraryName = "Church Corner Toy Library";
-  static const appBarTitle = "CC Toy Library";
+  static const appBarTitle = "Church Corner Toy Library";
 
   static const welcomeTitle = "Welcome to the Church Corner Toy Library";
 
@@ -24,21 +24,24 @@ Closed on public holidays and over the Christmas break.""";
   static const membershipIntro = """
 Membership is open to families in our community. When you sign in to the app, you can choose a membership type that fits how you take part in the library.""";
 
-  static const casualMembershipDescription =
-      "Browse and borrow with a standard member account.";
+  static const dutyMembershipDescription =
+      "Become one of our fantastic volunteers. Help out in the library "
+      "3 times a year and pay a reduced fee of \$65. Plus each time you "
+      "volunteer we give you a \$5 credit towards your hire.";
 
   static const nonDutyMembershipDescription =
-      "Full membership without volunteer shifts.";
+      "No time to help out? No problem. Full membership is \$150 for the year.";
 
-  static const dutyMembershipDescription =
-      "Members who take volunteer shifts. Duty members are confirmed by our committee before volunteer tools are enabled in the app.";
+  static const casualMembershipDescription =
+      "5 visits per year for \$50 (+\$50 refundable bond). This suits "
+      "out-of-town relatives/Grandparents.";
 
   static const membershipTiers = """
-Casual — $casualMembershipDescription
+Duty membership — $dutyMembershipDescription
 
-Non-duty member — $nonDutyMembershipDescription
+Non-duty membership — $nonDutyMembershipDescription
 
-Duty volunteer — $dutyMembershipDescription""";
+Casual membership — $casualMembershipDescription""";
 
   static const membershipBody = """
 $membershipIntro

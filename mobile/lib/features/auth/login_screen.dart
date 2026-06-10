@@ -4,6 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "auth_messages.dart";
+import "registration_screen.dart";
 
 /// Login / registration UI for members/admins.
 class LoginScreen extends StatefulWidget {
@@ -53,36 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleSignUp() async {
-    final validationError = _validate();
-    if (validationError != null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(validationError)));
-      return;
-    }
-    final auth = context.read<AuthStore>();
-    await auth.signUp(email: _email.text, password: _password.text);
-    if (!mounted) return;
-    if (auth.error == null) {
-      if (auth.isLoggedIn) {
-        await showAuthSuccessDialog(
-          context,
-          title: "Account created",
-          message: accountCreatedMessage,
-        );
-        if (!mounted) return;
-        Navigator.of(context).pop();
-      } else {
-        await showAuthSuccessDialog(
-          context,
-          title: "Confirm your email",
-          message: emailConfirmationMessage,
-        );
-      }
-    }
-  }
-
   @override
   void dispose() {
     _email.dispose();
@@ -120,8 +91,16 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 8),
           OutlinedButton(
-            onPressed: auth.loading ? null : _handleSignUp,
-            child: const Text("Create account"),
+            onPressed: auth.loading
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RegistrationScreen(),
+                      ),
+                    );
+                  },
+            child: const Text("Join the library"),
           ),
           if (auth.loading)
             const Padding(

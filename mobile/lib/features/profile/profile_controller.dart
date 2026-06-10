@@ -5,6 +5,7 @@ import "package:supabase_flutter/supabase_flutter.dart";
 import "../../core/api_client.dart";
 import "../../core/auth_store.dart";
 import "kid_profile.dart";
+import "member_contact_info.dart";
 
 /// Editable profile state backed by `/api/v1/auth/me/profile`.
 class ProfileController extends ChangeNotifier {
@@ -17,25 +18,17 @@ class ProfileController extends ChangeNotifier {
   String fullName = "";
   List<KidProfile> kids = [];
   String? avatarPath;
+  MemberContactInfo contact = const MemberContactInfo();
   bool saving = false;
   bool uploadingAvatar = false;
   String? error;
-
-  String _savedFullName = "";
-
-  bool get hasUnsavedChanges => fullName.trim() != _savedFullName.trim();
 
   void syncFromAuth() {
     fullName = _auth.fullName ?? "";
     kids = List<KidProfile>.from(_auth.kids);
     avatarPath = _auth.avatarPath;
-    _savedFullName = fullName;
+    contact = _auth.contact;
     error = null;
-    notifyListeners();
-  }
-
-  void setFullName(String value) {
-    fullName = value;
     notifyListeners();
   }
 
@@ -77,28 +70,6 @@ class ProfileController extends ChangeNotifier {
       return true;
     } catch (e) {
       kids = List<KidProfile>.from(_auth.kids);
-      error = e.toString();
-      notifyListeners();
-      return false;
-    } finally {
-      saving = false;
-      notifyListeners();
-    }
-  }
-
-  Future<bool> save() async {
-    saving = true;
-    error = null;
-    notifyListeners();
-    try {
-      await _backend.patchJson("/api/v1/auth/me/profile", {
-        "full_name": fullName.trim(),
-        if (avatarPath != null) "avatar_path": avatarPath,
-      });
-      await _auth.refreshProfile(silent: true);
-      syncFromAuth();
-      return true;
-    } catch (e) {
       error = e.toString();
       notifyListeners();
       return false;

@@ -6,6 +6,12 @@ cd "$(dirname "$0")"
 ADB="${ANDROID_HOME:-/c/Users/igori/AppData/Local/Android/Sdk}/platform-tools/adb"
 DEVICE="${1:-4feead8a}"
 APK="build/app/outputs/flutter-apk/app-debug.apk"
+if [[ ! -f env/dev.json ]]; then
+  echo "Missing mobile/env/dev.json"
+  echo "Copy env/dev.json.example to env/dev.json and fill in Supabase values."
+  exit 1
+fi
+
 BUILD_ARGS=(
   --dart-define-from-file=env/dev.json
   --dart-define=USE_ADB_REVERSE=true

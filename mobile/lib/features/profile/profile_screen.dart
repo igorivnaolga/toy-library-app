@@ -6,10 +6,10 @@ import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
-import "../info/membership_info_screen.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
+import "member_contact_info.dart";
 
 /// Editable user profile opened from the AppBar avatar button.
 class ProfileScreen extends StatefulWidget {
@@ -20,24 +20,20 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final TextEditingController _nameController;
   late final TextEditingController _kidController;
   DateTime? _kidBirthDate;
   bool _editingChildren = false;
-  bool _editingName = false;
+  bool _contactExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    final profile = context.read<ProfileController>();
-    profile.syncFromAuth();
-    _nameController = TextEditingController(text: profile.fullName);
+    context.read<ProfileController>().syncFromAuth();
     _kidController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
     _kidController.dispose();
     super.dispose();
   }
@@ -76,21 +72,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await profile.pickAndUploadAvatar(source);
   }
 
-  Future<void> _save(ProfileController profile) async {
-    profile.setFullName(_nameController.text);
-    final ok = await profile.save();
-    if (!mounted) return;
-    if (ok) {
-      setState(() {
-        _editingChildren = false;
-        _editingName = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile updated")),
-      );
-    }
-  }
-
   Future<void> _addKid(ProfileController profile) async {
     final name = _kidController.text.trim();
     if (name.isEmpty || _kidBirthDate == null) {
@@ -122,15 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _toggleNameEdit() {
-    setState(() {
-      if (!_editingName) {
-        _nameController.text = context.read<ProfileController>().fullName;
-      }
-      _editingName = !_editingName;
-    });
-  }
-
   void _toggleChildrenEdit() {
     setState(() {
       _editingChildren = !_editingChildren;
@@ -158,6 +130,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     return "${date.day} ${months[date.month - 1]} ${date.year}";
+  }
+
+  bool _hasContactDetails(MemberContactInfo contact) {
+    return contact.hasAddress ||
+        (contact.parentBName?.trim().isNotEmpty ?? false) ||
+        (contact.mobilePhone?.trim().isNotEmpty ?? false) ||
+        (contact.altContactName?.trim().isNotEmpty ?? false) ||
+        (contact.heardAboutUs?.trim().isNotEmpty ?? false) ||
+        (contact.skills?.trim().isNotEmpty ?? false);
   }
 
   Future<void> _signOut() async {
@@ -196,68 +177,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             email: auth.email,
             avatarPath: profile.avatarPath,
             uploadingAvatar: profile.uploadingAvatar,
-            editingName: _editingName,
-            nameController: _nameController,
             onChangePhoto: () => _pickAvatar(profile),
-            onToggleNameEdit: profile.saving ? null : _toggleNameEdit,
-            onNameChanged: profile.setFullName,
           ),
           const SizedBox(height: 28),
           _ProfileSection(
             title: "Membership",
             children: [
-              Material(
-                color: theme.colorScheme.surface,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MembershipInfoScreen(),
-                      ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.card_membership_outlined,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.55),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: auth.membershipTier == "duty" && auth.isMember
-                              ? Text(
-                                  "Volunteer access pending approval",
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.secondary,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                )
-                              : Text(
-                                  "Your current membership",
-                                  style: context.profileSecondary,
-                                ),
-                        ),
-                        _MembershipBadge(
-                          label: membershipStatus,
-                          style: membershipBadgeStyle(
-                            label: membershipStatus,
-                            colors: theme.colorScheme,
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.card_membership_outlined,
+                      color: theme.colorScheme.onSurface
+                          .withValues(alpha: 0.55),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: auth.membershipTier == "duty" && auth.isMember
+                          ? Text(
+                              "Volunteer access pending approval",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.secondary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            )
+                          : Text(
+                              "Your current membership",
+                              style: context.profileSecondary,
+                            ),
+                    ),
+                    _MembershipBadge(
+                      label: membershipStatus,
+                      style: membershipBadgeStyle(
+                        label: membershipStatus,
+                        colors: theme.colorScheme,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+          if (_hasContactDetails(profile.contact)) ...[
+            const SizedBox(height: 24),
+            _CollapsibleProfileSection(
+              title: "Contact & membership form",
+              expanded: _contactExpanded,
+              onToggle: () =>
+                  setState(() => _contactExpanded = !_contactExpanded),
+              children: [
+                _ContactDetailsBody(contact: profile.contact),
+              ],
+            ),
+          ],
           const SizedBox(height: 24),
           _ProfileSection(
             title: "Children",
@@ -372,19 +345,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
-          if (profile.hasUnsavedChanges) ...[
-            const SizedBox(height: 32),
-            BrandChipButton(
-              label: "Save changes",
-              large: true,
-              onPressed: profile.saving ? null : () => _save(profile),
-            ),
-            if (profile.saving)
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-          ],
         ],
       ),
     );
@@ -397,22 +357,14 @@ class _ProfileHeader extends StatelessWidget {
     required this.email,
     required this.avatarPath,
     required this.uploadingAvatar,
-    required this.editingName,
-    required this.nameController,
     required this.onChangePhoto,
-    required this.onToggleNameEdit,
-    required this.onNameChanged,
   });
 
   final String fullName;
   final String? email;
   final String? avatarPath;
   final bool uploadingAvatar;
-  final bool editingName;
-  final TextEditingController nameController;
   final VoidCallback onChangePhoto;
-  final VoidCallback? onToggleNameEdit;
-  final ValueChanged<String> onNameChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -457,54 +409,11 @@ class _ProfileHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        if (editingName)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: nameController,
-                    textAlign: TextAlign.center,
-                    style: fieldTextStyle(context),
-                    cursorColor: fieldCursorColor(context),
-                    decoration: labeledInputDecoration(
-                      context,
-                      labelText: "Full name",
-                      fillColor: theme.colorScheme.surfaceContainerHighest,
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    onChanged: onNameChanged,
-                  ),
-                ),
-                IconButton(
-                  tooltip: "Close",
-                  onPressed: onToggleNameEdit,
-                  icon: const Icon(Icons.close, size: 20),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          )
-        else
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  fullName,
-                  textAlign: TextAlign.center,
-                  style: context.detailTitle,
-                ),
-              ),
-              IconButton(
-                tooltip: "Edit name",
-                onPressed: onToggleNameEdit,
-                icon: const Icon(Icons.edit_outlined, size: 20),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
+        Text(
+          fullName,
+          textAlign: TextAlign.center,
+          style: context.detailTitle,
+        ),
         if (email != null && email!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
@@ -514,6 +423,120 @@ class _ProfileHeader extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class _ContactDetailsBody extends StatelessWidget {
+  const _ContactDetailsBody({required this.contact});
+
+  final MemberContactInfo contact;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <(String, String)>[];
+    void add(String label, String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      rows.add((label, trimmed));
+    }
+
+    add("Parent B", contact.parentBName);
+    if (contact.hasAddress) add("Address", contact.formattedAddress);
+    add("Mobile phone", contact.mobilePhone);
+    add("Emergency contact", contact.altContactName);
+    add("Emergency address", contact.altContactAddress);
+    add("Emergency phone", contact.altContactPhone);
+    add("How you heard about us", contact.heardAboutUs);
+    add("Skills you can offer", contact.skills);
+    if (contact.textRemindersConsent != null) {
+      add(
+        "Text reminders",
+        contact.textRemindersConsent! ? "Yes" : "No",
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            Text(rows[i].$1, style: context.formSectionLabel),
+            const SizedBox(height: 4),
+            Text(rows[i].$2, style: context.listSubtitle),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CollapsibleProfileSection extends StatelessWidget {
+  const _CollapsibleProfileSection({
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: theme.colorScheme.surfaceContainerLowest,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              expanded ? 16 : 16,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              InkWell(
+                onTap: onToggle,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title.toUpperCase(),
+                          style: context.formSectionLabel,
+                        ),
+                      ),
+                      AnimatedRotation(
+                        turns: expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (expanded) ...[
+                const Divider(height: 1),
+                ...children,
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

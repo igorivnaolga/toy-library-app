@@ -68,6 +68,43 @@ def _apply_schema_patches(engine) -> None:
         )
         conn.execute(
             text(
+                "ALTER TABLE public.profiles "
+                "ADD COLUMN IF NOT EXISTS parent_b_name text, "
+                "ADD COLUMN IF NOT EXISTS address_line1 text, "
+                "ADD COLUMN IF NOT EXISTS address_line2 text, "
+                "ADD COLUMN IF NOT EXISTS suburb text, "
+                "ADD COLUMN IF NOT EXISTS mobile_phone text, "
+                "ADD COLUMN IF NOT EXISTS alt_contact_name text, "
+                "ADD COLUMN IF NOT EXISTS alt_contact_address text, "
+                "ADD COLUMN IF NOT EXISTS alt_contact_phone text, "
+                "ADD COLUMN IF NOT EXISTS heard_about_us text, "
+                "ADD COLUMN IF NOT EXISTS skills text, "
+                "ADD COLUMN IF NOT EXISTS text_reminders_consent boolean, "
+                "ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz, "
+                "ADD COLUMN IF NOT EXISTS registered_at date"
+            )
+        )
+        conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                  IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'profiles'
+                      AND column_name = 'home_phone'
+                  ) THEN
+                    UPDATE public.profiles
+                    SET mobile_phone = home_phone
+                    WHERE mobile_phone IS NULL AND home_phone IS NOT NULL;
+                  END IF;
+                END $$;
+                """
+            )
+        )
+        conn.execute(
+            text(
                 "ALTER TABLE public.toys "
                 "ADD COLUMN IF NOT EXISTS cv_ref_piece_count integer, "
                 "ADD COLUMN IF NOT EXISTS cv_ref_fg_pixels integer, "

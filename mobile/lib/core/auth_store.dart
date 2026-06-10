@@ -6,6 +6,7 @@ import "package:supabase_flutter/supabase_flutter.dart";
 import "api_client.dart";
 import "api_exception.dart";
 import "../features/profile/kid_profile.dart";
+import "../features/profile/member_contact_info.dart";
 
 /// App roles from backend `profiles.role`.
 enum AppRole { guest, member, volunteer, admin }
@@ -57,6 +58,9 @@ class AuthStore extends ChangeNotifier {
   List<String> kidsNames = const [];
   List<KidProfile> kids = const [];
   String? avatarPath;
+  MemberContactInfo contact = const MemberContactInfo();
+
+  bool get isAuthConfigured => _supabase != null;
 
   bool get isLoggedIn => _supabase?.auth.currentSession != null;
   String? get accessToken => _supabase?.auth.currentSession?.accessToken;
@@ -158,6 +162,7 @@ class AuthStore extends ChangeNotifier {
       kidsNames = const [];
       kids = const [];
       avatarPath = null;
+      contact = const MemberContactInfo();
       error = authProfileErrorMessage(e);
     } finally {
       if (!silent) {
@@ -185,6 +190,7 @@ class AuthStore extends ChangeNotifier {
         kids = _parseKids(me);
         kidsNames = kids.map((kid) => kid.name).toList();
         avatarPath = me["avatar_path"]?.toString();
+        contact = MemberContactInfo.fromJson(me);
         return;
       } catch (e) {
         lastError = e;
@@ -212,6 +218,7 @@ class AuthStore extends ChangeNotifier {
     kidsNames = const [];
     kids = const [];
     avatarPath = null;
+    contact = const MemberContactInfo();
     error = null;
     profileLoading = false;
   }

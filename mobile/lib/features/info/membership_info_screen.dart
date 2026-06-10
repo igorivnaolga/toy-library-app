@@ -86,13 +86,6 @@ class MembershipInfoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (auth.isGuest) ...[
-          Text(
-            "Sign in to choose a membership type and borrow toys from the library.",
-            style: context.bodyText,
-          ),
-          const SizedBox(height: 16),
-        ],
         for (var i = 0; i < membershipTierOptions.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),
           MembershipTierCard(

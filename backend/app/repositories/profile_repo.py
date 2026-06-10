@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -82,18 +82,73 @@ def update_member_for_admin(
     return profile
 
 
+def _clean_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
+
+
 def update_profile(
     session: Session,
     profile: Profile,
     *,
     full_name: str | None = None,
+    parent_b_name: str | None = None,
+    address_line1: str | None = None,
+    address_line2: str | None = None,
+    suburb: str | None = None,
+    mobile_phone: str | None = None,
+    alt_contact_name: str | None = None,
+    alt_contact_address: str | None = None,
+    alt_contact_phone: str | None = None,
+    heard_about_us: str | None = None,
+    skills: str | None = None,
+    text_reminders_consent: bool | None = None,
+    registered_at: date | None = None,
     kids: list[KidProfile] | None = None,
     avatar_path: str | None = None,
+    parent_b_name_set: bool = False,
+    address_line1_set: bool = False,
+    address_line2_set: bool = False,
+    suburb_set: bool = False,
+    mobile_phone_set: bool = False,
+    alt_contact_name_set: bool = False,
+    alt_contact_address_set: bool = False,
+    alt_contact_phone_set: bool = False,
+    heard_about_us_set: bool = False,
+    skills_set: bool = False,
+    text_reminders_consent_set: bool = False,
+    registered_at_set: bool = False,
 ) -> Profile:
     """Update editable profile fields for the current user."""
     if full_name is not None:
         cleaned = full_name.strip()
         profile.full_name = cleaned or None
+    if parent_b_name_set:
+        profile.parent_b_name = _clean_optional_text(parent_b_name)
+    if address_line1_set:
+        profile.address_line1 = _clean_optional_text(address_line1)
+    if address_line2_set:
+        profile.address_line2 = _clean_optional_text(address_line2)
+    if suburb_set:
+        profile.suburb = _clean_optional_text(suburb)
+    if mobile_phone_set:
+        profile.mobile_phone = _clean_optional_text(mobile_phone)
+    if alt_contact_name_set:
+        profile.alt_contact_name = _clean_optional_text(alt_contact_name)
+    if alt_contact_address_set:
+        profile.alt_contact_address = _clean_optional_text(alt_contact_address)
+    if alt_contact_phone_set:
+        profile.alt_contact_phone = _clean_optional_text(alt_contact_phone)
+    if heard_about_us_set:
+        profile.heard_about_us = _clean_optional_text(heard_about_us)
+    if skills_set:
+        profile.skills = _clean_optional_text(skills)
+    if text_reminders_consent_set:
+        profile.text_reminders_consent = text_reminders_consent
+    if registered_at_set:
+        profile.registered_at = registered_at
     if kids is not None:
         stored: list[dict[str, str | None]] = []
         names: list[str] = []
@@ -111,6 +166,62 @@ def update_profile(
     if avatar_path is not None:
         cleaned_path = avatar_path.strip()
         profile.avatar_path = cleaned_path or None
+    return profile
+
+
+def complete_registration(
+    session: Session,
+    profile: Profile,
+    *,
+    full_name: str,
+    parent_b_name: str | None,
+    address_line1: str | None,
+    address_line2: str | None,
+    suburb: str | None,
+    mobile_phone: str | None,
+    alt_contact_name: str | None,
+    alt_contact_address: str | None,
+    alt_contact_phone: str | None,
+    heard_about_us: str | None,
+    skills: str | None,
+    kids: list[KidProfile],
+    membership_tier: str,
+    text_reminders_consent: bool | None,
+    registered_at: date | None,
+) -> Profile:
+    """Persist the paper registration form and set first-time membership."""
+    apply_membership_choice(session, profile, membership_tier)
+    update_profile(
+        session,
+        profile,
+        full_name=full_name,
+        parent_b_name=parent_b_name,
+        address_line1=address_line1,
+        address_line2=address_line2,
+        suburb=suburb,
+        mobile_phone=mobile_phone,
+        alt_contact_name=alt_contact_name,
+        alt_contact_address=alt_contact_address,
+        alt_contact_phone=alt_contact_phone,
+        heard_about_us=heard_about_us,
+        skills=skills,
+        text_reminders_consent=text_reminders_consent,
+        registered_at=registered_at or date.today(),
+        kids=kids,
+        parent_b_name_set=True,
+        address_line1_set=True,
+        address_line2_set=True,
+        suburb_set=True,
+        mobile_phone_set=True,
+        alt_contact_name_set=True,
+        alt_contact_address_set=True,
+        alt_contact_phone_set=True,
+        heard_about_us_set=True,
+        skills_set=True,
+        text_reminders_consent_set=True,
+        registered_at_set=True,
+    )
+    profile.terms_accepted_at = datetime.now(timezone.utc)
     return profile
 
 

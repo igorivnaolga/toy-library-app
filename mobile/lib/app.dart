@@ -7,6 +7,7 @@ import "package:provider/provider.dart";
 import "core/api_client.dart";
 import "core/app_theme.dart";
 import "core/auth_store.dart";
+import "core/library_app_bar_title.dart";
 import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
 import "features/admin/admin_loans_screen.dart";
@@ -44,15 +45,16 @@ class ToyLibraryApp extends StatelessWidget {
     late final AuthStore auth;
     final client = backend ?? ApiClient(tokenProvider: () => auth.accessToken);
 
+    const supabaseUrl = String.fromEnvironment("SUPABASE_URL", defaultValue: "");
+    const supabaseAnonKey =
+        String.fromEnvironment("SUPABASE_ANON_KEY", defaultValue: "");
+
     if (authStore != null) {
       auth = authStore!;
+    } else if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+      auth = AuthStore.supabase(client);
     } else {
-      try {
-        auth = AuthStore.supabase(client);
-      } catch (_) {
-        // Useful for tests or when SUPABASE_* dart-defines aren't set yet.
-        auth = AuthStore.guest();
-      }
+      auth = AuthStore.guest();
     }
 
     return MultiProvider(
@@ -179,10 +181,7 @@ class _RoleHomeState extends State<_RoleHome> {
             builder: (context, _) {
               return Scaffold(
                 appBar: AppBar(
-                  title: const Text(
-                    LibraryInfoCopy.appBarTitle,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: const LibraryAppBarTitle(),
                   actions: [
                     if (auth.isAdmin) ...[
                       const AdminNotificationBell(),

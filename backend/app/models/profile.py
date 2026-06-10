@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, String, text
+from datetime import date, datetime
+
+from sqlalchemy import Boolean, Date, DateTime, String, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +45,21 @@ class Profile(Base):
     )
     avatar_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     admin_notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    parent_b_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    suburb: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mobile_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    alt_contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    alt_contact_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    alt_contact_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    heard_about_us: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    skills: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    text_reminders_consent: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    registered_at: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     bookings: Mapped[list["Booking"]] = relationship(back_populates="profile")
     loans: Mapped[list["Loan"]] = relationship(back_populates="profile")
