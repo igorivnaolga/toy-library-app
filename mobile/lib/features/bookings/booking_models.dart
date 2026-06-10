@@ -82,6 +82,10 @@ class BookingItem {
     if (!isPending) {
       return statusLabel;
     }
+    final price = rentalPriceLabel;
+    if (price != null) {
+      return "Hire charge $price";
+    }
     return "";
   }
 

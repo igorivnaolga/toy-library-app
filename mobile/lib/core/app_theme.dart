@@ -10,6 +10,10 @@ const Color kStatusOnLoanFg = Color(0xFFE65100);
 
 const Color kModalSurface = Color(0xFFF6F4F0);
 
+/// Soft tint for grouped list date headers (bookings, loans).
+const Color kGroupHeaderBackground = Color(0xFFFFF8E8);
+const Color kGroupHeaderBorder = Color(0xFFF5D78E);
+
 /// Shared height for side-by-side modal actions (Cancel + confirm).
 const double kModalActionButtonHeight = 44;
 

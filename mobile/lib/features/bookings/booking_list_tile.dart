@@ -15,6 +15,7 @@ class BookingListTile extends StatelessWidget {
     required this.onOpen,
     required this.onChangeDate,
     required this.onCancel,
+    this.inGroup = false,
   });
 
   final BookingItem item;
@@ -22,6 +23,7 @@ class BookingListTile extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onChangeDate;
   final VoidCallback? onCancel;
+  final bool inGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -30,19 +32,26 @@ class BookingListTile extends StatelessWidget {
     final subtitle =
         item.isPending ? item.groupedListSubtitle : item.listSubtitle;
 
+    final photoSize = inGroup ? 56.0 : 80.0;
+
     return Opacity(
       opacity: item.isCancelled ? 0.72 : 1,
       child: Material(
-        color: colors.surfaceContainerLowest,
+        color: inGroup ? colors.surface : colors.surfaceContainerLowest,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(inGroup ? 10 : 12),
+          side: inGroup
+              ? BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.55),
+                )
+              : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onOpen,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, inGroup ? 10 : 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -52,7 +61,7 @@ class BookingListTile extends StatelessWidget {
                     ToyPhotoTile(
                       toyId: item.toyId,
                       photoFile: item.photoFile,
-                      size: 80,
+                      size: photoSize,
                     ),
                     const SizedBox(width: 12),
                     Expanded(

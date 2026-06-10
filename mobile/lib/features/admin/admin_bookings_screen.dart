@@ -8,7 +8,7 @@ import "../../core/search_field.dart";
 import "../../core/section_header.dart";
 import "../bookings/booking_list_tile.dart";
 import "../bookings/booking_models.dart";
-import "../bookings/booking_pickup_date_header.dart";
+import "../bookings/booking_pickup_date_section.dart";
 import "admin_models.dart";
 import "../catalog/toy_detail_screen.dart";
 import "admin_controller.dart";
@@ -197,31 +197,21 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                   children: [
                     for (var d = 0; d < groups.byPickupDate.length; d++) ...[
-                      if (d > 0) const SizedBox(height: 20),
-                      BookingPickupDateHeader(
+                      if (d > 0) const SizedBox(height: 12),
+                      BookingPickupDateSection(
                         group: groups.byPickupDate[d].pickupSummary,
                         showTotalRental: false,
-                      ),
-                      for (var m = 0;
-                          m < groups.byPickupDate[d].members.length;
-                          m++) ...[
-                        if (m > 0) const SizedBox(height: 12),
-                        _AdminMemberHeader(
-                          section: groups.byPickupDate[d].members[m],
-                          nested: true,
-                        ),
-                        for (var i = 0;
-                            i <
-                                groups
-                                    .byPickupDate[d].members[m].bookings.length;
-                            i++) ...[
-                          if (i > 0) const SizedBox(height: 8),
-                          _AdminBookingTile(
-                            item: groups
-                                .byPickupDate[d].members[m].bookings[i],
-                          ),
+                        children: [
+                          for (var m = 0;
+                              m < groups.byPickupDate[d].members.length;
+                              m++) ...[
+                            if (m > 0) const SizedBox(height: 10),
+                            _AdminMemberSection(
+                              section: groups.byPickupDate[d].members[m],
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ],
                     if (groups.withoutPickupDate.isNotEmpty) ...[
                       if (groups.byPickupDate.isNotEmpty)
@@ -230,19 +220,10 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                       for (var m = 0;
                           m < groups.withoutPickupDate.length;
                           m++) ...[
-                        if (m > 0) const SizedBox(height: 12),
-                        _AdminMemberHeader(
+                        if (m > 0) const SizedBox(height: 10),
+                        _AdminMemberSection(
                           section: groups.withoutPickupDate[m],
-                          nested: true,
                         ),
-                        for (var i = 0;
-                            i < groups.withoutPickupDate[m].bookings.length;
-                            i++) ...[
-                          if (i > 0) const SizedBox(height: 8),
-                          _AdminBookingTile(
-                            item: groups.withoutPickupDate[m].bookings[i],
-                          ),
-                        ],
                       ],
                     ],
                   ],
@@ -256,122 +237,139 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
   }
 }
 
-class _AdminMemberHeader extends StatelessWidget {
-  const _AdminMemberHeader({
-    required this.section,
-    this.nested = false,
-  });
+class _AdminMemberSection extends StatelessWidget {
+  const _AdminMemberSection({required this.section});
 
   final AdminBookingMemberSection section;
-  final bool nested;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final email = section.memberEmail?.trim();
     final totalLabel = formatRentalPriceCents(section.totalRentalCents);
-    final toyLabel = section.toyCount == 1
-        ? "1 toy"
-        : "${section.toyCount} toys";
+    final toyLabel =
+        section.toyCount == 1 ? "1 toy" : "${section.toyCount} toys";
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(0, 4, 0, nested ? 8 : 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: colors.outlineVariant.withValues(alpha: 0.65),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.7),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.person_outline,
-                  size: 22,
-                  color: colors.onSurface.withValues(alpha: 0.72),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerHighest,
+              border: Border(
+                left: BorderSide(
+                  color: kBrandYellow.withValues(alpha: 0.55),
+                  width: 4,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Member", style: context.formSectionLabel),
-                      const SizedBox(height: 2),
-                      Text(
-                        section.memberLabel,
-                        style: context.cardTitle.copyWith(fontSize: 17),
-                      ),
-                      if (email != null &&
-                          email.isNotEmpty &&
-                          email.toLowerCase() !=
-                              section.memberLabel.toLowerCase()) ...[
-                        const SizedBox(height: 2),
-                        Text(email, style: context.listSubtitle),
-                      ],
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    toyLabel,
-                    style: TextStyle(
-                      color: colors.onSurface.withValues(alpha: 0.82),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (totalLabel != null) ...[
-              const SizedBox(height: 10),
-              Divider(
-                height: 1,
-                color: colors.outlineVariant.withValues(alpha: 0.45),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(
-                    "Total rental",
-                    style: context.listSubtitle.copyWith(
-                      fontWeight: FontWeight.w600,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 20,
                       color: colors.onSurface.withValues(alpha: 0.72),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    totalLabel,
-                    style: context.cardTitle.copyWith(fontSize: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        section.memberLabel,
+                        style: context.cardTitle.copyWith(fontSize: 16),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kBrandYellow.withValues(alpha: 0.28),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        toyLabel,
+                        style: const TextStyle(
+                          color: kBrandOnYellow,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (email != null &&
+                    email.isNotEmpty &&
+                    email.toLowerCase() !=
+                        section.memberLabel.toLowerCase()) ...[
+                  const SizedBox(height: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28),
+                    child: Text(email, style: context.listSubtitle),
                   ),
                 ],
-              ),
-              if (section.unpricedBookingCount > 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    section.unpricedBookingCount == 1
-                        ? "Excludes 1 toy without a listed price"
-                        : "Excludes ${section.unpricedBookingCount} toys without listed prices",
-                    style: context.listSubtitle.copyWith(fontSize: 12),
+                if (totalLabel != null) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28),
+                    child: Row(
+                      children: [
+                        Text(
+                          "Total rental",
+                          style: context.listSubtitle.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface.withValues(alpha: 0.72),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          totalLabel,
+                          style: context.cardTitle.copyWith(fontSize: 16),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
-          ],
-        ),
+                  if (section.unpricedBookingCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28, top: 2),
+                      child: Text(
+                        section.unpricedBookingCount == 1
+                            ? "Excludes 1 toy without a listed price"
+                            : "Excludes ${section.unpricedBookingCount} toys without listed prices",
+                        style: context.listSubtitle.copyWith(fontSize: 12),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < section.bookings.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _AdminBookingTile(item: section.bookings[i]),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -387,6 +385,7 @@ class _AdminBookingTile extends StatelessWidget {
     return BookingListTile(
       item: item,
       loading: false,
+      inGroup: true,
       onOpen: () {
         Navigator.of(context).push(
           MaterialPageRoute<void>(

@@ -4,7 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../catalog/toy_detail_screen.dart";
-import "loan_due_date_header.dart";
+import "loan_due_date_section.dart";
 import "loan_list_tile.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
@@ -142,26 +142,25 @@ class _MyLoansView extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             children: [
+              if (sections.activeByDueDate.isNotEmpty)
+                const SectionHeader("Active"),
               for (var g = 0; g < sections.activeByDueDate.length; g++) ...[
-                if (g > 0) const SizedBox(height: 20),
-                LoanDueDateHeader(
-                  dueDate: sections.activeByDueDate[g].dueDate,
-                  isOverdue: sections.activeByDueDate[g].isOverdue,
+                if (g > 0) const SizedBox(height: 12),
+                LoanDueDateSection(
+                  group: sections.activeByDueDate[g],
+                  children: [
+                    for (final loan in sections.activeByDueDate[g].loans)
+                      LoanListTile(
+                        item: loan,
+                        loading: c.myLoansLoading,
+                        inGroup: true,
+                        onOpen: () => onOpenToy(loan.toyId),
+                        onRenew: loan.canRenew
+                            ? () => onRenew(loan)
+                            : null,
+                      ),
+                  ],
                 ),
-                for (var i = 0;
-                    i < sections.activeByDueDate[g].loans.length;
-                    i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  LoanListTile(
-                    item: sections.activeByDueDate[g].loans[i],
-                    loading: c.myLoansLoading,
-                    onOpen: () =>
-                        onOpenToy(sections.activeByDueDate[g].loans[i].toyId),
-                    onRenew: sections.activeByDueDate[g].loans[i].canRenew
-                        ? () => onRenew(sections.activeByDueDate[g].loans[i])
-                        : null,
-                  ),
-                ],
               ],
               if (sections.activeByDueDate.isNotEmpty &&
                   sections.returned.isNotEmpty)

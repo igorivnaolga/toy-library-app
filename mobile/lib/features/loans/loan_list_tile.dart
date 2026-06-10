@@ -13,12 +13,14 @@ class LoanListTile extends StatelessWidget {
     required this.loading,
     required this.onOpen,
     this.onRenew,
+    this.inGroup = false,
   });
 
   final LoanItem item;
   final bool loading;
   final VoidCallback onOpen;
   final VoidCallback? onRenew;
+  final bool inGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -29,16 +31,21 @@ class LoanListTile extends StatelessWidget {
     return Opacity(
       opacity: item.isReturned ? 0.72 : 1,
       child: Material(
-        color: colors.surfaceContainerLowest,
+        color: inGroup ? colors.surface : colors.surfaceContainerLowest,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(inGroup ? 10 : 12),
+          side: inGroup
+              ? BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.55),
+                )
+              : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onOpen,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(inGroup ? 10 : 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
