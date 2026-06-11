@@ -42,6 +42,7 @@ from app.repositories.booking_repo import (
     purge_expired_cancelled_bookings,
 )
 from app.repositories.toy_repo import _db_toy_count, get_toy_by_id
+from app.services.payment_service import PaymentError, assert_membership_paid_for_booking
 
 # Match seed CSV labels; ``normalize_availability`` maps these to available/reserved.
 _TOY_STATUS_IN_LIBRARY = "In library"
@@ -264,6 +265,10 @@ def create_booking_for_user(
 ) -> Booking:
     """Reserve an available toy for the member; updates toy status to reserved."""
     _run_booking_maintenance(session)
+    try:
+        assert_membership_paid_for_booking(session, user_id)
+    except PaymentError as exc:
+        raise BookingError(exc.code, exc.message) from exc
 
     toy = _get_toy_row(session, toy_id)
     if toy is None:

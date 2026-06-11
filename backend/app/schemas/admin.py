@@ -55,6 +55,17 @@ class AdminMemberDetailOut(AdminMemberOut):
         None,
         description="Private notes visible to admins only.",
     )
+    membership_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Pending membership and bond charges (NZD cents).",
+    )
+    membership_fees_paid: bool = True
+    balance_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Total pending balance in NZD cents.",
+    )
 
 
 class AdminMembershipUpdateIn(BaseModel):

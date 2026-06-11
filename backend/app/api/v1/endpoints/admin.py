@@ -43,6 +43,11 @@ from app.schemas.notification import MemberPushRemindersResult
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
+from app.services.payment_service import (
+    balance_summary,
+    membership_payment_summary,
+    refresh_membership_payments_for_tier,
+)
 from app.services.toy_photo_upload import upload_toy_photo_service
 from app.services.toy_service import create_toy_service, update_toy_service
 
@@ -241,6 +246,8 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
     if created_row is not None:
         membership_ends_at = created_row + timedelta(days=365)
     kids = kids_from_profile(profile)
+    payment_summary = membership_payment_summary(session, profile.id)
+    account_balance = balance_summary(session, profile.id)
     return AdminMemberDetailOut(
         user_id=str(profile.id),
         email=get_user_email(session, profile.id) or "",
@@ -253,6 +260,9 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
         kids=kids,
         avatar_path=profile.avatar_path,
         admin_notes=profile.admin_notes,
+        membership_due_cents=payment_summary.due_cents,
+        membership_fees_paid=payment_summary.fees_paid,
+        balance_due_cents=account_balance.balance_due_cents,
     )
 
 
@@ -284,6 +294,7 @@ def update_member_membership(
         raise HTTPException(status_code=404, detail="Member not found")
     try:
         update_membership_tier_for_admin(db, profile, body.membership_tier)
+        refresh_membership_payments_for_tier(db, profile.id, body.membership_tier)
     except ValueError as e:
         code = str(e)
         if code == "cannot_change_admin":

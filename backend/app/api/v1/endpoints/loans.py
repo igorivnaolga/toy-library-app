@@ -102,10 +102,16 @@ def list_active_loans(
 def check_out_booking(
     body: LoanCheckOutFromBooking,
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_on_duty),
+    principal: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
-        loan = check_out_from_booking(db, uuid.UUID(body.booking_id))
+        loan = check_out_from_booking(
+            db,
+            uuid.UUID(body.booking_id),
+            rental_payment=body.rental_payment,
+            payment_method=body.payment_method,
+            recorded_by=principal.id,
+        )
     except LoanError as e:
         raise _http_error(e) from e
     except ValueError as e:
@@ -118,13 +124,16 @@ def check_out_booking(
 def check_out_walk_in(
     body: LoanCheckOutWalkIn,
     db: Session = Depends(get_db),
-    _: Principal = Depends(_require_on_duty),
+    principal: Principal = Depends(_require_on_duty),
 ) -> LoanOut:
     try:
         loan = check_out_walk_in_service(
             db,
             user_id=uuid.UUID(body.user_id),
             toy_id=body.toy_id,
+            rental_payment=body.rental_payment,
+            payment_method=body.payment_method,
+            recorded_by=principal.id,
         )
     except LoanError as e:
         raise _http_error(e) from e

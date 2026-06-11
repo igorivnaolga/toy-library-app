@@ -9,7 +9,9 @@ import "../../core/search_field.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/catalog_models.dart";
 import "desk_member.dart";
+import "desk_checkout_dialog.dart";
 import "loans_controller.dart";
+import "../payments/payment_models.dart";
 
 /// Walk-in checkout: pick a member, then add one or more toys to check out.
 class DeskWalkInPanel extends StatefulWidget {
@@ -187,6 +189,22 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
     final member = _selectedMember;
     if (member == null || _selectedToys.isEmpty) return;
 
+    final checkout = await showDeskCheckoutDialog(
+      context,
+      memberLabel: member.displayLabel,
+      memberBalanceDueCents: member.balanceDueCents,
+      lines: _selectedToys
+          .map(
+            (toy) => DeskCheckoutLine(
+              toyId: toy.toyId,
+              toyName: toy.name,
+              rentalPriceCents: toy.rentalPriceCents,
+            ),
+          )
+          .toList(),
+    );
+    if (checkout == null || !mounted) return;
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -197,6 +215,8 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         await controller.checkOutWalkIn(
           userId: member.userId,
           toyId: toy.toyId,
+          rentalPayment: checkout.rentalPayment,
+          paymentMethod: checkout.paymentMethod,
         );
       }
       if (!mounted) return;
@@ -218,6 +238,16 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         _error = loanActionErrorMessage(e);
       });
     }
+  }
+
+  String _toyChipLabel(ToyItem toy) {
+    final price = toy.rentalPriceCents != null && toy.rentalPriceCents! > 0
+        ? formatDueCents(toy.rentalPriceCents!)
+        : null;
+    if (price != null) {
+      return "${toy.name} (${toy.toyId}) · $price";
+    }
+    return "${toy.name} (${toy.toyId})";
   }
 
   String get _checkoutLabel {
@@ -251,9 +281,24 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
             ),
             const SizedBox(height: 6),
             if (_hasMember)
-              _SelectionChip(
-                label: _selectedMember!.displayLabel,
-                onClear: busy ? null : _clearMember,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SelectionChip(
+                    label: _selectedMember!.displayLabel,
+                    onClear: busy ? null : _clearMember,
+                  ),
+                  if (_selectedMember!.balanceDueCents > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      "Balance owing: "
+                      "${formatDueCents(_selectedMember!.balanceDueCents)}",
+                      style: context.listSubtitle.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
               )
             else ...[
               TextField(
@@ -296,7 +341,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                   children: _selectedToys
                       .map(
                         (toy) => _SelectionChip(
-                          label: "${toy.name} (${toy.toyId})",
+                          label: _toyChipLabel(toy),
                           onClear:
                               busy ? null : () => _removeToy(toy.toyId),
                         ),

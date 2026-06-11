@@ -3,6 +3,7 @@ import "package:flutter/foundation.dart";
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
+import "../payments/payment_models.dart";
 import "admin_models.dart";
 
 /// Loads admin panel data from `/api/v1/admin/*`.
@@ -206,6 +207,33 @@ class AdminController extends ChangeNotifier {
       {"membership_tier": membershipTier},
     );
     return AdminMemberDetail.fromJson(json);
+  }
+
+  Future<List<PaymentItem>> loadMemberPayments(String userId) async {
+    final json = await _client.getJson("/api/v1/payments/users/$userId");
+    return parsePaymentList(json);
+  }
+
+  Future<List<PaymentItem>> markMembershipPaid(
+    String userId, {
+    required String method,
+  }) async {
+    final json = await _client.postJson(
+      "/api/v1/payments/users/$userId/mark-membership-paid",
+      {"method": method},
+    );
+    return parsePaymentList(json);
+  }
+
+  Future<PaymentItem> markPaymentPaid(
+    String paymentId, {
+    required String method,
+  }) async {
+    final json = await _client.postJson(
+      "/api/v1/payments/$paymentId/mark-paid",
+      {"method": method},
+    );
+    return PaymentItem.fromJson(json);
   }
 
   Future<AdminMemberDetail> updateMemberProfile(

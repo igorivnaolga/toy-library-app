@@ -162,11 +162,17 @@ class AdminMemberDetail extends AdminMember {
     this.kids = const [],
     this.avatarPath,
     this.adminNotes,
+    this.membershipDueCents = 0,
+    this.membershipFeesPaid = true,
+    this.balanceDueCents = 0,
   });
 
   final List<KidProfile> kids;
   final String? avatarPath;
   final String? adminNotes;
+  final int membershipDueCents;
+  final bool membershipFeesPaid;
+  final int balanceDueCents;
 
   factory AdminMemberDetail.fromJson(Map<String, dynamic> json) {
     return AdminMemberDetail(
@@ -185,6 +191,10 @@ class AdminMemberDetail extends AdminMember {
       kids: parseKidsList(json["kids"]),
       avatarPath: json["avatar_path"]?.toString(),
       adminNotes: json["admin_notes"]?.toString(),
+      membershipDueCents:
+          (json["membership_due_cents"] as num?)?.toInt() ?? 0,
+      membershipFeesPaid: json["membership_fees_paid"] != false,
+      balanceDueCents: (json["balance_due_cents"] as num?)?.toInt() ?? 0,
     );
   }
 }

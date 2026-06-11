@@ -72,6 +72,20 @@ class MeOut(ProfileContactOut):
     kids: list[KidProfile] = Field(default_factory=list)
     kids_names: list[str] = Field(default_factory=list)
     avatar_path: str | None = None
+    membership_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Sum of pending membership and bond charges (NZD cents).",
+    )
+    membership_fees_paid: bool = Field(
+        True,
+        description="False when membership/bond payments are still pending.",
+    )
+    balance_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Total pending balance (membership, bond, and rentals) in NZD cents.",
+    )
 
 
 class ProfileUpdateIn(ProfileContactOut):

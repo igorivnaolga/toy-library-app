@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="toy_library_mobile"
+        android:label="Toy Library"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data

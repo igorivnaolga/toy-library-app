@@ -71,3 +71,7 @@ class Profile(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    payments: Mapped[list["Payment"]] = relationship(
+        back_populates="user",
+        foreign_keys="Payment.user_id",
+    )

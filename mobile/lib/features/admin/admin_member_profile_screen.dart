@@ -7,6 +7,7 @@ import "../../core/brand_chip_button.dart";
 import "../profile/kid_profile.dart";
 import "../profile/profile_avatar.dart";
 import "../profile/profile_labels.dart";
+import "../payments/payment_models.dart";
 import "admin_controller.dart";
 import "admin_models.dart";
 
@@ -30,6 +31,7 @@ class AdminMemberProfileScreen extends StatefulWidget {
 
 class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   AdminMemberDetail? _member;
+  List<PaymentItem> _payments = const [];
   String? _selectedTier;
   bool _loading = true;
   bool _saving = false;
@@ -70,11 +72,13 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
       _error = null;
     });
     try {
-      final member =
-          await context.read<AdminController>().loadMemberDetail(widget.userId);
+      final admin = context.read<AdminController>();
+      final member = await admin.loadMemberDetail(widget.userId);
+      final payments = await admin.loadMemberPayments(widget.userId);
       if (!mounted) return;
       setState(() {
         _member = member;
+        _payments = payments;
         _selectedTier = member.membershipTier;
         _notesController.text = member.adminNotes ?? "";
         _loading = false;
@@ -265,6 +269,109 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     return "Member";
   }
 
+  Future<void> _markMembershipPaid(String method) async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final admin = context.read<AdminController>();
+      final updated = await admin.markMembershipPaid(
+        widget.userId,
+        method: method,
+      );
+      final member = await admin.loadMemberDetail(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _payments = updated;
+        _member = member;
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Membership payment recorded")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminActionErrorMessage(e);
+        _saving = false;
+      });
+    }
+  }
+
+  Future<void> _markPaymentPaid(PaymentItem payment, String method) async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final admin = context.read<AdminController>();
+      await admin.markPaymentPaid(payment.paymentId, method: method);
+      final member = await admin.loadMemberDetail(widget.userId);
+      final payments = await admin.loadMemberPayments(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _member = member;
+        _payments = payments;
+        _saving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminActionErrorMessage(e);
+        _saving = false;
+      });
+    }
+  }
+
+  void _showMarkPaidSheet({PaymentItem? payment}) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text("Cash"),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (payment != null) {
+                  _markPaymentPaid(payment, "cash");
+                } else {
+                  _markMembershipPaid("cash");
+                }
+              },
+            ),
+            ListTile(
+              title: const Text("EFTPOS"),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (payment != null) {
+                  _markPaymentPaid(payment, "eftpos");
+                } else {
+                  _markMembershipPaid("eftpos");
+                }
+              },
+            ),
+            ListTile(
+              title: const Text("Bank transfer"),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (payment != null) {
+                  _markPaymentPaid(payment, "bank");
+                } else {
+                  _markMembershipPaid("bank");
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _membershipBadgeLabel(AdminMemberDetail member) {
     if (member.role == "volunteer") return "Volunteer";
     if (member.membershipTier == "duty" && !member.volunteerConfirmed) {
@@ -329,6 +436,78 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 28),
+                _AdminProfileSection(
+                  title: "Payments",
+                  children: [
+                    if (member != null && member.balanceDueCents > 0) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Text(
+                          "Balance owing: ${formatDueCents(member.balanceDueCents)}",
+                          style: context.cardTitle.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (member != null && !member.membershipFeesPaid) ...[
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          member.balanceDueCents > 0 ? 0 : 16,
+                          16,
+                          8,
+                        ),
+                        child: Text(
+                          "Membership due: ${formatDueCents(member.membershipDueCents)}",
+                          style: context.listSubtitle,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: BrandChipButton(
+                          label: _saving
+                              ? "Recording…"
+                              : "Record membership paid",
+                          onPressed: _saving
+                              ? null
+                              : () => _showMarkPaidSheet(),
+                        ),
+                      ),
+                    ],
+                    if (_payments.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          member?.membershipFeesPaid == true
+                              ? "No payment records yet."
+                              : "No payment rows loaded.",
+                          style: context.listSubtitle,
+                        ),
+                      )
+                    else
+                      for (final payment in _payments) ...[
+                        ListTile(
+                          title: Text(
+                            payment.description ??
+                                "${payment.typeLabel} — ${payment.amountLabel}",
+                          ),
+                          subtitle: Text(payment.statusLabel),
+                          trailing: payment.isPending
+                              ? TextButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => _showMarkPaidSheet(
+                                            payment: payment,
+                                          ),
+                                  child: const Text("Mark paid"),
+                                )
+                              : null,
+                        ),
+                      ],
+                  ],
+                ),
+                const SizedBox(height: 20),
                 _AdminProfileSection(
                   title: "Membership",
                   onEdit: _saving ? null : _toggleMembershipEdit,

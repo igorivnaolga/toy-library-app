@@ -7,6 +7,8 @@ import "../../core/auth_store.dart";
 import "../auth/login_screen.dart";
 import "../membership/membership_tier_card.dart";
 import "../membership/membership_tiers.dart";
+import "../payments/member_balance_card.dart";
+import "../payments/payment_instructions_card.dart";
 import "../profile/profile_labels.dart";
 import "library_info_copy.dart";
 
@@ -85,6 +87,17 @@ class MembershipInfoScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          if (!auth.isGuest) ...[
+            MemberBalanceCard(balanceDueCents: auth.balanceDueCents),
+            const SizedBox(height: 12),
+          ],
+          if (!auth.membershipFeesPaid) ...[
+            PaymentInstructionsCard(
+              amountDueCents: auth.membershipDueCents,
+              memberEmail: auth.email,
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
         for (var i = 0; i < membershipTierOptions.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),

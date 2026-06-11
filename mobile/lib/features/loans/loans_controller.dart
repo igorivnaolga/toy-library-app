@@ -78,10 +78,19 @@ class LoansController extends ChangeNotifier {
     }
   }
 
-  Future<LoanItem> checkOutFromBooking(String bookingId) async {
-    final json = await _client.postJson("/api/v1/loans/check-out/booking", {
+  Future<LoanItem> checkOutFromBooking(
+    String bookingId, {
+    String rentalPayment = "pending",
+    String? paymentMethod,
+  }) async {
+    final body = <String, dynamic>{
       "booking_id": bookingId,
-    });
+      "rental_payment": rentalPayment,
+    };
+    if (paymentMethod != null) {
+      body["payment_method"] = paymentMethod;
+    }
+    final json = await _client.postJson("/api/v1/loans/check-out/booking", body);
     final loan = LoanItem.fromJson(json);
     pendingCheckouts =
         pendingCheckouts.where((b) => b.bookingId != bookingId).toList();
@@ -97,11 +106,18 @@ class LoansController extends ChangeNotifier {
   Future<LoanItem> checkOutWalkIn({
     required String userId,
     required String toyId,
+    String rentalPayment = "pending",
+    String? paymentMethod,
   }) async {
-    final json = await _client.postJson("/api/v1/loans/check-out/walk-in", {
+    final body = <String, dynamic>{
       "user_id": userId,
       "toy_id": toyId,
-    });
+      "rental_payment": rentalPayment,
+    };
+    if (paymentMethod != null) {
+      body["payment_method"] = paymentMethod;
+    }
+    final json = await _client.postJson("/api/v1/loans/check-out/walk-in", body);
     final loan = LoanItem.fromJson(json);
     activeLoans = [
       loan,

@@ -28,6 +28,11 @@ from app.repositories.loan_repo import (
     mark_loan_returned,
 )
 from app.repositories.toy_repo import get_toy_by_id
+from app.services.payment_service import (
+    PaymentError,
+    apply_rental_payment_action,
+    create_rental_payment_for_loan,
+)
 
 _TOY_STATUS_IN_LIBRARY = "In library"
 _TOY_STATUS_ON_LOAN = "On loan"
@@ -97,6 +102,10 @@ def _ensure_toy_available_for_checkout(toy: Toy) -> None:
 def check_out_from_booking(
     session: Session,
     booking_id: uuid.UUID,
+    *,
+    rental_payment: str = "pending",
+    payment_method: str | None = None,
+    recorded_by: uuid.UUID | None = None,
 ) -> Loan:
     """Volunteer check-out: pending booking → active loan."""
     booking = get_booking_by_id(session, booking_id)
@@ -137,6 +146,14 @@ def check_out_from_booking(
     )
     mark_booking_completed(session, booking)
     toy.status = _TOY_STATUS_ON_LOAN
+    payment = create_rental_payment_for_loan(session, loan, toy)
+    _apply_checkout_payment(
+        session,
+        payment,
+        rental_payment=rental_payment,
+        payment_method=payment_method,
+        recorded_by=recorded_by,
+    )
     session.flush()
 
     loaded = get_loan_by_id(session, loan.id)
@@ -148,6 +165,9 @@ def check_out_walk_in(
     *,
     user_id: uuid.UUID,
     toy_id: str,
+    rental_payment: str = "pending",
+    payment_method: str | None = None,
+    recorded_by: uuid.UUID | None = None,
 ) -> Loan:
     """Volunteer check-out without a prior booking."""
     toy = _get_toy_row(session, toy_id)
@@ -173,10 +193,42 @@ def check_out_walk_in(
         checked_out_at=library_now(),
     )
     toy.status = _TOY_STATUS_ON_LOAN
+    payment = create_rental_payment_for_loan(session, loan, toy)
+    _apply_checkout_payment(
+        session,
+        payment,
+        rental_payment=rental_payment,
+        payment_method=payment_method,
+        recorded_by=recorded_by,
+    )
     session.flush()
 
     loaded = get_loan_by_id(session, loan.id)
     return loaded if loaded is not None else loan
+
+
+def _apply_checkout_payment(
+    session: Session,
+    payment,
+    *,
+    rental_payment: str,
+    payment_method: str | None,
+    recorded_by: uuid.UUID | None,
+) -> None:
+    if rental_payment == "pending":
+        return
+    if recorded_by is None:
+        raise LoanError("recorded_by_required", "Staff id is required to record payment.")
+    try:
+        apply_rental_payment_action(
+            session,
+            payment,
+            rental_payment=rental_payment,
+            payment_method=payment_method,
+            recorded_by=recorded_by,
+        )
+    except PaymentError as exc:
+        raise LoanError(exc.code, exc.message) from exc
 
 
 def check_in_loan(

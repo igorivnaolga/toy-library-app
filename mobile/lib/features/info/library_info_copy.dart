@@ -81,5 +81,14 @@ Upper Riccarton
 
   static const paymentsTitle = "Payments";
 
-  static const paymentsBody = "Cash and EFTPOS payments available.";
+  static const paymentsBody =
+      "Pay at the library (cash or EFTPOS), or by bank transfer using the "
+      "details below.";
+
+  /// Update with your library's real account before production use.
+  static const bankAccountName = "Church Corner Toy Library";
+  static const bankAccountNumber = "12-3456-0123456-00";
+
+  static const bankTransferReferenceHint =
+      "Use the email address on your membership account as the payment reference.";
 }

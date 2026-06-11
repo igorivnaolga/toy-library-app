@@ -49,6 +49,8 @@ def _http_error(exc: BookingError) -> HTTPException:
         status = 409
     elif exc.code in {"invalid_pickup_date", "pickup_before_loan_due"}:
         status = 422
+    elif exc.code == "membership_unpaid":
+        status = 402
     return HTTPException(status_code=status, detail=exc.message)
 
 

@@ -57,6 +57,11 @@ class DeskMemberOut(BaseModel):
     user_id: str
     full_name: str = ""
     email: str = ""
+    balance_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Member's total pending balance at checkout.",
+    )
 
 
 class DeskMembersResponse(BaseModel):

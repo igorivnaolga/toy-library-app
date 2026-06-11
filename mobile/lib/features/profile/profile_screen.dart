@@ -9,6 +9,9 @@ import "../../core/brand_chip_button.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
+import "../payments/member_balance_card.dart";
+import "../payments/payment_models.dart";
+import "../../core/api_client.dart";
 import "member_contact_info.dart";
 
 /// Editable user profile opened from the AppBar avatar button.
@@ -24,12 +27,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   DateTime? _kidBirthDate;
   bool _editingChildren = false;
   bool _contactExpanded = false;
+  List<PaymentItem> _payments = const [];
+  bool _paymentsLoading = false;
 
   @override
   void initState() {
     super.initState();
     context.read<ProfileController>().syncFromAuth();
     _kidController = TextEditingController();
+    _loadPayments();
+  }
+
+  Future<void> _loadPayments() async {
+    final client = context.read<BackendClient>();
+    setState(() => _paymentsLoading = true);
+    try {
+      final json = await client.getJson("/api/v1/payments/me");
+      if (!mounted) return;
+      setState(() {
+        _payments = parsePaymentList(json);
+        _paymentsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _paymentsLoading = false);
+    }
   }
 
   @override
@@ -180,6 +202,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onChangePhoto: () => _pickAvatar(profile),
           ),
           const SizedBox(height: 28),
+          if (_paymentsLoading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 20),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: MemberBalanceCard(
+                balanceDueCents: auth.balanceDueCents,
+                payments: _payments,
+              ),
+            ),
           _ProfileSection(
             title: "Membership",
             children: [

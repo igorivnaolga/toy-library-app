@@ -10,6 +10,7 @@ import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
 import "../loans/desk_check_in_dialog.dart";
+import "../loans/desk_checkout_dialog.dart";
 import "../loans/desk_walk_in_panel.dart";
 import "../loans/loan_desk_summary.dart";
 import "../loans/loan_models.dart";
@@ -37,10 +38,27 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
   }
 
   Future<void> _checkOut(BookingItem booking) async {
+    final result = await showDeskCheckoutDialog(
+      context,
+      memberLabel: booking.memberLabel,
+      lines: [
+        DeskCheckoutLine(
+          toyId: booking.toyId,
+          toyName: booking.toyName ?? booking.toyId,
+          rentalPriceCents: booking.rentalPriceCents,
+        ),
+      ],
+    );
+    if (result == null || !mounted) return;
+
     final controller = context.read<LoansController>();
     final catalog = context.read<CatalogController>();
     try {
-      await controller.checkOutFromBooking(booking.bookingId);
+      await controller.checkOutFromBooking(
+        booking.bookingId,
+        rentalPayment: result.rentalPayment,
+        paymentMethod: result.paymentMethod,
+      );
       await catalog.refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -450,6 +468,13 @@ class _CheckoutTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         booking.pickupLabel!,
+                        style: context.listSubtitle,
+                      ),
+                    ],
+                    if (booking.rentalPriceLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        "Hire ${booking.rentalPriceLabel}",
                         style: context.listSubtitle,
                       ),
                     ],

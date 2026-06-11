@@ -17,6 +17,12 @@ from app.repositories.profile_repo import (
     update_profile,
 )
 from app.schemas.principal import MeOut, Principal, ProfileUpdateIn, RegistrationCompleteIn
+from app.services.payment_service import (
+    balance_summary,
+    create_membership_payments_for_tier,
+    membership_payment_summary,
+    refresh_membership_payments_for_tier,
+)
 
 router = APIRouter()
 
@@ -53,8 +59,13 @@ def _me_from_principal(principal: Principal) -> MeOut:
     )
 
 
-def _me_from_profile(profile, *, email: str | None) -> MeOut:
+def _me_from_profile(profile, *, email: str | None, db: Session | None = None) -> MeOut:
     kids = kids_from_profile(profile)
+    payment_summary = None
+    account_balance = None
+    if db is not None:
+        payment_summary = membership_payment_summary(db, profile.id)
+        account_balance = balance_summary(db, profile.id)
     return MeOut(
         user_id=profile.id,
         email=email,
@@ -65,6 +76,9 @@ def _me_from_profile(profile, *, email: str | None) -> MeOut:
         kids=kids,
         kids_names=[kid.name for kid in kids],
         avatar_path=profile.avatar_path,
+        membership_due_cents=payment_summary.due_cents if payment_summary else 0,
+        membership_fees_paid=payment_summary.fees_paid if payment_summary else True,
+        balance_due_cents=account_balance.balance_due_cents if account_balance else 0,
         **_contact_fields_from_profile(profile),
     )
 
@@ -78,7 +92,7 @@ def read_me(
     profile = get_profile_by_id(db, principal.id)
     if profile is None:
         raise HTTPException(status_code=403, detail="Profile not found")
-    return _me_from_profile(profile, email=principal.email)
+    return _me_from_profile(profile, email=principal.email, db=db)
 
 
 class MembershipChoiceIn(BaseModel):
@@ -97,6 +111,7 @@ def patch_my_membership(
         raise HTTPException(status_code=403, detail="Profile not found")
     try:
         apply_membership_choice(db, profile, body.membership_tier)
+        create_membership_payments_for_tier(db, profile.id, body.membership_tier)
     except ValueError as e:
         code = str(e)
         if code == "already_chosen":
@@ -107,7 +122,7 @@ def patch_my_membership(
         raise HTTPException(status_code=400, detail="Invalid membership choice.") from e
     db.commit()
     db.refresh(profile)
-    return _me_from_profile(profile, email=principal.email)
+    return _me_from_profile(profile, email=principal.email, db=db)
 
 
 @router.post("/me/registration", response_model=MeOut)
@@ -145,6 +160,7 @@ def complete_my_registration(
             text_reminders_consent=body.text_reminders_consent,
             registered_at=body.registered_at,
         )
+        create_membership_payments_for_tier(db, profile.id, body.membership_tier)
     except ValueError as e:
         code = str(e)
         if code == "already_chosen":
@@ -155,7 +171,7 @@ def complete_my_registration(
         raise HTTPException(status_code=400, detail="Invalid registration data.") from e
     db.commit()
     db.refresh(profile)
-    return _me_from_profile(profile, email=principal.email)
+    return _me_from_profile(profile, email=principal.email, db=db)
 
 
 @router.patch("/me/profile", response_model=MeOut)
@@ -203,4 +219,4 @@ def patch_my_profile(
     )
     db.commit()
     db.refresh(profile)
-    return _me_from_profile(profile, email=principal.email)
+    return _me_from_profile(profile, email=principal.email, db=db)

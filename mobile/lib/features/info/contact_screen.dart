@@ -3,6 +3,7 @@ import "package:flutter/material.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "contact_links.dart";
+import "../payments/payment_instructions_card.dart";
 import "library_info_copy.dart";
 import "library_location_map.dart";
 
@@ -87,9 +88,16 @@ class ContactScreen extends StatelessWidget {
         _ContactInfoCard(
           icon: Icons.payments_outlined,
           title: LibraryInfoCopy.paymentsTitle,
-          child: Text(
-            LibraryInfoCopy.paymentsBody,
-            style: context.bodyText,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                LibraryInfoCopy.paymentsBody,
+                style: context.bodyText,
+              ),
+              const SizedBox(height: 12),
+              PaymentInstructionsCard(compact: true),
+            ],
           ),
         ),
       ],

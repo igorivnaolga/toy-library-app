@@ -51,3 +51,9 @@ _install_apk() {
 _install_apk
 "$ADB" -s "$DEVICE" reverse tcp:8000 tcp:8000
 echo "Installed on $DEVICE (API via adb reverse -> host :8000)"
+
+if [[ "$DEVICE" == emulator-* ]]; then
+  echo "Launching app (first emulator start can take ~30s)..."
+  "$ADB" -s "$DEVICE" shell am start -n com.example.toy_library_mobile/.MainActivity >/dev/null
+  echo "App drawer name: toy_library_mobile — swipe up and search 'toy' if you don't see it."
+fi

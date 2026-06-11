@@ -4,18 +4,37 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.loan import Loan
 from app.services.loan_service import loan_is_overdue
 from app.utils.text import capitalize_first_letter
 
 
-class LoanCheckOutFromBooking(BaseModel):
+class _RentalPaymentFields(BaseModel):
+    rental_payment: Literal["pending", "paid"] = Field(
+        default="pending",
+        description="Whether the rental charge stays pending or is marked paid at checkout.",
+    )
+    payment_method: Literal["cash", "eftpos", "bank"] | None = Field(
+        default=None,
+        description="Required when rental_payment is paid.",
+    )
+
+    @model_validator(mode="after")
+    def _paid_requires_method(self) -> "_RentalPaymentFields":
+        if self.rental_payment == "paid" and self.payment_method is None:
+            raise ValueError("payment_method is required when rental_payment is paid.")
+        return self
+
+
+class LoanCheckOutFromBooking(_RentalPaymentFields):
     booking_id: str = Field(min_length=1, description="Pending booking to check out.")
 
 
-class LoanCheckOutWalkIn(BaseModel):
+class LoanCheckOutWalkIn(_RentalPaymentFields):
     user_id: str = Field(min_length=1, description="Member profile id.")
     toy_id: str = Field(min_length=1, max_length=32, description="Catalog toy_id.")
 

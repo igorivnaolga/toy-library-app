@@ -40,6 +40,7 @@ from app.schemas.duty import (
     duty_session_out_from_model,
 )
 from app.schemas.principal import Principal
+from app.services.payment_service import balance_summary
 
 router = APIRouter()
 
@@ -104,9 +105,19 @@ def search_desk_members(
         if q.strip()
         else list_roster_members(db)
     )
-    return DeskMembersResponse(
-        data=[DeskMemberOut.model_validate(row) for row in rows],
-    )
+    data: list[DeskMemberOut] = []
+    for row in rows:
+        user_id = uuid.UUID(row["user_id"])
+        account = balance_summary(db, user_id)
+        data.append(
+            DeskMemberOut(
+                user_id=row["user_id"],
+                full_name=row.get("full_name", ""),
+                email=row.get("email", ""),
+                balance_due_cents=account.balance_due_cents,
+            )
+        )
+    return DeskMembersResponse(data=data)
 
 
 @router.post("/sessions", response_model=DutySessionOut)

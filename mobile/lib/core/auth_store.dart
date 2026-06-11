@@ -61,6 +61,9 @@ class AuthStore extends ChangeNotifier {
   List<KidProfile> kids = const [];
   String? avatarPath;
   MemberContactInfo contact = const MemberContactInfo();
+  int membershipDueCents = 0;
+  bool membershipFeesPaid = true;
+  int balanceDueCents = 0;
 
   bool get isAuthConfigured => _supabase != null;
 
@@ -72,7 +75,8 @@ class AuthStore extends ChangeNotifier {
   bool get isVolunteer => role == AppRole.volunteer;
   bool get isAdmin => role == AppRole.admin;
 
-  bool get canBookToys => isMember || isVolunteer;
+  bool get canBookToys =>
+      (isMember || isVolunteer) && membershipFeesPaid;
 
   /// Logged-in non-admin still needs onboarding when the backend has no tier yet.
   bool get needsMembershipOnboarding {
@@ -198,6 +202,9 @@ class AuthStore extends ChangeNotifier {
         kidsNames = kids.map((kid) => kid.name).toList();
         avatarPath = me["avatar_path"]?.toString();
         contact = MemberContactInfo.fromJson(me);
+        membershipDueCents = (me["membership_due_cents"] as num?)?.toInt() ?? 0;
+        membershipFeesPaid = me["membership_fees_paid"] != false;
+        balanceDueCents = (me["balance_due_cents"] as num?)?.toInt() ?? 0;
         unawaited(
           PushNotificationService.instance.syncWithBackend(
             backend,
@@ -233,6 +240,9 @@ class AuthStore extends ChangeNotifier {
     kids = const [];
     avatarPath = null;
     contact = const MemberContactInfo();
+    membershipDueCents = 0;
+    membershipFeesPaid = true;
+    balanceDueCents = 0;
     error = null;
     profileLoading = false;
   }
