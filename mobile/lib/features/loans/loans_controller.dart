@@ -173,12 +173,22 @@ class LoansController extends ChangeNotifier {
     );
   }
 
-  Future<LoanItem> checkIn(String loanId, {int? missingPieces}) async {
-    final body = missingPieces != null
-        ? {"missing_pieces": missingPieces}
-        : null;
+  Future<LoanItem> checkIn(
+    String loanId, {
+    int? missingPieces,
+    String? missingPiecesDetail,
+  }) async {
+    final body = <String, dynamic>{};
+    if (missingPieces != null) {
+      body["missing_pieces"] = missingPieces;
+    }
+    final detail = missingPiecesDetail?.trim();
+    if (detail != null && detail.isNotEmpty) {
+      body["missing_pieces_detail"] = detail;
+    }
+    final payload = body.isEmpty ? null : body;
     final json =
-        await _client.postJson("/api/v1/loans/$loanId/check-in", body);
+        await _client.postJson("/api/v1/loans/$loanId/check-in", payload);
     final loan = LoanItem.fromJson(json);
     activeLoans = activeLoans.where((l) => l.loanId != loanId).toList();
     myLoans = [

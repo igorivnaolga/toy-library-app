@@ -143,7 +143,13 @@ def check_in(
 ) -> LoanOut:
     try:
         missing = body.missing_pieces if body is not None else None
-        loan = check_in_loan(db, loan_id, missing_pieces=missing)
+        detail = body.missing_pieces_detail if body is not None else None
+        loan = check_in_loan(
+            db,
+            loan_id,
+            missing_pieces=missing,
+            missing_pieces_detail=detail,
+        )
     except LoanError as e:
         raise _http_error(e) from e
     db.commit()

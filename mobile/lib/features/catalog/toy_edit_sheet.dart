@@ -1,13 +1,18 @@
+import "dart:io";
+
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
+import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/toy_photo_url.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
+import "toy_photo_placeholder.dart";
 
 /// Admin form to edit toy metadata via `PATCH /api/v1/admin/toys/{id}`.
 Future<ToyItem?> showToyEditSheet(
@@ -55,6 +60,8 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
   late final TextEditingController _totalPieces;
   late final TextEditingController _missingPieces;
   late final TextEditingController _hireCharge;
+  final ImagePicker _picker = ImagePicker();
+  String? _pickedPhotoPath;
   bool _saving = false;
 
   @override
@@ -106,6 +113,54 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
     return parsed;
   }
 
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+              child: Text(
+                widget.isCreate ? "Add toy photo" : "Change toy photo",
+                style: context.screenTitle,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(
+                "Choose from gallery",
+                style: context.listSecondary(),
+              ),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(
+                "Take a photo",
+                style: context.listSecondary(),
+              ),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 88,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _pickedPhotoPath = picked.path);
+  }
+
   int? _parseHireChargeCents() {
     final raw = _hireCharge.text.trim();
     if (raw.isEmpty) return null;
@@ -149,7 +204,7 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
     setState(() => _saving = true);
     final catalog = context.read<CatalogController>();
     try {
-      final ToyItem saved;
+      ToyItem saved;
       if (widget.isCreate) {
         saved = await catalog.createToy(
           name: _name.text.trim(),
@@ -175,6 +230,9 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
           missingPieces: missingPieces,
           rentalPriceCents: rentalPriceCents,
         );
+      }
+      if (_pickedPhotoPath != null) {
+        saved = await catalog.uploadToyPhoto(saved.toyId, _pickedPhotoPath!);
       }
       if (!mounted) return;
       Navigator.pop(context, saved);
@@ -208,9 +266,20 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
               const SizedBox(height: 4),
               Text(
                 widget.toy!.toyId,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: context.listSubtitle,
               ),
             ],
+            const SizedBox(height: 16),
+            _ToyPhotoPicker(
+              pickedPath: _pickedPhotoPath,
+              existingToyId: widget.toy?.toyId,
+              hasExistingPhoto: widget.toy?.photoFile != null &&
+                  widget.toy!.photoFile!.isNotEmpty,
+              onPick: _pickPhoto,
+              onClear: _pickedPhotoPath == null
+                  ? null
+                  : () => setState(() => _pickedPhotoPath = null),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _name,
@@ -317,6 +386,88 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ToyPhotoPicker extends StatelessWidget {
+  const _ToyPhotoPicker({
+    required this.pickedPath,
+    required this.onPick,
+    this.existingToyId,
+    this.hasExistingPhoto = false,
+    this.onClear,
+  });
+
+  final String? pickedPath;
+  final String? existingToyId;
+  final bool hasExistingPhoto;
+  final VoidCallback onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPicked = pickedPath != null && pickedPath!.isNotEmpty;
+    final showNetwork = !hasPicked && hasExistingPhoto && existingToyId != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text("Photo", style: context.formSectionLabel),
+        const SizedBox(height: 8),
+        Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 160,
+              height: 160,
+              child: hasPicked
+                  ? Image.file(
+                      File(pickedPath!),
+                      fit: BoxFit.cover,
+                    )
+                  : showNetwork
+                      ? Image.network(
+                          toyPhotoHttpUrl(existingToyId!),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ToyPhotoPlaceholder(
+                            expand: true,
+                            borderRadius: 12,
+                          ),
+                        )
+                      : const ToyPhotoPlaceholder(
+                          expand: true,
+                          borderRadius: 12,
+                        ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onPick,
+                icon: const Icon(Icons.photo_outlined, size: 18),
+                label: Text(
+                  hasPicked || hasExistingPhoto ? "Change photo" : "Add photo",
+                  style: context.listSecondary().copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ),
+            if (hasPicked && onClear != null) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: "Remove selected photo",
+                onPressed: onClear,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }

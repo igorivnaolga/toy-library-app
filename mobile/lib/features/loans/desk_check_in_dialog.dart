@@ -10,9 +10,13 @@ import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/modal_action_buttons.dart";
+import "../../core/toy_pieces.dart";
+import "../catalog/catalog_provider.dart";
 import "loan_desk_summary.dart";
 import "loan_models.dart";
 import "loans_controller.dart";
+
+enum _MissingEntryMode { stepper, typedCount }
 
 /// Desk photo count + learn at check-in. `false` = manual +/− only (CV code kept).
 const bool kDeskCheckInCvEnabled = false;
@@ -30,9 +34,14 @@ class DeskCheckInPhotoLearn {
 }
 
 class DeskCheckInResult {
-  const DeskCheckInResult({this.missingPieces, this.photoLearn});
+  const DeskCheckInResult({
+    this.missingPieces,
+    this.missingPiecesDetail,
+    this.photoLearn,
+  });
 
   final int? missingPieces;
+  final String? missingPiecesDetail;
   final DeskCheckInPhotoLearn? photoLearn;
 }
 
@@ -97,11 +106,15 @@ class _DeskCheckInDialog extends StatefulWidget {
 class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
   final ImagePicker _picker = ImagePicker();
   late final TextEditingController _missingController;
+  late final TextEditingController _missingNamesController;
   late int _piecesReturned;
+  _MissingEntryMode _entryMode = _MissingEntryMode.stepper;
+  List<ToyPieceLine> _pieceLines = const [];
   String? _validationError;
   String? _estimateMessage;
   bool _estimating = false;
   String? _lastPhotoPath;
+
   @override
   void initState() {
     super.initState();
@@ -114,14 +127,59 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       _piecesReturned = 0;
     }
     _missingController = TextEditingController(
-      text: loan.toyMissingPieces?.toString() ?? "",
+      text: missing > 0 ? missing.toString() : "",
     );
+    _missingNamesController = TextEditingController();
+    _loadPieceLines();
+  }
+
+  Future<void> _loadPieceLines() async {
+    try {
+      final toy =
+          await context.read<CatalogController>().fetchToy(widget.loan.toyId);
+      if (!mounted) return;
+      setState(() => _pieceLines = toy.pieceLines);
+    } catch (_) {
+      // SETLS breakdown is optional at check-in.
+    }
   }
 
   @override
   void dispose() {
     _missingController.dispose();
+    _missingNamesController.dispose();
     super.dispose();
+  }
+
+  void _setMissingCount(int missing) {
+    final total = widget.loan.toyTotalPieces;
+    if (total == null) {
+      _missingController.text = missing > 0 ? missing.toString() : "";
+      return;
+    }
+    setState(() {
+      _piecesReturned = (total - missing).clamp(0, total);
+      _missingController.text = missing > 0 ? missing.toString() : "";
+      _validationError = null;
+    });
+  }
+
+  void _appendPieceName(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final current = _missingNamesController.text.trim();
+    final parts = current.isEmpty
+        ? <String>[]
+        : current.split(RegExp(r"[,;\n]+")).map((p) => p.trim()).toList();
+    if (parts.any((part) => part.toLowerCase() == trimmed.toLowerCase())) {
+      return;
+    }
+    parts.add(trimmed);
+    _missingNamesController.text = parts.join(", ");
+    _missingNamesController.selection = TextSelection.collapsed(
+      offset: _missingNamesController.text.length,
+    );
+    setState(() {});
   }
 
   int? get _missingFromStepper {
@@ -287,13 +345,93 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       }
     }
 
+    String? missingPiecesDetail;
+    final missingNow = total != null
+        ? (_missingFromStepper ?? 0)
+        : (missingPieces ?? 0);
+    if (missingNow > 0) {
+      final detail = _missingNamesController.text.trim();
+      missingPiecesDetail = detail.isEmpty ? null : detail;
+    }
+
     if (!mounted) return;
     Navigator.pop(
       context,
       DeskCheckInResult(
         missingPieces: missingPieces,
+        missingPiecesDetail: missingPiecesDetail,
         photoLearn: photoLearn,
       ),
+    );
+  }
+
+  Widget _buildEntryModeToggle(BuildContext context) {
+    return SegmentedButton<_MissingEntryMode>(
+      segments: const [
+        ButtonSegment(
+          value: _MissingEntryMode.stepper,
+          label: Text("Use +/−"),
+          icon: Icon(Icons.exposure_outlined, size: 18),
+        ),
+        ButtonSegment(
+          value: _MissingEntryMode.typedCount,
+          label: Text("Type count"),
+          icon: Icon(Icons.edit_outlined, size: 18),
+        ),
+      ],
+      selected: {_entryMode},
+      onSelectionChanged: (selection) {
+        setState(() {
+          _entryMode = selection.first;
+          _validationError = null;
+          final missing = _missingFromStepper ??
+              int.tryParse(_missingController.text.trim());
+          if (missing != null) {
+            _missingController.text = missing > 0 ? missing.toString() : "";
+          }
+        });
+      },
+    );
+  }
+
+  Widget _buildMissingNamesField(BuildContext context, int missing) {
+    if (missing <= 0) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 12),
+        TextField(
+          controller: _missingNamesController,
+          style: fieldTextStyle(context),
+          cursorColor: fieldCursorColor(context),
+          textCapitalization: TextCapitalization.sentences,
+          decoration: labeledInputDecoration(
+            context,
+            labelText: "Which pieces are missing?",
+            helperText: "Type piece names (e.g. H, L) or tap below.",
+          ),
+          minLines: 1,
+          maxLines: 3,
+        ),
+        if (_pieceLines.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text("Tap to add", style: fieldHelperStyle(context)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _pieceLines
+                .map(
+                  (line) => ActionChip(
+                    label: Text(line.name),
+                    onPressed: () => _appendPieceName(line.name),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ],
     );
   }
 
@@ -388,9 +526,49 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
               const SizedBox(height: 12),
             ] else
               const SizedBox(height: 16),
-            if (total != null)
-              _buildPiecesStepper(context, total)
-            else
+            if (total != null) ...[
+              _buildEntryModeToggle(context),
+              const SizedBox(height: 12),
+              if (_entryMode == _MissingEntryMode.stepper)
+                _buildPiecesStepper(context, total)
+              else
+                TextField(
+                  controller: _missingController,
+                  style: fieldTextStyle(context),
+                  cursorColor: fieldCursorColor(context),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: labeledInputDecoration(
+                    context,
+                    labelText: "Missing pieces",
+                    helperText: "Enter how many pieces are missing.",
+                    errorText: _validationError,
+                  ),
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value.trim());
+                    if (parsed == null && value.trim().isNotEmpty) {
+                      setState(() {
+                        _validationError =
+                            "Enter a whole number of missing pieces.";
+                      });
+                      return;
+                    }
+                    if (parsed != null) {
+                      if (parsed > total) {
+                        setState(() {
+                          _validationError =
+                              "Missing pieces cannot exceed $total.";
+                        });
+                        return;
+                      }
+                      _setMissingCount(parsed);
+                    } else if (value.trim().isEmpty) {
+                      _setMissingCount(0);
+                    }
+                  },
+                ),
+              _buildMissingNamesField(context, _missingFromStepper ?? 0),
+            ] else ...[
               TextField(
                 controller: _missingController,
                 style: fieldTextStyle(context),
@@ -404,11 +582,18 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                   errorText: _validationError,
                 ),
                 onChanged: (_) {
-                  if (_validationError != null) {
-                    setState(() => _validationError = null);
-                  }
+                  setState(() {
+                    if (_validationError != null) {
+                      _validationError = null;
+                    }
+                  });
                 },
               ),
+              _buildMissingNamesField(
+                context,
+                int.tryParse(_missingController.text.trim()) ?? 0,
+              ),
+            ],
             if (kDeskCheckInCvEnabled) ...[
               const SizedBox(height: 12),
               Text(

@@ -35,6 +35,7 @@ def update_toy_pieces(
         toy_id,
         total_pieces=payload.get("total_pieces"),
         missing_pieces=payload.get("missing_pieces"),
+        piece_lines=body.piece_lines,
     )
     if updated is None:
         raise HTTPException(

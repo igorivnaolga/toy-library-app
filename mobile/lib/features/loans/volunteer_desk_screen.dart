@@ -67,6 +67,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
       await controller.checkIn(
         loan.loanId,
         missingPieces: result.missingPieces,
+        missingPiecesDetail: result.missingPiecesDetail,
       );
       await catalog.refresh();
       if (!mounted) return;

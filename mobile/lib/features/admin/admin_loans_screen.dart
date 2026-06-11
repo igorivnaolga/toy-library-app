@@ -84,6 +84,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
       await controller.checkIn(
         loan.loanId,
         missingPieces: result.missingPieces,
+        missingPiecesDetail: result.missingPiecesDetail,
       );
       await catalog.refresh();
       if (!mounted) return;

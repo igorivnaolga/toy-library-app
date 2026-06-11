@@ -1,11 +1,9 @@
 import "dart:typed_data";
 
-import "package:http/http.dart" as http;
 import "package:pdf/pdf.dart";
 import "package:pdf/widgets.dart" as pw;
 import "package:printing/printing.dart";
 
-import "../../core/toy_photo_url.dart";
 import "../info/library_info_copy.dart";
 import "catalog_models.dart";
 
@@ -27,31 +25,18 @@ Future<void> shareToyLabelPdf(ToyItem toy) async {
 }
 
 Future<Uint8List> buildToyLabelPdf(ToyItem toy) async {
-  final photo = await _loadToyPhoto(toy);
   final doc = pw.Document();
   doc.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(28),
-      build: (context) => _labelPage(toy, photo),
+      build: (context) => _labelPage(toy),
     ),
   );
   return doc.save();
 }
 
-Future<pw.MemoryImage?> _loadToyPhoto(ToyItem toy) async {
-  try {
-    final response = await http.get(Uri.parse(toyPhotoHttpUrl(toy.toyId)));
-    if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
-      return null;
-    }
-    return pw.MemoryImage(response.bodyBytes);
-  } catch (_) {
-    return null;
-  }
-}
-
-pw.Widget _labelPage(ToyItem toy, pw.MemoryImage? photo) {
+pw.Widget _labelPage(ToyItem toy) {
   final hireCharge = toy.rentalPriceLabel ?? "—";
   final pieces = toy.totalPieces?.toString() ?? "—";
   final displayArea = _dashIfEmpty(toy.category);
@@ -98,41 +83,18 @@ pw.Widget _labelPage(ToyItem toy, pw.MemoryImage? photo) {
         ),
       ),
       pw.SizedBox(height: 12),
-      pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(1.1),
+          1: const pw.FlexColumnWidth(1.3),
+        },
         children: [
-          pw.Container(
-            width: 220,
-            height: 110,
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.black, width: 0.8),
-            ),
-            child: photo != null
-                ? pw.Image(photo, fit: pw.BoxFit.cover)
-                : pw.Center(
-                    child: pw.Text(
-                      "Photo",
-                      style: const pw.TextStyle(fontSize: 10),
-                    ),
-                  ),
-          ),
-          pw.SizedBox(width: 10),
-          pw.Expanded(
-            child: pw.Table(
-              border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(1.1),
-                1: const pw.FlexColumnWidth(1.3),
-              },
-              children: [
-                _labelRow("Toy Name", toy.name),
-                _labelRow("Display Area", displayArea),
-                _labelRow("Recommended Age Group", ageGroup),
-                _labelRow("No. of pieces", pieces),
-                _labelRow("Hire Charge", hireCharge),
-              ],
-            ),
-          ),
+          _labelRow("Toy Name", toy.name),
+          _labelRow("Display Area", displayArea),
+          _labelRow("Recommended Age Group", ageGroup),
+          _labelRow("No. of pieces", pieces),
+          _labelRow("Hire Charge", hireCharge),
         ],
       ),
       pw.SizedBox(height: 14),

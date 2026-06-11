@@ -115,6 +115,18 @@ def _apply_schema_patches(engine) -> None:
                 "ADD COLUMN IF NOT EXISTS cv_ref_source varchar(16)"
             )
         )
+        conn.execute(
+            text(
+                "ALTER TABLE public.toys "
+                "ADD COLUMN IF NOT EXISTS missing_pieces_detail text"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE public.toys "
+                "ADD COLUMN IF NOT EXISTS piece_inventory text"
+            )
+        )
 
 
 @asynccontextmanager

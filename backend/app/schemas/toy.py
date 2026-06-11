@@ -4,6 +4,37 @@ from app.core import availability as avail
 from app.utils.text import capitalize_first_letter
 
 
+class ToyPieceLineOut(BaseModel):
+    """One SETLS piece entry for desk staff (from ``setls_pieces_export.csv``)."""
+
+    name: str
+    quantity: int = Field(ge=1)
+    missing: int = Field(default=0, ge=0)
+
+
+class ToyPieceLineIn(BaseModel):
+    """Editable piece line saved to ``toys.piece_inventory``."""
+
+    name: str = Field(min_length=1)
+    quantity: int = Field(ge=1)
+    missing: int = Field(default=0, ge=0)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        return value.strip()
+
+    @field_validator("missing")
+    @classmethod
+    def _missing_within_quantity(cls, missing: int, info) -> int:
+        quantity = info.data.get("quantity")
+        if quantity is not None and missing > quantity:
+            raise ValueError("missing cannot exceed quantity")
+        return missing
+
+
 class ToyOut(BaseModel):
     toy_id: str
     name: str
@@ -31,10 +62,18 @@ class ToyOut(BaseModel):
         ge=0,
         description="Pieces currently known to be missing from the set.",
     )
+    missing_pieces_detail: str | None = Field(
+        default=None,
+        description="Which pieces are missing, when recorded at desk check-in.",
+    )
     rental_price_cents: int | None = Field(
         default=None,
         ge=0,
         description="Toy rental price in NZD cents (from SETLS).",
+    )
+    piece_lines: list[ToyPieceLineOut] | None = Field(
+        default=None,
+        description="SETLS piece breakdown; included for admin/volunteer toy detail only.",
     )
 
     @field_validator("name", mode="before")
@@ -90,6 +129,10 @@ class ToyPiecesUpdate(BaseModel):
 
     total_pieces: int | None = Field(default=None, ge=0)
     missing_pieces: int | None = Field(default=None, ge=0)
+    piece_lines: list[ToyPieceLineIn] | None = Field(
+        default=None,
+        description="Full piece inventory; replaces SETLS breakdown when saved.",
+    )
 
 
 class ToysMetaOut(BaseModel):

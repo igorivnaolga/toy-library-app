@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/toy_pieces.dart";
 import "catalog_models.dart";
 
 /// Holds catalog list state: categories, paged toys, filters, and load errors.
@@ -104,6 +105,26 @@ class CatalogController extends ChangeNotifier {
 
   Future<ToyItem> fetchToy(String toyId) async {
     final json = await _client.getJson("/api/v1/toys/$toyId");
+    return ToyItem.fromJson(json);
+  }
+
+  Future<ToyItem> updateToyPieces(
+    String toyId, {
+    required List<ToyPieceLine> pieceLines,
+  }) async {
+    final body = {
+      "piece_lines": pieceLines.map((line) => line.toJson()).toList(),
+    };
+    final json = await _client.patchJson("/api/v1/toys/$toyId/pieces", body);
+    return ToyItem.fromJson(json);
+  }
+
+  Future<ToyItem> uploadToyPhoto(String toyId, String filePath) async {
+    final json = await _client.postMultipartImage(
+      "/api/v1/admin/toys/$toyId/photo",
+      fileField: "image",
+      filePath: filePath,
+    );
     return ToyItem.fromJson(json);
   }
 

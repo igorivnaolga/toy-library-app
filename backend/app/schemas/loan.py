@@ -28,6 +28,11 @@ class LoanCheckIn(BaseModel):
         ge=0,
         description="Updated missing piece count after inspection.",
     )
+    missing_pieces_detail: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional note of which pieces are missing (e.g. H, L).",
+    )
 
 
 class LoanOut(BaseModel):

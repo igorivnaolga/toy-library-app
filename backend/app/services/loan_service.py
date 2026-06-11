@@ -184,6 +184,7 @@ def check_in_loan(
     loan_id: uuid.UUID,
     *,
     missing_pieces: int | None = None,
+    missing_pieces_detail: str | None = None,
 ) -> Loan:
     """Volunteer check-in: return toy and close the loan."""
     loan = get_loan_by_id(session, loan_id)
@@ -197,13 +198,21 @@ def check_in_loan(
         )
 
     toy = loan.toy or _get_toy_row(session, loan.toy_id)
-    if missing_pieces is not None and toy is not None:
-        if toy.total_pieces is not None and missing_pieces > toy.total_pieces:
-            raise LoanError(
-                "invalid_missing_pieces",
-                "Missing pieces cannot exceed total pieces.",
-            )
-        toy.missing_pieces = missing_pieces
+    if toy is not None and (
+        missing_pieces is not None or missing_pieces_detail is not None
+    ):
+        if missing_pieces is not None:
+            if toy.total_pieces is not None and missing_pieces > toy.total_pieces:
+                raise LoanError(
+                    "invalid_missing_pieces",
+                    "Missing pieces cannot exceed total pieces.",
+                )
+            toy.missing_pieces = missing_pieces
+            if missing_pieces == 0:
+                toy.missing_pieces_detail = None
+        if missing_pieces_detail is not None:
+            cleaned = missing_pieces_detail.strip()
+            toy.missing_pieces_detail = cleaned or None
     mark_loan_returned(session, loan)
     if toy is not None:
         if get_pending_booking_for_toy(session, toy.toy_id) is not None:

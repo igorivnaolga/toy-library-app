@@ -47,7 +47,9 @@ class ToyItem {
     this.photoFile,
     this.totalPieces,
     this.missingPieces,
+    this.missingPiecesDetail,
     this.rentalPriceCents,
+    this.pieceLines = const [],
   });
 
   final String toyId;
@@ -61,7 +63,9 @@ class ToyItem {
   final String? photoFile;
   final int? totalPieces;
   final int? missingPieces;
+  final String? missingPiecesDetail;
   final int? rentalPriceCents;
+  final List<ToyPieceLine> pieceLines;
 
   String? get rentalPriceLabel {
     final cents = rentalPriceCents;
@@ -87,7 +91,9 @@ class ToyItem {
       photoFile: json["photo_file"] as String?,
       totalPieces: (json["total_pieces"] as num?)?.toInt(),
       missingPieces: (json["missing_pieces"] as num?)?.toInt(),
+      missingPiecesDetail: json["missing_pieces_detail"]?.toString(),
       rentalPriceCents: (json["rental_price_cents"] as num?)?.toInt(),
+      pieceLines: parseToyPieceLines(json["piece_lines"]),
     );
   }
 }

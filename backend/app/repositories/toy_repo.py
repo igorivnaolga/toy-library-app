@@ -20,8 +20,14 @@ from sqlalchemy.orm import joinedload
 from app.core.availability import normalize_availability
 from app.db.session import get_engine, session_scope
 from app.models.toy import Toy as ToyORM
+from app.models.toy_image import ToyImage as ToyImageORM
 from app.schemas.toy import ToyOut
-from app.services.pieces_from_setls import load_pieces_summary
+from app.services.pieces_from_setls import (
+    ToyPieceLine,
+    load_pieces_summary,
+    serialize_piece_inventory,
+    totals_from_piece_lines,
+)
 from app.services.rental_price_from_setls import load_rental_prices
 
 _MAX_DISTINCT_AGE_RANGES = 100
@@ -113,6 +119,7 @@ def _toy_row_to_out(toy: ToyORM) -> ToyOut:
         photo_file=photo_file,
         total_pieces=toy.total_pieces,
         missing_pieces=toy.missing_pieces,
+        missing_pieces_detail=toy.missing_pieces_detail,
         rental_price_cents=toy.rental_price_cents,
     )
 
@@ -371,18 +378,127 @@ def _validate_toy_pieces(total: int | None, missing: int | None) -> None:
         raise ValueError("missing_pieces cannot exceed total_pieces.")
 
 
+def _validate_piece_lines(lines: list[ToyPieceLine]) -> None:
+    for line in lines:
+        if not line.name.strip():
+            raise ValueError("Piece name cannot be empty.")
+        if line.quantity < 1:
+            raise ValueError("Piece quantity must be at least 1.")
+        if line.missing < 0 or line.missing > line.quantity:
+            raise ValueError("missing cannot exceed quantity for a piece line.")
+
+
+def get_toy_piece_inventory_raw(toy_id: str) -> str | None:
+    """Return stored ``piece_inventory`` JSON for a DB toy, or ``None`` if unavailable."""
+    if _db_toy_count() == 0:
+        return None
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
+    session = session_scope()
+    try:
+        toy = session.get(ToyORM, toy_id_norm)
+        if toy is None:
+            return None
+        return toy.piece_inventory
+    finally:
+        session.close()
+
+
 def update_toy_pieces_in_db(
     toy_id: str,
     *,
     total_pieces: int | None = None,
     missing_pieces: int | None = None,
+    piece_lines: list[ToyPieceLine] | None = None,
 ) -> ToyOut | None:
-    """Update piece counts only."""
+    """Update piece counts and/or full inventory."""
+    if piece_lines is not None:
+        if _db_toy_count() == 0:
+            return None
+        toy_id_norm = toy_id.strip()
+        if not toy_id_norm:
+            return None
+        _validate_piece_lines(piece_lines)
+        computed_total, computed_missing = totals_from_piece_lines(piece_lines)
+        session = session_scope()
+        try:
+            toy = session.scalar(
+                select(ToyORM)
+                .options(joinedload(ToyORM.image))
+                .where(ToyORM.toy_id == toy_id_norm)
+            )
+            if toy is None:
+                return None
+            toy.piece_inventory = serialize_piece_inventory(piece_lines)
+            toy.total_pieces = computed_total
+            toy.missing_pieces = computed_missing if computed_missing > 0 else None
+            _validate_toy_pieces(toy.total_pieces, toy.missing_pieces)
+            session.commit()
+            return _toy_row_to_out(toy)
+        finally:
+            session.close()
+
     return update_toy_in_db(
         toy_id,
         total_pieces=total_pieces,
         missing_pieces=missing_pieces,
     )
+
+
+def upload_toy_photo_in_db(
+    toy_id: str,
+    *,
+    image_bytes: bytes,
+    filename_suffix: str,
+    storage_root: Path,
+) -> ToyOut | None:
+    """Write image file and upsert ``toy_images`` row."""
+    if _db_toy_count() == 0:
+        return None
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
+    suffix = filename_suffix if filename_suffix.startswith(".") else f".{filename_suffix}"
+    if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise ValueError("Unsupported image format.")
+
+    new_filename = f"{toy_id_norm}{suffix}"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    dest = (storage_root / new_filename).resolve()
+    root_r = storage_root.resolve()
+    if not str(dest).startswith(str(root_r)):
+        raise ValueError("Invalid photo filename.")
+
+    session = session_scope()
+    try:
+        toy = session.scalar(
+            select(ToyORM)
+            .options(joinedload(ToyORM.image))
+            .where(ToyORM.toy_id == toy_id_norm)
+        )
+        if toy is None:
+            return None
+
+        old_filename = toy.image.filename if toy.image else None
+        dest.write_bytes(image_bytes)
+
+        if toy.image is None:
+            session.add(ToyImageORM(toy_id=toy_id_norm, filename=new_filename))
+        else:
+            toy.image.filename = new_filename
+
+        session.commit()
+        session.refresh(toy)
+
+        if old_filename and old_filename != new_filename:
+            from app.services.toy_photo import safe_delete_photo_file
+
+            safe_delete_photo_file(storage_root, old_filename)
+
+        return _toy_row_to_out(toy)
+    finally:
+        session.close()
 
 
 def resolve_toy_orm(session, toy_id: str) -> ToyORM | None:

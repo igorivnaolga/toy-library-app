@@ -101,14 +101,28 @@ def update_toy_pieces_service(
     *,
     total_pieces: int | None = None,
     missing_pieces: int | None = None,
+    piece_lines: list | None = None,
 ) -> ToyOut | None:
     from app.repositories.toy_repo import update_toy_pieces_in_db
+    from app.services.pieces_from_setls import ToyPieceLine
+
+    parsed_lines: list[ToyPieceLine] | None = None
+    if piece_lines is not None:
+        parsed_lines = [
+            ToyPieceLine(
+                name=line.name.strip(),
+                quantity=line.quantity,
+                missing=line.missing,
+            )
+            for line in piece_lines
+        ]
 
     try:
         return update_toy_pieces_in_db(
             toy_id,
             total_pieces=total_pieces,
             missing_pieces=missing_pieces,
+            piece_lines=parsed_lines,
         )
     except ValueError as e:
         from fastapi import HTTPException

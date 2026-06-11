@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -41,6 +41,7 @@ from app.schemas.duty import DutySessionOut, duty_session_out_from_model
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
+from app.services.toy_photo_upload import upload_toy_photo_service
 from app.services.toy_service import create_toy_service, update_toy_service
 
 router = APIRouter()
@@ -333,6 +334,31 @@ def update_toy(
         missing_pieces=payload.get("missing_pieces"),
         rental_price_cents=payload.get("rental_price_cents"),
     )
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Toy not found or catalog is not loaded in the database yet.",
+        )
+    return updated
+
+
+@router.post("/toys/{toy_id}/photo", response_model=ToyOut)
+async def upload_toy_photo(
+    toy_id: str,
+    image: UploadFile = File(...),
+    _: Principal = Depends(require_admin),
+) -> ToyOut:
+    """Upload or replace the catalog photo for a toy."""
+    data = await image.read()
+    try:
+        updated = upload_toy_photo_service(
+            toy_id,
+            data,
+            content_type=image.content_type,
+        )
+    except ValueError as exc:
+        status = 413 if "too large" in str(exc).lower() else 422
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
     if updated is None:
         raise HTTPException(
             status_code=404,

@@ -19,6 +19,7 @@ import "toy_label_pdf.dart";
 import "toy_availability_badge.dart";
 import "toy_id_badge.dart";
 import "toy_detail_action_bar.dart";
+import "toy_detail_pieces_section.dart";
 import "toy_detail_section.dart";
 import "toy_photo_placeholder.dart";
 
@@ -200,6 +201,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
         final description = t.description?.trim().isNotEmpty == true
             ? t.description!.trim()
             : null;
+        final showPieceBreakdown = auth.isAdmin || auth.isVolunteer;
 
         return Scaffold(
           appBar: AppBar(
@@ -333,15 +335,23 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                         ToyDetailMetaRow(label: "Category", value: t.category!),
                       if (t.ageRange != null)
                         ToyDetailMetaRow(label: "Age range", value: t.ageRange!),
-                      if (hasToyPiecesInfo(
-                        totalPieces: t.totalPieces,
-                        missingPieces: t.missingPieces,
-                      ))
+                      if (!showPieceBreakdown &&
+                          hasToyPiecesInfo(
+                            totalPieces: t.totalPieces,
+                            missingPieces: t.missingPieces,
+                          ))
                         ToyDetailMetaRow(
                           label: "Pieces",
                           value: t.piecesSummary.isNotEmpty
                               ? t.piecesSummary
                               : "Not recorded",
+                        ),
+                      if ((auth.isAdmin || auth.isVolunteer) &&
+                          t.missingPiecesDetail != null &&
+                          t.missingPiecesDetail!.trim().isNotEmpty)
+                        ToyDetailMetaRow(
+                          label: "Missing pieces",
+                          value: t.missingPiecesDetail!.trim(),
                         ),
                       if (t.rentalPriceLabel != null)
                         ToyDetailMetaRow(
@@ -357,6 +367,16 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   ],
                 ),
               ),
+              if (showPieceBreakdown) ...[
+                const SizedBox(height: 12),
+                ToyDetailPiecesSection(
+                  toyId: t.toyId,
+                  pieceLines: t.pieceLines,
+                  totalPieces: t.totalPieces,
+                  missingPieces: t.missingPieces,
+                  onSaved: _retry,
+                ),
+              ],
               const SizedBox(height: 12),
               ToyDetailSectionCard(
                 child: Column(
@@ -367,8 +387,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                     Text(
                       description ?? "No description available.",
                       style: description != null
-                          ? context.bodyText
-                          : context.bodyPlaceholder,
+                          ? context.metaValue.copyWith(height: 1.45)
+                          : context.bodyPlaceholder.copyWith(height: 1.45),
                     ),
                   ],
                 ),

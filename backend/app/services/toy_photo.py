@@ -48,3 +48,17 @@ def resolve_toy_photo_path(toy_id: str) -> Path | None:
 def guess_media_type(path: Path) -> str:
     mime, _ = mimetypes.guess_type(str(path))
     return mime or "application/octet-stream"
+
+
+def safe_delete_photo_file(root: Path, filename: str | None) -> None:
+    if not filename:
+        return
+    safe_name = Path(filename).name
+    if not safe_name or safe_name in (".", ".."):
+        return
+    candidate = (root / safe_name).resolve()
+    root_r = root.resolve()
+    if not str(candidate).startswith(str(root_r)):
+        return
+    if candidate.is_file():
+        candidate.unlink(missing_ok=True)
