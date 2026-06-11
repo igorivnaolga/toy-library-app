@@ -5,6 +5,8 @@ import "package:supabase_flutter/supabase_flutter.dart";
 
 import "api_client.dart";
 import "api_exception.dart";
+import "push_notifications.dart";
+import "reminder_sync.dart";
 import "../features/profile/kid_profile.dart";
 import "../features/profile/member_contact_info.dart";
 
@@ -129,10 +131,15 @@ class AuthStore extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final backend = _backend;
+    if (backend != null) {
+      await PushNotificationService.instance.unregisterFromBackend(backend);
+    }
     final supa = _supabase;
     if (supa != null) {
       await supa.auth.signOut();
     }
+    await ReminderSync.clear();
     _setGuest();
     notifyListeners();
   }
@@ -191,6 +198,13 @@ class AuthStore extends ChangeNotifier {
         kidsNames = kids.map((kid) => kid.name).toList();
         avatarPath = me["avatar_path"]?.toString();
         contact = MemberContactInfo.fromJson(me);
+        unawaited(
+          PushNotificationService.instance.syncWithBackend(
+            backend,
+            remindersEnabled:
+                canBookToys && contact.textRemindersConsent == true,
+          ),
+        );
         return;
       } catch (e) {
         lastError = e;

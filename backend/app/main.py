@@ -127,6 +127,42 @@ def _apply_schema_patches(engine) -> None:
                 "ADD COLUMN IF NOT EXISTS piece_inventory text"
             )
         )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.device_tokens (
+                    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
+                    token varchar(512) NOT NULL UNIQUE,
+                    platform varchar(16) NOT NULL DEFAULT 'android',
+                    updated_at timestamptz NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_device_tokens_user_id "
+                "ON public.device_tokens (user_id)"
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.push_notification_logs (
+                    dedupe_key varchar(256) PRIMARY KEY,
+                    user_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
+                    sent_at timestamptz NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_push_notification_logs_user_id "
+                "ON public.push_notification_logs (user_id)"
+            )
+        )
 
 
 @asynccontextmanager

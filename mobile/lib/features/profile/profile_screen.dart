@@ -462,6 +462,14 @@ class _ContactDetailsBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (contact.textRemindersConsent == true) ...[
+            Text(
+              "Pickup, return, and overdue reminders are sent to this phone "
+              "when notifications are allowed.",
+              style: context.emptyState,
+            ),
+            const SizedBox(height: 12),
+          ],
           for (var i = 0; i < rows.length; i++) ...[
             if (i > 0) const SizedBox(height: 12),
             Text(rows[i].$1, style: context.formSectionLabel),

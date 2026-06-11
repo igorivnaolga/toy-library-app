@@ -67,3 +67,7 @@ class Profile(Base):
         back_populates="volunteer",
         foreign_keys="DutySession.volunteer_id",
     )
+    device_tokens: Mapped[list["DeviceToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

@@ -4,9 +4,12 @@ library;
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "dart:async";
+
 import "core/api_client.dart";
 import "core/app_theme.dart";
 import "core/auth_store.dart";
+import "core/reminder_sync.dart";
 import "core/library_app_bar_title.dart";
 import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
@@ -116,11 +119,31 @@ class _RoleHome extends StatefulWidget {
   State<_RoleHome> createState() => _RoleHomeState();
 }
 
-class _RoleHomeState extends State<_RoleHome> {
+class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
+  String _lastReminderSignature = "";
+  bool _memberRemindersBootstrapped = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncAdminNotifications());
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncAdminNotifications();
+      _bootstrapMemberReminders();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _bootstrapMemberReminders();
+    }
   }
 
   @override
@@ -135,6 +158,44 @@ class _RoleHomeState extends State<_RoleHome> {
     if (auth.isAdmin) {
       context.read<AdminController>().loadNotifications(silent: true);
     }
+  }
+
+  Future<void> _bootstrapMemberReminders() async {
+    if (!mounted) return;
+    final auth = context.read<AuthStore>();
+    if (!auth.canBookToys) {
+      await ReminderSync.clear();
+      return;
+    }
+    if (!_memberRemindersBootstrapped) {
+      _memberRemindersBootstrapped = true;
+      await ReminderSync.refreshForMember(context);
+    }
+  }
+
+  void _syncMemberRemindersIfChanged(AuthStore auth) {
+    final signature = _reminderSignature(auth);
+    if (signature == _lastReminderSignature) return;
+    _lastReminderSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ReminderSync.syncFromControllers(context));
+    });
+  }
+
+  String _reminderSignature(AuthStore auth) {
+    final enabled = ReminderSync.remindersEnabled(auth);
+    final bookings = context.read<BookingsController>().bookings;
+    final loans = context.read<LoansController>().myLoans;
+    final pending = bookings
+        .where((booking) => booking.isPending)
+        .map((booking) => "${booking.bookingId}:${booking.pickupDate}")
+        .join("|");
+    final active = loans
+        .where((loan) => loan.isActive)
+        .map((loan) => "${loan.loanId}:${loan.dueDate}:${loan.isOverdue}")
+        .join("|");
+    return "$enabled#$pending#$active";
   }
 
   void _openDuty(BuildContext context) {
@@ -169,6 +230,9 @@ class _RoleHomeState extends State<_RoleHome> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
+    context.watch<BookingsController>();
+    context.watch<LoansController>();
+    _syncMemberRemindersIfChanged(auth);
     final tabs = _tabsForRole(auth.role);
 
     return DefaultTabController(

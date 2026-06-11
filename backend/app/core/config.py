@@ -45,6 +45,14 @@ class Settings(BaseSettings):
         le=600,
         description="Clock skew tolerance when validating access token iat/nbf/exp.",
     )
+    firebase_credentials_path: str | None = Field(
+        default=None,
+        description="Path to Firebase service account JSON for FCM push (optional).",
+    )
+    cron_secret: str | None = Field(
+        default=None,
+        description="Shared secret for scheduled jobs (X-Cron-Secret header).",
+    )
 
 
 @lru_cache

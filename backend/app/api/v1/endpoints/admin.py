@@ -5,12 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_admin
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.repositories.duty_repo import list_todays_unconfirmed_duty_sessions
 from app.repositories.profile_repo import (
@@ -38,6 +39,7 @@ from app.schemas.admin import (
 )
 from app.schemas.booking import booking_out_from_model
 from app.schemas.duty import DutySessionOut, duty_session_out_from_model
+from app.schemas.notification import MemberPushRemindersResult
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
@@ -59,6 +61,41 @@ class PendingDutyVolunteersOut(BaseModel):
 
 class TodaysDutyShiftsOut(BaseModel):
     data: list[DutySessionOut]
+
+
+@router.post(
+    "/notifications/send-member-reminders",
+    response_model=MemberPushRemindersResult,
+)
+def send_member_push_reminders(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(require_admin),
+) -> MemberPushRemindersResult:
+    """
+    Send due booking/loan push reminders (admin or cron).
+
+    Schedule this endpoint around 6:00, 8:00, and 9:00 Pacific/Auckland.
+    """
+    _ = principal
+    result = send_due_member_push_reminders(db)
+    return MemberPushRemindersResult(**result)
+
+
+@router.post(
+    "/notifications/send-member-reminders/cron",
+    response_model=MemberPushRemindersResult,
+    include_in_schema=False,
+)
+def send_member_push_reminders_cron(
+    db: Session = Depends(get_db),
+    cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+) -> MemberPushRemindersResult:
+    """Cron entry point protected by ``CRON_SECRET`` env."""
+    expected = get_settings().cron_secret
+    if not expected or cron_secret != expected:
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
+    result = send_due_member_push_reminders(db)
+    return MemberPushRemindersResult(**result)
 
 
 @router.get("/notifications", response_model=AdminNotificationsOut)

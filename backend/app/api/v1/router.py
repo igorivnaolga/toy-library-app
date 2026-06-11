@@ -8,6 +8,7 @@ from app.api.v1.endpoints.desk import router as desk_router
 from app.api.v1.endpoints.duty import router as duty_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.loans import router as loans_router
+from app.api.v1.endpoints.notifications import router as notifications_router
 from app.api.v1.endpoints.toys import router as toys_router
 
 api_router = APIRouter()
@@ -20,3 +21,6 @@ api_router.include_router(toys_router, prefix="/toys", tags=["toys"])
 api_router.include_router(categories_router, prefix="/categories", tags=["categories"])
 api_router.include_router(duty_router, prefix="/duty", tags=["duty"])
 api_router.include_router(desk_router, prefix="/desk", tags=["desk"])
+api_router.include_router(
+    notifications_router, prefix="/notifications", tags=["notifications"]
+)

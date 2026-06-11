@@ -12,3 +12,4 @@ pillow
 opencv-python-headless
 numpy
 scikit-learn
+firebase-admin
