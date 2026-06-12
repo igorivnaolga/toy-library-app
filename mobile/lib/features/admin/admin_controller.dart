@@ -5,6 +5,7 @@ import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
 import "../payments/payment_models.dart";
 import "admin_models.dart";
+import "admin_statistics_models.dart";
 
 /// Loads admin panel data from `/api/v1/admin/*`.
 class AdminController extends ChangeNotifier {
@@ -18,17 +19,150 @@ class AdminController extends ChangeNotifier {
   List<BookingItem> bookings = [];
   List<AdminMember> members = [];
 
+  StatsOverview? statsOverview;
+  StatsBreakdown? statsBreakdown;
+  StatsCatalog? statsCatalog;
+  ToyPopularity? toyPopularity;
+  int _breakdownRequestId = 0;
+
   bool notificationsLoading = false;
   bool pendingLoading = false;
   bool recentMembersLoading = false;
   bool bookingsLoading = false;
   bool membersLoading = false;
+  bool statsLoading = false;
+  bool statsBreakdownLoading = false;
 
   String? notificationsError;
   String? pendingError;
   String? recentMembersError;
   String? bookingsError;
   String? membersError;
+  String? statsError;
+
+  Map<String, String> _statsQuery({
+    required String period,
+    DateTime? sessionDate,
+    int? year,
+    int? month,
+    String? groupBy,
+  }) {
+    final query = <String, String>{"period": period};
+    if (period == "session" && sessionDate != null) {
+      query["session_date"] = formatApiDate(sessionDate);
+    }
+    if (period == "month") {
+      if (year != null) query["year"] = "$year";
+      if (month != null) query["month"] = "$month";
+    }
+    if (period == "year" && year != null) {
+      query["year"] = "$year";
+    }
+    if (groupBy != null && groupBy.isNotEmpty) query["group_by"] = groupBy;
+    return query;
+  }
+
+  Future<void> loadStatsOverview({
+    required String period,
+    DateTime? sessionDate,
+    int? year,
+    int? month,
+  }) async {
+    statsLoading = true;
+    statsError = null;
+    notifyListeners();
+    try {
+      final json = await _client.getJson(
+        "/api/v1/admin/stats/overview",
+        _statsQuery(
+          period: period,
+          sessionDate: sessionDate,
+          year: year,
+          month: month,
+        ),
+      );
+      statsOverview = StatsOverview.fromJson(json);
+      statsError = null;
+    } catch (e) {
+      statsError = e.toString();
+    } finally {
+      statsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadStatsBreakdown({
+    required String period,
+    DateTime? sessionDate,
+    int? year,
+    int? month,
+    String groupBy = "category",
+  }) async {
+    final requestId = ++_breakdownRequestId;
+    statsBreakdownLoading = true;
+    notifyListeners();
+    try {
+      final json = await _client.getJson(
+        "/api/v1/admin/stats/loans/breakdown",
+        _statsQuery(
+          period: period,
+          sessionDate: sessionDate,
+          year: year,
+          month: month,
+          groupBy: groupBy,
+        ),
+      );
+      if (requestId != _breakdownRequestId) return;
+      statsBreakdown = StatsBreakdown.fromJson(json);
+      statsError = null;
+    } catch (e) {
+      if (requestId != _breakdownRequestId) return;
+      statsBreakdown = null;
+      statsError ??= e.toString();
+    } finally {
+      if (requestId == _breakdownRequestId) {
+        statsBreakdownLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadStatsCatalog() async {
+    try {
+      final json = await _client.getJson("/api/v1/admin/stats/catalog");
+      statsCatalog = StatsCatalog.fromJson(json);
+      notifyListeners();
+    } catch (e) {
+      statsCatalog = null;
+      statsError ??= e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadToyPopularity({
+    required String period,
+    DateTime? sessionDate,
+    int? year,
+    int? month,
+  }) async {
+    try {
+      final json = await _client.getJson(
+        "/api/v1/admin/stats/toys/popularity",
+        _statsQuery(
+          period: period,
+          sessionDate: sessionDate,
+          year: year,
+          month: month,
+        ),
+      );
+      toyPopularity = ToyPopularity.fromJson(json);
+      notifyListeners();
+    } catch (e) {
+      toyPopularity = null;
+      statsError ??= e.toString();
+      notifyListeners();
+    }
+  }
 
   Future<void> loadNotifications({bool silent = false}) async {
     if (!silent) {

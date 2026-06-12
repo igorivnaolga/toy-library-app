@@ -15,6 +15,7 @@ import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
 import "features/admin/admin_loans_screen.dart";
 import "features/admin/admin_members_screen.dart";
+import "features/admin/admin_statistics_screen.dart";
 import "features/admin/admin_notifications_sheet.dart";
 import "features/auth/login_screen.dart";
 import "features/bookings/bookings_controller.dart";
@@ -329,11 +330,12 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     const bookings = ("Bookings", Icons.event_note);
     const members = ("Members", Icons.people_outline);
     const loans = ("Loans", Icons.autorenew);
+    const stats = ("Stats", Icons.bar_chart_outlined);
     const duty = ("Duty", Icons.desk_outlined);
 
     switch (role) {
       case AppRole.admin:
-        return const [catalog, bookings, members, loans];
+        return const [catalog, bookings, members, loans, stats];
       case AppRole.volunteer:
         return const [catalog, bookings, loans, duty, ..._infoTabs];
       case AppRole.member:
@@ -351,6 +353,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
           AdminBookingsScreen(),
           AdminMembersScreen(),
           AdminLoansScreen(),
+          AdminStatisticsScreen(),
         ];
       case AppRole.volunteer:
         return const [

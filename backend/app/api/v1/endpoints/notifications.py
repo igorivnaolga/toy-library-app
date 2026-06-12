@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_current_principal, require_roles
@@ -33,7 +31,7 @@ def register_device_token(
     platform = (body.platform or "android").strip().lower() or "android"
     upsert_device_token(
         db,
-        user_id=uuid.UUID(principal.id),
+        user_id=principal.id,
         token=body.token,
         platform=platform,
     )
@@ -50,7 +48,7 @@ def unregister_device_token(
     """Remove an FCM token (e.g. on sign-out)."""
     delete_device_token(
         db,
-        user_id=uuid.UUID(principal.id),
+        user_id=principal.id,
         token=body.token,
     )
     db.commit()

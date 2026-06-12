@@ -69,6 +69,23 @@ class _LoginScreenState extends State<LoginScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (!auth.isAuthConfigured)
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  "Supabase auth is not loaded. Stop the app and run with "
+                  "mobile/env/dev.json, e.g.\n"
+                  "flutter run --dart-define-from-file=env/dev.json "
+                  "--dart-define=USE_ADB_REVERSE=true",
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ),
+          if (!auth.isAuthConfigured) const SizedBox(height: 12),
           TextField(
             controller: _email,
             keyboardType: TextInputType.emailAddress,

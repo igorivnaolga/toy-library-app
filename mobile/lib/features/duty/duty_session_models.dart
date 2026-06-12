@@ -135,6 +135,16 @@ class LibrarySessionTimes {
     final start = from ?? DateTime.now();
     final first = DateTime(start.year, start.month, start.day);
     final last = first.add(Duration(days: withinDays));
+    return sessionDaysBetween(from: first, to: last);
+  }
+
+  /// Wed/Sat session days from [from] through [to] inclusive.
+  static List<DateTime> sessionDaysBetween({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    final first = DateTime(from.year, from.month, from.day);
+    final last = DateTime(to.year, to.month, to.day);
     final days = <DateTime>[];
     var probe = first;
     while (!probe.isAfter(last)) {

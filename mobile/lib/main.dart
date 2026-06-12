@@ -11,9 +11,17 @@ import "core/reminder_notifications.dart";
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Never block first frame on optional services — a thrown error here shows a black screen.
-  await ReminderNotificationService.instance.initialize();
-  await PushNotificationService.instance.initialize();
+  // Never block first frame on optional services — cap init time on slow emulators.
+  try {
+    await ReminderNotificationService.instance
+        .initialize()
+        .timeout(const Duration(seconds: 5));
+  } catch (_) {}
+  try {
+    await PushNotificationService.instance
+        .initialize()
+        .timeout(const Duration(seconds: 8));
+  } catch (_) {}
 
   const supabaseUrl = String.fromEnvironment("SUPABASE_URL", defaultValue: "");
   const supabaseAnonKey =

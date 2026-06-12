@@ -184,14 +184,16 @@ class AuthStore extends ChangeNotifier {
   }
 
   Future<void> _fetchProfileFromBackend(BackendClient backend) async {
-    const maxAttempts = 3;
+    const maxAttempts = 2;
     Object? lastError;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
-        await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
       try {
-        final me = await backend.getJson("/api/v1/auth/me");
+        final me = await backend
+            .getJson("/api/v1/auth/me")
+            .timeout(const Duration(seconds: 12));
         userId = me["user_id"]?.toString();
         email = me["email"]?.toString();
         fullName = me["full_name"]?.toString();
