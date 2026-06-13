@@ -45,6 +45,14 @@ class Settings(BaseSettings):
         le=600,
         description="Clock skew tolerance when validating access token iat/nbf/exp.",
     )
+    supabase_service_role_key: str | None = Field(
+        default=None,
+        description="Service role key for server-side Supabase Storage uploads (Dashboard → Settings → API).",
+    )
+    toy_photos_bucket: str = Field(
+        default="toy-photos",
+        description="Supabase Storage bucket for catalog toy photos.",
+    )
     firebase_credentials_path: str | None = Field(
         default=None,
         description="Path to Firebase service account JSON for FCM push (optional).",

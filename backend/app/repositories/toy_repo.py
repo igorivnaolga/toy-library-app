@@ -446,6 +446,44 @@ def update_toy_pieces_in_db(
     )
 
 
+def update_toy_photo_filename_in_db(
+    toy_id: str,
+    new_filename: str,
+) -> tuple[ToyOut | None, str | None]:
+    """Upsert ``toy_images.filename`` without writing local files."""
+    if _db_toy_count() == 0:
+        return None, None
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None, None
+
+    safe_name = Path(new_filename).name
+    if not safe_name or safe_name in (".", ".."):
+        raise ValueError("Invalid photo filename.")
+
+    session = session_scope()
+    try:
+        toy = session.scalar(
+            select(ToyORM)
+            .options(joinedload(ToyORM.image))
+            .where(ToyORM.toy_id == toy_id_norm)
+        )
+        if toy is None:
+            return None, None
+
+        old_filename = toy.image.filename if toy.image else None
+        if toy.image is None:
+            session.add(ToyImageORM(toy_id=toy_id_norm, filename=safe_name))
+        else:
+            toy.image.filename = safe_name
+
+        session.commit()
+        session.refresh(toy)
+        return _toy_row_to_out(toy), old_filename
+    finally:
+        session.close()
+
+
 def upload_toy_photo_in_db(
     toy_id: str,
     *,

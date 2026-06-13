@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.toy import Toy
 from app.services.toy_cv_learner import PhotoFeatures
-from app.services.toy_photo import resolve_toy_photo_path
+from app.services.toy_photo import read_toy_photo_bytes
 
 _LAYOUT_GRID = 8
 _REF_EMA = 0.35
@@ -133,13 +133,13 @@ def ensure_catalog_reference(session: Session, toy: Toy) -> bool:
     if has_reference(toy):
         return False
 
-    path = resolve_toy_photo_path(toy.toy_id)
-    if path is None:
+    photo_bytes = read_toy_photo_bytes(toy.toy_id)
+    if photo_bytes is None:
         return False
 
     from app.services.desk_cv_service import extract_photo_features
 
-    features = extract_photo_features(path.read_bytes())
+    features = extract_photo_features(photo_bytes)
     piece_count = toy.cv_learn_piece_count or toy.total_pieces
     if features is None or not piece_count:
         return False

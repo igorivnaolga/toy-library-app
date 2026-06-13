@@ -62,18 +62,26 @@ Fill at least:
 | `CREATE_TABLES_ON_STARTUP` | Set `true` in development so tables are created on startup (use migrations in production) |
 | `SUPABASE_URL` | Project URL from Supabase → Settings → API |
 | `SUPABASE_JWT_SECRET` | **JWT Secret** from the same page (not the anon key) — required when Supabase signs access tokens with **HS256**. Newer projects may use **asymmetric** signing (RS256/ES256); the API then verifies using **JWKS** and only needs `SUPABASE_URL`. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Service role** key (same API page) — enables toy photo uploads to Supabase Storage |
 
 Optional:
 
 | Variable | Purpose |
 |----------|---------|
-| `TOY_IMAGES_DIR` | Absolute path to a folder of image files named like `photo_file` in the DB (e.g. `142928.jpg`). If unset, the API may fall back to `<repo>/toy_library_photos` when present. |
+| `TOY_IMAGES_DIR` | Local folder of image files (legacy). Used when `SUPABASE_SERVICE_ROLE_KEY` is unset, and as the source folder for `python -m app.scripts.migrate_toy_photos_to_supabase`. |
+| `TOY_PHOTOS_BUCKET` | Supabase Storage bucket for catalog photos (default: `toy-photos`) |
 
 Settings are loaded from **`backend/.env`** (and also **`./.env`** at repo root if present).
 
 Apply Supabase SQL for user profiles (signup → `public.profiles`) when you use Auth:
 
 - `backend/supabase/snippets/001_profiles.sql`
+
+For toy catalog photos in Supabase Storage:
+
+1. Run `backend/supabase/snippets/017_toy_photos_storage.sql` in the Supabase SQL editor.
+2. Set `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
+3. Upload existing files: `python -m app.scripts.migrate_toy_photos_to_supabase`
 
 ## 5. Seed the database (optional)
 

@@ -35,7 +35,10 @@ class _ToyPhotoTileState extends State<ToyPhotoTile> {
       return ToyPhotoPlaceholder(size: widget.size);
     }
 
-    final url = toyPhotoHttpUrl(widget.toyId);
+    final url = toyPhotoUrl(widget.toyId, photoFile: widget.photoFile);
+    if (url == null) {
+      return ToyPhotoPlaceholder(size: widget.size);
+    }
     // Decode at display resolution so large source images don't load full-size
     // for a small thumbnail (keeps the catalog list light on memory).
     final dpr = MediaQuery.of(context).devicePixelRatio;

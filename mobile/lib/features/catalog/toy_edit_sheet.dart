@@ -273,6 +273,7 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
             _ToyPhotoPicker(
               pickedPath: _pickedPhotoPath,
               existingToyId: widget.toy?.toyId,
+              existingPhotoFile: widget.toy?.photoFile,
               hasExistingPhoto: widget.toy?.photoFile != null &&
                   widget.toy!.photoFile!.isNotEmpty,
               onPick: _pickPhoto,
@@ -395,12 +396,14 @@ class _ToyPhotoPicker extends StatelessWidget {
     required this.pickedPath,
     required this.onPick,
     this.existingToyId,
+    this.existingPhotoFile,
     this.hasExistingPhoto = false,
     this.onClear,
   });
 
   final String? pickedPath;
   final String? existingToyId;
+  final String? existingPhotoFile;
   final bool hasExistingPhoto;
   final VoidCallback onPick;
   final VoidCallback? onClear;
@@ -428,7 +431,10 @@ class _ToyPhotoPicker extends StatelessWidget {
                     )
                   : showNetwork
                       ? Image.network(
-                          toyPhotoHttpUrl(existingToyId!),
+                          toyPhotoUrl(
+                            existingToyId!,
+                            photoFile: existingPhotoFile,
+                          )!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => const ToyPhotoPlaceholder(
                             expand: true,

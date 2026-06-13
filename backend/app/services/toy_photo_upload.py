@@ -1,10 +1,15 @@
-"""Save admin-uploaded toy photos to disk and ``toy_images``."""
+"""Save admin-uploaded toy photos to Supabase Storage or disk and ``toy_images``."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from app.schemas.toy import ToyOut
+from app.services.supabase_storage import (
+    delete_toy_photo,
+    toy_photos_storage_enabled,
+    upload_toy_photo_bytes,
+)
 from app.services.toy_photo import resolve_toy_images_root
 
 _MAX_BYTES = 8 * 1024 * 1024
@@ -41,13 +46,25 @@ def upload_toy_photo_service(
     if len(data) > _MAX_BYTES:
         raise ValueError("Image is too large.")
 
+    ext = _extension_for_upload(content_type, data)
+    from app.repositories.toy_repo import update_toy_photo_filename_in_db
+
+    if toy_photos_storage_enabled():
+        toy_id_norm = toy_id.strip()
+        new_filename = f"{toy_id_norm}{ext}"
+        upload_toy_photo_bytes(new_filename, data)
+        updated, old_filename = update_toy_photo_filename_in_db(toy_id_norm, new_filename)
+        if old_filename and old_filename != new_filename:
+            delete_toy_photo(old_filename)
+        return updated
+
     root = resolve_toy_images_root()
     if root is None:
         raise ValueError(
-            "Toy photo storage is not configured. Set TOY_IMAGES_DIR on the server."
+            "Toy photo storage is not configured. Set SUPABASE_SERVICE_ROLE_KEY "
+            "for Supabase Storage, or TOY_IMAGES_DIR for local files."
         )
 
-    ext = _extension_for_upload(content_type, data)
     from app.repositories.toy_repo import upload_toy_photo_in_db
 
     return upload_toy_photo_in_db(

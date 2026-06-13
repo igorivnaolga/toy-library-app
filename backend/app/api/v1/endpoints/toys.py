@@ -8,7 +8,7 @@ data access + DB/CSV switching happens in repositories/services.
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.core.auth_deps import get_optional_principal, require_roles
 from app.core.roles import Role
@@ -23,7 +23,11 @@ from app.schemas.toy import (
     ToysMetaOut,
 )
 from app.services.pieces_from_setls import resolve_piece_lines_for_toy
-from app.services.toy_photo import guess_media_type, resolve_toy_photo_path
+from app.services.toy_photo import (
+    guess_media_type,
+    resolve_toy_photo_path,
+    resolve_toy_photo_public_url,
+)
 from app.services.toy_service import (
     get_toy_service,
     get_toys_meta_service,
@@ -34,9 +38,13 @@ from app.services.toy_service import (
 router = APIRouter()
 
 
-@router.get("/{toy_id}/photo")
-def get_toy_photo(toy_id: str) -> FileResponse:
-    """Serve the image file referenced by `ToyOut.photo_file` when `TOY_IMAGES_DIR` / repo folder exists."""
+@router.get("/{toy_id}/photo", response_model=None)
+def get_toy_photo(toy_id: str) -> FileResponse | RedirectResponse:
+    """Serve the toy image from Supabase Storage or local ``TOY_IMAGES_DIR``."""
+    public_url = resolve_toy_photo_public_url(toy_id)
+    if public_url is not None:
+        return RedirectResponse(url=public_url, status_code=307)
+
     path = resolve_toy_photo_path(toy_id)
     if path is None:
         raise HTTPException(status_code=404, detail="Toy photo not found")

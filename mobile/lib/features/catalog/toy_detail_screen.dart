@@ -271,7 +271,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                       height: 200,
                       child: hasPhotoName
                           ? Image.network(
-                              toyPhotoHttpUrl(t.toyId),
+                              toyPhotoUrl(t.toyId, photoFile: t.photoFile)!,
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.medium,
                               errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(

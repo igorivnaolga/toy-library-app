@@ -1,4 +1,4 @@
-"""Resolve on-disk paths for toy photos served by `GET /api/v1/toys/{toy_id}/photo`."""
+"""Resolve toy photo paths/URLs for serving and CV reference loading."""
 
 from __future__ import annotations
 
@@ -24,7 +24,12 @@ def resolve_toy_images_root() -> Path | None:
 
 
 def resolve_toy_photo_path(toy_id: str) -> Path | None:
-    """Return absolute path to the image file for this toy, or None if missing/not configured."""
+    """Return absolute path to the on-disk image file, or None if missing/not configured."""
+    from app.services.supabase_storage import toy_photos_storage_enabled
+
+    if toy_photos_storage_enabled():
+        return None
+
     root = resolve_toy_images_root()
     if root is None:
         return None
@@ -43,6 +48,39 @@ def resolve_toy_photo_path(toy_id: str) -> Path | None:
     if not str(candidate).startswith(str(root_r)):
         return None
     return candidate if candidate.is_file() else None
+
+
+def resolve_toy_photo_public_url(toy_id: str) -> str | None:
+    """Public Supabase URL when storage is configured; otherwise None."""
+    from app.services.supabase_storage import toy_photos_public_url, toy_photos_storage_enabled
+
+    if not toy_photos_storage_enabled():
+        return None
+
+    toy = get_toy_service(toy_id)
+    if toy is None or not toy.photo_file:
+        return None
+    return toy_photos_public_url(toy.photo_file)
+
+
+def read_toy_photo_bytes(toy_id: str) -> bytes | None:
+    """Load toy photo bytes from Supabase or local disk."""
+    from app.services.supabase_storage import (
+        download_toy_photo_bytes,
+        toy_photos_storage_enabled,
+    )
+
+    toy = get_toy_service(toy_id)
+    if toy is None or not toy.photo_file:
+        return None
+
+    if toy_photos_storage_enabled():
+        return download_toy_photo_bytes(toy.photo_file)
+
+    path = resolve_toy_photo_path(toy_id)
+    if path is None:
+        return None
+    return path.read_bytes()
 
 
 def guess_media_type(path: Path) -> str:
