@@ -3,18 +3,23 @@ import "package:provider/provider.dart";
 
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
+import "../../core/app_theme.dart";
+import "../../core/loan_due_status.dart";
 import "../../core/section_header.dart";
 import "../../core/brand_chip_button.dart";
 import "../bookings/booking_models.dart";
+import "../duty/duty_session_models.dart";
 import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
 import "../loans/desk_check_in_dialog.dart";
 import "../loans/desk_checkout_dialog.dart";
 import "../loans/desk_walk_in_panel.dart";
+import "../loans/loan_due_date_header.dart";
 import "../loans/loan_desk_summary.dart";
 import "../loans/loan_models.dart";
 import "../loans/loans_controller.dart";
+import "admin_controller.dart";
 import "admin_cv_scan_panel.dart";
 
 /// Admin desk: separate check-out and check-in flows (CV-ready check-in).
@@ -26,6 +31,328 @@ class AdminLoansScreen extends StatefulWidget {
 
   @override
   State<AdminLoansScreen> createState() => _AdminLoansScreenState();
+}
+
+/// Check-in desk filtered to one member and due date (from member profile).
+class AdminMemberCheckInScreen extends StatefulWidget {
+  const AdminMemberCheckInScreen({
+    super.key,
+    required this.memberUserId,
+    required this.memberName,
+    required this.dueDate,
+    required this.initialLoans,
+  });
+
+  final String memberUserId;
+  final String memberName;
+  final DateTime dueDate;
+  final List<LoanItem> initialLoans;
+
+  @override
+  State<AdminMemberCheckInScreen> createState() =>
+      _AdminMemberCheckInScreenState();
+}
+
+class _AdminMemberCheckInScreenState extends State<AdminMemberCheckInScreen> {
+  late List<LoanItem> _loans;
+  String? _checkingInLoanId;
+  bool _refreshing = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _loans = List<LoanItem>.from(widget.initialLoans);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LoanItem> get _visibleLoans => filterCheckInLoans(
+        _loans,
+        query: _query,
+        memberUserId: widget.memberUserId,
+        dueDate: widget.dueDate,
+        includeMemberInSearch: false,
+      );
+
+  Future<void> _refreshLoans() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final all = await context
+          .read<AdminController>()
+          .loadMemberLoans(widget.memberUserId);
+      if (!mounted) return;
+      setState(() {
+        _loans = all
+            .where(
+              (loan) =>
+                  loan.isActive &&
+                  _sameDay(loan.returnSessionDate, widget.dueDate),
+            )
+            .toList();
+      });
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _checkIn(LoanItem loan) async {
+    if (_checkingInLoanId != null) return;
+    final result = await showDeskCheckInDialog(context, loan);
+    if (result == null || !mounted) return;
+
+    setState(() => _checkingInLoanId = loan.loanId);
+    final controller = context.read<LoansController>();
+    final catalog = context.read<CatalogController>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await controller.checkIn(
+        loan.loanId,
+        missingPieces: result.missingPieces,
+        missingPiecesDetail: result.missingPiecesDetail,
+      );
+      await catalog.refresh();
+      if (!mounted) return;
+      setState(() {
+        _checkingInLoanId = null;
+        _loans = _loans.where((item) => item.loanId != loan.loanId).toList();
+      });
+      messenger.showSnackBar(
+        SnackBar(content: Text("Checked in ${loan.toyName ?? loan.toyId}")),
+      );
+      if (kDeskCheckInCvEnabled) {
+        final photoLearn = result.photoLearn;
+        if (photoLearn != null) {
+          runDeskPhotoLearnInBackground(controller, messenger, photoLearn);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _checkingInLoanId = null);
+      messenger.showSnackBar(
+        SnackBar(content: Text(loanActionErrorMessage(e))),
+      );
+    }
+  }
+
+  void _openToy(String toyId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ToyDetailScreen(toyId: toyId),
+      ),
+    );
+  }
+
+  Future<void> _handleScannedToyId(String toyId) async {
+    LoanItem? match;
+    for (final loan in _visibleLoans) {
+      if (loan.toyId != toyId) continue;
+      match = loan;
+      break;
+    }
+    if (!mounted) return;
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Toy $toyId isn't on loan to ${widget.memberName} for this due date.",
+          ),
+        ),
+      );
+      return;
+    }
+    await _checkIn(match);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = _checkingInLoanId != null || _refreshing;
+    final visible = _visibleLoans;
+    final isOverdue = _loans.isNotEmpty
+        ? _loans.any((loan) => loan.effectiveIsOverdue)
+        : isLoanOverdue(widget.dueDate);
+    final isDueToday = !isOverdue &&
+        (_loans.isNotEmpty
+            ? _loans.any((loan) => loan.effectiveIsDueToday)
+            : isLoanDueToday(widget.dueDate));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Check in"),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshLoans,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          children: [
+            _MemberCheckInHeader(
+              memberName: widget.memberName,
+              dueDate: widget.dueDate,
+              isOverdue: isOverdue,
+              isDueToday: isDueToday,
+              toyCount: _loans.length,
+            ),
+            const SizedBox(height: 16),
+            if (kDeskToyIdScanEnabled) ...[
+              AdminCvScanPanel(onToyIdScanned: _handleScannedToyId),
+              const SizedBox(height: 16),
+            ],
+            if (_loans.isNotEmpty) ...[
+              TextField(
+                controller: _searchController,
+                style: fieldTextStyle(context),
+                cursorColor: fieldCursorColor(context),
+                textInputAction: TextInputAction.search,
+                decoration: searchInputDecoration(
+                  context,
+                  hintText: "Search by toy or ID",
+                  suffixIcon: searchClearSuffix(
+                    context,
+                    visible: _query.isNotEmpty,
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _query = "");
+                    },
+                  ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_loans.isEmpty)
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.35,
+                child: Center(
+                  child: Text(
+                    _refreshing
+                        ? "Refreshing…"
+                        : "No toys on loan for this due date.",
+                    textAlign: TextAlign.center,
+                    style: context.listSubtitle,
+                  ),
+                ),
+              )
+            else if (visible.isEmpty)
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.25,
+                child: Center(
+                  child: Text(
+                    'No toys match "${_query.trim()}".',
+                    textAlign: TextAlign.center,
+                    style: context.listSubtitle,
+                  ),
+                ),
+              )
+            else ...[
+              const SectionHeader("On loan"),
+              for (var i = 0; i < visible.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                _CheckInTile(
+                  loan: visible[i],
+                  loading: busy && _checkingInLoanId == visible[i].loanId,
+                  onOpen: () => _openToy(visible[i].toyId),
+                  onCheckIn: () => _checkIn(visible[i]),
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+DateTime _sameDayKey(DateTime date) =>
+    DateTime(date.year, date.month, date.day);
+
+bool _sameDay(DateTime a, DateTime b) => _sameDayKey(a) == _sameDayKey(b);
+
+/// Member + due date context when opening check-in from the admin profile.
+class _MemberCheckInHeader extends StatelessWidget {
+  const _MemberCheckInHeader({
+    required this.memberName,
+    required this.dueDate,
+    required this.isOverdue,
+    required this.isDueToday,
+    required this.toyCount,
+  });
+
+  final String memberName;
+  final DateTime dueDate;
+  final bool isOverdue;
+  final bool isDueToday;
+  final int toyCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final iconColor =
+        isOverdue ? colors.error : colors.primary.withValues(alpha: 0.85);
+
+    return Material(
+      color: kModalSurface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.65)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.person_outline, size: 22, color: iconColor),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Member", style: context.formSectionLabel),
+                      const SizedBox(height: 2),
+                      Text(
+                        memberName,
+                        style: context.cardTitle.copyWith(fontSize: 17),
+                      ),
+                      if (toyCount > 0) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          toyCount == 1
+                              ? "1 toy to check in"
+                              : "$toyCount toys to check in",
+                          style: context.listSubtitle,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: colors.outlineVariant.withValues(alpha: 0.5),
+          ),
+          LoanDueDateHeader(
+            dueDate: dueDate,
+            isOverdue: isOverdue,
+            isDueToday: isDueToday,
+            embedded: true,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AdminLoansScreenState extends State<AdminLoansScreen> {
@@ -41,6 +368,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
     final result = await showDeskCheckoutDialog(
       context,
       memberLabel: booking.memberLabel,
+      memberUserId: booking.userId,
       lines: [
         DeskCheckoutLine(
           toyId: booking.toyId,
@@ -309,6 +637,8 @@ class _CheckInTab extends StatefulWidget {
     required this.onToyIdScanned,
     required this.onRefresh,
     this.enableToyIdScan = true,
+    this.filterMemberUserId,
+    this.filterDueDate,
   });
 
   final Future<void> Function(LoanItem loan) onCheckIn;
@@ -316,6 +646,8 @@ class _CheckInTab extends StatefulWidget {
   final Future<void> Function(String toyId) onToyIdScanned;
   final Future<void> Function() onRefresh;
   final bool enableToyIdScan;
+  final String? filterMemberUserId;
+  final DateTime? filterDueDate;
 
   @override
   State<_CheckInTab> createState() => _CheckInTabState();
@@ -332,12 +664,12 @@ class _CheckInTabState extends State<_CheckInTab> {
   }
 
   List<LoanItem> _filtered(List<LoanItem> loans) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return loans;
-    return loans.where((loan) {
-      final name = (loan.toyName ?? "").toLowerCase();
-      return loan.toyId.toLowerCase().contains(q) || name.contains(q);
-    }).toList();
+    return filterCheckInLoans(
+      loans,
+      query: _query,
+      memberUserId: widget.filterMemberUserId,
+      dueDate: widget.filterDueDate,
+    );
   }
 
   @override
@@ -350,6 +682,8 @@ class _CheckInTabState extends State<_CheckInTab> {
 
         final all = c.activeLoans;
         final filtered = _filtered(all);
+        final hasDeskFilters = widget.filterMemberUserId != null ||
+            widget.filterDueDate != null;
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
@@ -361,7 +695,7 @@ class _CheckInTabState extends State<_CheckInTab> {
                 AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
                 const SizedBox(height: 16),
               ],
-              if (all.isNotEmpty) ...[
+              if (all.isNotEmpty && !hasDeskFilters) ...[
                 TextField(
                   controller: _searchController,
                   style: fieldTextStyle(context),
@@ -369,7 +703,7 @@ class _CheckInTabState extends State<_CheckInTab> {
                   textInputAction: TextInputAction.search,
                   decoration: searchInputDecoration(
                     context,
-                    hintText: "Search by toy name or ID",
+                    hintText: "Search by member, toy or ID",
                     suffixIcon: searchClearSuffix(
                       context,
                       visible: _query.isNotEmpty,
@@ -393,7 +727,9 @@ class _CheckInTabState extends State<_CheckInTab> {
               else if (filtered.isEmpty)
                 Center(
                   child: Text(
-                    'No toys match "${_query.trim()}".',
+                    hasDeskFilters
+                        ? "No toys on loan for this member on this due date."
+                        : 'No toys match "${_query.trim()}".',
                     textAlign: TextAlign.center,
                   ),
                 )

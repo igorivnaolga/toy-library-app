@@ -62,6 +62,11 @@ class DeskMemberOut(BaseModel):
         ge=0,
         description="Member's total pending balance at checkout.",
     )
+    credit_balance_cents: int = Field(
+        0,
+        ge=0,
+        description="Member unapplied account credit at checkout.",
+    )
 
 
 class DeskMembersResponse(BaseModel):

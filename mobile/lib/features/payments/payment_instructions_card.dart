@@ -12,11 +12,13 @@ class PaymentInstructionsCard extends StatelessWidget {
     this.amountDueCents,
     this.memberEmail,
     this.compact = false,
+    this.showBookingHint = false,
   });
 
   final int? amountDueCents;
   final String? memberEmail;
   final bool compact;
+  final bool showBookingHint;
 
   @override
   Widget build(BuildContext context) {
@@ -88,8 +90,12 @@ class PaymentInstructionsCard extends StatelessWidget {
             if (!compact) ...[
               const SizedBox(height: 10),
               Text(
-                "Bank transfers are confirmed by the coordinator — you can book "
-                "once payment is recorded in the app.",
+                showBookingHint
+                    ? "You can book toys now. Bank transfers are confirmed by "
+                        "the coordinator — bring cash or EFTPOS payment to "
+                        "your first visit if you prefer to pay at the library."
+                    : "Bank transfers are confirmed by the coordinator — you can "
+                        "book once payment is recorded in the app.",
                 style: context.listSubtitle.copyWith(fontStyle: FontStyle.italic),
               ),
             ],

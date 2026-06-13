@@ -1,4 +1,4 @@
-from app.repositories.toy_repo import distinct_age_ranges, get_toy_by_id, list_toys
+from app.repositories.toy_repo import distinct_age_ranges, distinct_manufacturers, get_toy_by_id, list_toys
 from app.schemas.toy import ToyOut, ToysMetaOut
 
 
@@ -27,7 +27,10 @@ def get_toy_service(toy_id: str) -> ToyOut | None:
 
 
 def get_toys_meta_service() -> ToysMetaOut:
-    return ToysMetaOut(age_ranges=distinct_age_ranges())
+    return ToysMetaOut(
+        age_ranges=distinct_age_ranges(),
+        manufacturers=distinct_manufacturers(),
+    )
 
 
 def create_toy_service(
@@ -94,6 +97,17 @@ def update_toy_service(
         from fastapi import HTTPException
 
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+def delete_toy_service(toy_id: str) -> bool | None:
+    from app.repositories.toy_repo import delete_toy_in_db
+
+    try:
+        return delete_toy_in_db(toy_id)
+    except ValueError as e:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 def update_toy_pieces_service(

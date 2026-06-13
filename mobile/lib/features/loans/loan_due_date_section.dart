@@ -10,10 +10,12 @@ class LoanDueDateSection extends StatelessWidget {
     super.key,
     required this.group,
     required this.children,
+    this.onHeaderTap,
   });
 
   final LoanDueDateGroup group;
   final List<Widget> children;
+  final VoidCallback? onHeaderTap;
 
   @override
   Widget build(BuildContext context) {
@@ -30,12 +32,36 @@ class LoanDueDateSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LoanDueDateHeader(
-            dueDate: group.dueDate,
-            isOverdue: group.isOverdue,
-            isDueToday: group.isDueToday,
-            embedded: true,
-          ),
+          if (onHeaderTap == null)
+            LoanDueDateHeader(
+              dueDate: group.dueDate,
+              isOverdue: group.isOverdue,
+              isDueToday: group.isDueToday,
+              embedded: true,
+            )
+          else
+            InkWell(
+              onTap: onHeaderTap,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: LoanDueDateHeader(
+                      dueDate: group.dueDate,
+                      isOverdue: group.isOverdue,
+                      isDueToday: group.isDueToday,
+                      embedded: true,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      Icons.chevron_right,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
             child: Column(

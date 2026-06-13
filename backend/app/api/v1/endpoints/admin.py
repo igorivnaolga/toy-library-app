@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.auth_deps import require_admin
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.repositories.duty_repo import list_todays_unconfirmed_duty_sessions
+from app.repositories.category_repo import update_category_label
 from app.repositories.profile_repo import (
     RECENT_MEMBERS_DAYS,
     approve_duty_volunteer,
@@ -37,19 +37,23 @@ from app.schemas.admin import (
     AdminMemberUpdateIn,
     AdminNotificationsOut,
 )
-from app.schemas.booking import booking_out_from_model
+from app.schemas.category import CategoryOut, CategoryUpdateIn
 from app.schemas.duty import DutySessionOut, duty_session_out_from_model
 from app.schemas.notification import MemberPushRemindersResult
+from app.models.category import Category
+from app.models.toy import Toy
+from app.schemas.loan import LoanOut, LoansListResponse, loan_out_from_model
 from app.schemas.principal import Principal
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
+from app.services.loan_service import list_my_loans_service, renewals_remaining_for_loan
 from app.services.payment_service import (
     balance_summary,
     membership_payment_summary,
     refresh_membership_payments_for_tier,
 )
 from app.services.toy_photo_upload import upload_toy_photo_service
-from app.services.toy_service import create_toy_service, update_toy_service
+from app.services.toy_service import create_toy_service, delete_toy_service, update_toy_service
 
 router = APIRouter()
 
@@ -248,6 +252,7 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
     kids = kids_from_profile(profile)
     payment_summary = membership_payment_summary(session, profile.id)
     account_balance = balance_summary(session, profile.id)
+    loan_rows = list_my_loans_service(session, profile.id)
     return AdminMemberDetailOut(
         user_id=str(profile.id),
         email=get_user_email(session, profile.id) or "",
@@ -263,6 +268,8 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
         membership_due_cents=payment_summary.due_cents,
         membership_fees_paid=payment_summary.fees_paid,
         balance_due_cents=account_balance.balance_due_cents,
+        credit_balance_cents=account_balance.credit_balance_cents,
+        loans=[_admin_loan_out(session, row) for row in loan_rows],
     )
 
 
@@ -278,6 +285,38 @@ def get_member_detail(
     if profile.role not in ("member", "volunteer"):
         raise HTTPException(status_code=404, detail="Member not found")
     return _member_detail_out(db, profile)
+
+
+def _admin_loan_out(db: Session, loan) -> LoanOut:
+    toy = loan.toy
+    if toy is None:
+        toy = db.get(Toy, loan.toy_id)
+    max_renewals = None
+    if toy is not None and toy.category_id is not None:
+        category = db.get(Category, toy.category_id)
+        if category is not None:
+            max_renewals = category.max_renewals
+    return loan_out_from_model(
+        loan,
+        max_renewals=max_renewals,
+        renewals_remaining=renewals_remaining_for_loan(db, loan, max_renewals),
+    )
+
+
+@router.get("/users/{user_id}/loans", response_model=LoansListResponse)
+def list_member_loans(
+    user_id: uuid.UUID,
+    active_only: bool = Query(False, description="Return only active loans."),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> LoansListResponse:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    rows = list_my_loans_service(db, user_id, active_only=active_only)
+    return LoansListResponse(data=[_admin_loan_out(db, row) for row in rows])
 
 
 @router.patch("/users/{user_id}/membership", response_model=AdminMemberDetailOut)
@@ -335,6 +374,25 @@ def update_member_profile(
     return _member_detail_out(db, profile)
 
 
+@router.patch("/categories/{code}", response_model=CategoryOut)
+def rename_category(
+    code: str,
+    body: CategoryUpdateIn,
+    _: Principal = Depends(require_admin),
+) -> CategoryOut:
+    """Rename a catalog category and update toys that use the old label."""
+    try:
+        updated = update_category_label(code, body.label)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found or catalog is not loaded in the database yet.",
+        )
+    return updated
+
+
 @router.post("/toys", response_model=ToyOut, status_code=201)
 def create_toy(
     body: ToyCreate,
@@ -388,6 +446,26 @@ def update_toy(
             detail="Toy not found or catalog is not loaded in the database yet.",
         )
     return updated
+
+
+@router.delete("/toys/{toy_id}")
+def delete_toy(
+    toy_id: str,
+    _: Principal = Depends(require_admin),
+) -> dict[str, bool | str]:
+    """Remove a toy from the DB-backed catalog."""
+    deleted = delete_toy_service(toy_id)
+    if deleted is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Catalog database is not configured; cannot delete toys.",
+        )
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Toy not found or catalog is not loaded in the database yet.",
+        )
+    return {"deleted": True, "toy_id": toy_id.strip()}
 
 
 @router.post("/toys/{toy_id}/photo", response_model=ToyOut)

@@ -15,15 +15,25 @@ from app.db.base import Base
 PAYMENT_TYPE_MEMBERSHIP = "membership"
 PAYMENT_TYPE_BOND = "bond"
 PAYMENT_TYPE_RENTAL = "rental"
+PAYMENT_TYPE_TOP_UP = "top_up"
+PAYMENT_TYPE_VOLUNTEER_CREDIT = "volunteer_credit"
 
 PAYMENT_TYPES = frozenset(
-    {PAYMENT_TYPE_MEMBERSHIP, PAYMENT_TYPE_BOND, PAYMENT_TYPE_RENTAL}
+    {
+        PAYMENT_TYPE_MEMBERSHIP,
+        PAYMENT_TYPE_BOND,
+        PAYMENT_TYPE_RENTAL,
+        PAYMENT_TYPE_TOP_UP,
+        PAYMENT_TYPE_VOLUNTEER_CREDIT,
+    }
 )
 
 PAYMENT_STATUS_PENDING = "pending"
 PAYMENT_STATUS_PAID_CASH = "paid_cash"
 PAYMENT_STATUS_PAID_EFTPOS = "paid_eftpos"
 PAYMENT_STATUS_PAID_BANK = "paid_bank"
+PAYMENT_STATUS_PAID_CREDIT = "paid_credit"
+PAYMENT_STATUS_GRANTED = "granted"
 PAYMENT_STATUS_REFUNDED = "refunded"
 PAYMENT_STATUS_CANCELLED = "cancelled"
 
@@ -33,6 +43,12 @@ PAID_STATUSES = frozenset(
         PAYMENT_STATUS_PAID_EFTPOS,
         PAYMENT_STATUS_PAID_BANK,
     }
+)
+
+TOP_UP_PAID_STATUSES = PAID_STATUSES
+
+CREDIT_GRANT_TYPES = frozenset(
+    {PAYMENT_TYPE_TOP_UP, PAYMENT_TYPE_VOLUNTEER_CREDIT}
 )
 
 MEMBERSHIP_PAYMENT_TYPES = frozenset({PAYMENT_TYPE_MEMBERSHIP, PAYMENT_TYPE_BOND})
@@ -79,6 +95,11 @@ class Payment(Base):
     toy_id: Mapped[str | None] = mapped_column(
         String(32),
         ForeignKey("toys.toy_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    duty_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("duty_sessions.id", ondelete="SET NULL"),
         nullable=True,
     )
     recorded_by: Mapped[uuid.UUID | None] = mapped_column(

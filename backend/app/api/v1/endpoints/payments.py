@@ -13,16 +13,20 @@ from app.repositories.profile_repo import get_profile_by_id
 from app.schemas.payment import (
     MarkMembershipPaidIn,
     MarkPaymentPaidIn,
+    MemberBalanceSummaryOut,
     PaymentOut,
     PaymentsListResponse,
+    RecordTopUpIn,
     payment_out_from_model,
 )
 from app.schemas.principal import Principal
 from app.services.payment_service import (
     PaymentError,
+    balance_summary,
     list_user_payments_service,
     mark_all_membership_payments_paid,
     mark_payment_paid,
+    record_top_up,
 )
 
 router = APIRouter()
@@ -62,6 +66,22 @@ def list_member_payments_admin(
     rows = list_user_payments_service(db, user_id)
     return PaymentsListResponse(
         data=[payment_out_from_model(row) for row in rows],
+    )
+
+
+@router.get("/users/{user_id}/balance-summary", response_model=MemberBalanceSummaryOut)
+def member_balance_summary(
+    user_id: uuid.UUID,
+    _: Principal = Depends(_require_on_duty),
+    db: Session = Depends(get_db),
+) -> MemberBalanceSummaryOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None or profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    account = balance_summary(db, user_id)
+    return MemberBalanceSummaryOut(
+        balance_due_cents=account.balance_due_cents,
+        credit_balance_cents=account.credit_balance_cents,
     )
 
 
@@ -111,3 +131,28 @@ def mark_membership_paid_endpoint(
     return PaymentsListResponse(
         data=[payment_out_from_model(row) for row in payments],
     )
+
+
+@router.post("/users/{user_id}/top-up", response_model=PaymentOut)
+def record_top_up_endpoint(
+    user_id: uuid.UUID,
+    body: RecordTopUpIn,
+    principal: Principal = Depends(_require_on_duty),
+    db: Session = Depends(get_db),
+) -> PaymentOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None or profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    try:
+        payment = record_top_up(
+            db,
+            user_id,
+            amount_cents=body.amount_cents,
+            method=body.method,
+            recorded_by=principal.id,
+        )
+    except PaymentError as exc:
+        raise _http_error(exc) from exc
+    db.commit()
+    db.refresh(payment)
+    return payment_out_from_model(payment)

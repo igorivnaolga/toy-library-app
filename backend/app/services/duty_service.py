@@ -16,6 +16,7 @@ from app.repositories.duty_repo import (
     list_duty_sessions,
 )
 from app.repositories.profile_repo import get_profile_by_id
+from app.services.payment_service import grant_volunteer_duty_credit
 
 
 class DutyError(Exception):
@@ -106,4 +107,6 @@ def confirm_duty_session_for_admin(
         )
     if row.admin_confirmed_at is not None:
         return row
-    return confirm_duty_session(session, row, admin_id)
+    confirmed = confirm_duty_session(session, row, admin_id)
+    grant_volunteer_duty_credit(session, confirmed, recorded_by=admin_id)
+    return confirmed

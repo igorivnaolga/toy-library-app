@@ -91,13 +91,7 @@ class _RegistrationPasswordScreenState extends State<RegistrationPasswordScreen>
       await auth.refreshProfile(silent: true);
 
       if (!mounted) return;
-      await showAuthSuccessDialog(
-        context,
-        title: "Welcome!",
-        message: "Your membership form was saved. You can review it anytime "
-            "on your profile.",
-      );
-      if (!mounted) return;
+      auth.markPostRegistrationWelcome();
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;

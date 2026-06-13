@@ -4,7 +4,6 @@ import "package:provider/provider.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/api_client.dart";
 import "../../core/auth_store.dart";
-import "../payments/payment_models.dart";
 import "membership_tier_card.dart";
 import "membership_tiers.dart";
 
@@ -35,15 +34,7 @@ class _MembershipOnboardingScreenState
       });
       await auth.refreshProfile(silent: true);
       if (mounted && !auth.membershipFeesPaid) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Membership fee ${formatDueCents(auth.membershipDueCents)} "
-              "is due — pay at the library or by bank transfer (see Membership tab).",
-            ),
-            duration: const Duration(seconds: 8),
-          ),
-        );
+        auth.markPostRegistrationWelcome();
       }
     } catch (e) {
       setState(() => _error = e.toString());

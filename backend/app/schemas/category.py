@@ -13,3 +13,7 @@ class CategoryOut(BaseModel):
 
 class CategoriesListResponse(BaseModel):
     data: list[CategoryOut]
+
+
+class CategoryUpdateIn(BaseModel):
+    label: str = Field(min_length=1, max_length=500)

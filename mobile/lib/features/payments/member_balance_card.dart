@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
+import "payment_list_by_date.dart";
 import "payment_models.dart";
 
 /// Member account balance shown on profile and membership screens.
@@ -8,16 +9,19 @@ class MemberBalanceCard extends StatelessWidget {
   const MemberBalanceCard({
     super.key,
     required this.balanceDueCents,
+    this.creditBalanceCents = 0,
     this.payments = const [],
   });
 
   final int balanceDueCents;
+  final int creditBalanceCents;
   final List<PaymentItem> payments;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final pending = payments.where((p) => p.isPending).toList();
+    final pendingPayments = payments.where((p) => p.isPending).toList();
+    final pendingCount = pendingPayments.length;
 
     return Material(
       color: balanceDueCents > 0
@@ -43,42 +47,42 @@ class MemberBalanceCard extends StatelessWidget {
                   child: Text(
                     balanceDueCents > 0
                         ? "Balance owing: ${formatDueCents(balanceDueCents)}"
-                        : "Nothing owing",
+                        : creditBalanceCents > 0
+                            ? "Account credit: ${formatDueCents(creditBalanceCents)}"
+                            : "Nothing owing",
                     style: context.cardTitle,
                   ),
                 ),
               ],
             ),
-            if (pending.isNotEmpty) ...[
+            if (pendingCount > 0 && balanceDueCents > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                pendingCount == 1
+                    ? "1 charge below"
+                    : "$pendingCount charges below",
+                style: context.listSubtitle,
+              ),
+            ],
+            if (creditBalanceCents > 0 && balanceDueCents > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Account credit: ${formatDueCents(creditBalanceCents)}",
+                style: context.listSubtitle,
+              ),
+            ],
+            if (payments.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text("Pending charges", style: context.groupLabel),
+              Text(
+                pendingCount > 0 ? "Breakdown" : "Payments",
+                style: context.groupLabel,
+              ),
               const SizedBox(height: 6),
-              ...pending.take(6).map(
-                    (payment) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              payment.description ??
-                                  "${payment.typeLabel} — ${payment.amountLabel}",
-                              style: context.listSubtitle,
-                            ),
-                          ),
-                          Text(
-                            payment.amountLabel,
-                            style: context.bodyText,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              if (pending.length > 6)
-                Text(
-                  "+ ${pending.length - 6} more",
-                  style: context.listSubtitle,
-                ),
-            ] else if (balanceDueCents == 0) ...[
+              PaymentsGroupedByDate(
+                payments: pendingCount > 0 ? pendingPayments : payments,
+                itemBuilder: (payment) => MemberPaymentRow(payment: payment),
+              ),
+            ] else if (balanceDueCents == 0 && creditBalanceCents == 0) ...[
               const SizedBox(height: 8),
               Text(
                 "Membership and toy hire charges appear here when due.",

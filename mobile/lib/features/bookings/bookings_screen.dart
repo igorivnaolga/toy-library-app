@@ -20,6 +20,8 @@ class BookingsScreen extends StatefulWidget {
 }
 
 class _BookingsScreenState extends State<BookingsScreen> {
+  bool _pastExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -113,12 +115,12 @@ class _BookingsScreenState extends State<BookingsScreen> {
       );
     }
 
-    if (!auth.canBookToys) {
+    if (!auth.isMember && !auth.isVolunteer) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            "Complete membership setup to book toys from the catalog.",
+            "Sign in as a member to view and manage your toy bookings.",
             textAlign: TextAlign.center,
           ),
         ),
@@ -154,6 +156,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
             onRefresh: c.loadBookings,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               children: const [
                 EmptyStateMessage(
                   "No bookings yet.\nOpen a toy in the catalog and tap Book.",
@@ -187,11 +190,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
                   sections.past.isNotEmpty)
                 const SizedBox(height: 20),
               if (sections.past.isNotEmpty) ...[
-                const SectionHeader("Past"),
-                for (var i = 0; i < sections.past.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _bookingTile(context, c, sections.past[i]),
-                ],
+                CollapsibleSection(
+                  title: "Past (${sections.past.length})",
+                  expanded: _pastExpanded,
+                  onToggle: () => setState(() => _pastExpanded = !_pastExpanded),
+                  children: [
+                    for (var i = 0; i < sections.past.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 8),
+                      _bookingTile(context, c, sections.past[i]),
+                    ],
+                  ],
+                ),
               ],
             ],
           ),

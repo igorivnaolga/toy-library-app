@@ -237,9 +237,29 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   tooltip: "Edit toy",
                   icon: const Icon(Icons.edit_outlined),
                   onPressed: () async {
-                    final updated = await showToyEditSheet(context, toy: t);
+                    final result = await showToyEditSheet(context, toy: t);
                     if (!context.mounted) return;
-                    if (updated != null) {
+                    if (result is ToyFormDeleted) {
+                      final catalog = context.read<CatalogController>();
+                      final messenger = ScaffoldMessenger.of(context);
+                      final deleted = result;
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      await catalog.refresh();
+                      messenger
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Toy "${deleted.toyName}" (${deleted.toyId}) deleted.',
+                            ),
+                            duration: const Duration(seconds: 4),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      return;
+                    }
+                    if (result is ToyFormSaved) {
                       await context.read<CatalogController>().refresh();
                       _retry();
                     }

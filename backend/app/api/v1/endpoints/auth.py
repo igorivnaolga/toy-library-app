@@ -79,6 +79,7 @@ def _me_from_profile(profile, *, email: str | None, db: Session | None = None) -
         membership_due_cents=payment_summary.due_cents if payment_summary else 0,
         membership_fees_paid=payment_summary.fees_paid if payment_summary else True,
         balance_due_cents=account_balance.balance_due_cents if account_balance else 0,
+        credit_balance_cents=account_balance.credit_balance_cents if account_balance else 0,
         **_contact_fields_from_profile(profile),
     )
 

@@ -3,6 +3,7 @@ import "package:flutter/foundation.dart";
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
+import "../payments/payment_models.dart";
 import "../catalog/catalog_models.dart";
 import "desk_member.dart";
 import "loan_models.dart";
@@ -59,10 +60,15 @@ class LoansController extends ChangeNotifier {
     deskError = null;
     notifyListeners();
     try {
-      final pendingJson = await _client.getJson("/api/v1/bookings/pending");
-      final activeJson = await _client.getJson("/api/v1/loans/active");
-      pendingCheckouts = _parseBookingList(pendingJson);
-      activeLoans = _parseLoanList(activeJson);
+      final pendingFuture = _client.getJson("/api/v1/bookings/pending");
+      final activeFuture = _client.getJson("/api/v1/loans/active");
+      pendingFuture.then((json) {
+        pendingCheckouts = _parseBookingList(json);
+        notifyListeners();
+      }).catchError((_) {});
+      final results = await Future.wait([pendingFuture, activeFuture]);
+      pendingCheckouts = _parseBookingList(results[0]);
+      activeLoans = _parseLoanList(results[1]);
       deskError = null;
     } on ApiException catch (e) {
       deskError = _friendlyDeskMessage(e);
@@ -76,6 +82,13 @@ class LoansController extends ChangeNotifier {
       deskLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<MemberBalanceSummary> loadMemberBalanceSummary(String userId) async {
+    final json = await _client.getJson(
+      "/api/v1/payments/users/$userId/balance-summary",
+    );
+    return MemberBalanceSummary.fromJson(json);
   }
 
   Future<LoanItem> checkOutFromBooking(
@@ -240,16 +253,7 @@ class LoansController extends ChangeNotifier {
   }
 
   List<LoanItem> _parseLoanList(Map<String, dynamic> json) {
-    final raw = json["data"];
-    if (raw is! List<dynamic>) {
-      return [];
-    }
-    final items = raw
-        .whereType<Map<String, dynamic>>()
-        .map(LoanItem.fromJson)
-        .toList();
-    sortLoansList(items);
-    return items;
+    return parseLoanList(json);
   }
 
   List<BookingItem> _parseBookingList(Map<String, dynamic> json) {

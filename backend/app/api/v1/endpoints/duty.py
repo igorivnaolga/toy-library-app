@@ -115,6 +115,7 @@ def search_desk_members(
                 full_name=row.get("full_name", ""),
                 email=row.get("email", ""),
                 balance_due_cents=account.balance_due_cents,
+                credit_balance_cents=account.credit_balance_cents,
             )
         )
     return DeskMembersResponse(data=data)

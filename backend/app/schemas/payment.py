@@ -20,6 +20,7 @@ class PaymentOut(BaseModel):
     booking_id: uuid.UUID | None = None
     loan_id: uuid.UUID | None = None
     toy_id: str | None = None
+    duty_session_id: uuid.UUID | None = None
     recorded_by: uuid.UUID | None = None
     paid_at: datetime | None = None
     created_at: datetime
@@ -39,6 +40,16 @@ class MarkMembershipPaidIn(BaseModel):
     method: Literal["cash", "eftpos", "bank"]
 
 
+class RecordTopUpIn(BaseModel):
+    amount_cents: int = Field(ge=1, le=10_000_000)
+    method: Literal["cash", "eftpos", "bank"]
+
+
+class MemberBalanceSummaryOut(BaseModel):
+    balance_due_cents: int = Field(ge=0)
+    credit_balance_cents: int = Field(ge=0)
+
+
 def payment_out_from_model(payment) -> PaymentOut:
     return PaymentOut(
         payment_id=payment.id,
@@ -51,6 +62,7 @@ def payment_out_from_model(payment) -> PaymentOut:
         booking_id=payment.booking_id,
         loan_id=payment.loan_id,
         toy_id=payment.toy_id,
+        duty_session_id=payment.duty_session_id,
         recorded_by=payment.recorded_by,
         paid_at=payment.paid_at,
         created_at=payment.created_at,

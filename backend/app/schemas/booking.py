@@ -62,6 +62,16 @@ class BookingOut(BaseModel):
         None,
         description="Toy rental price in NZD cents when known.",
     )
+    member_balance_due_cents: int = Field(
+        0,
+        ge=0,
+        description="Member net balance owing when loaded for volunteer desk.",
+    )
+    member_credit_balance_cents: int = Field(
+        0,
+        ge=0,
+        description="Member unapplied account credit when loaded for volunteer desk.",
+    )
     created_at: datetime
     cancelled_at: datetime | None = None
 
@@ -91,6 +101,8 @@ def booking_out_from_model(
     booking: Booking,
     *,
     member_email: str | None = None,
+    member_balance_due_cents: int = 0,
+    member_credit_balance_cents: int = 0,
 ) -> BookingOut:
     """Map SQLAlchemy ``Booking`` (+ optional loaded ``toy`` / ``profile``) to API JSON."""
     toy = getattr(booking, "toy", None)
@@ -115,6 +127,8 @@ def booking_out_from_model(
         pickup_date=booking.pickup_date,
         pickup_label=pickup_label,
         rental_price_cents=toy.rental_price_cents if toy is not None else None,
+        member_balance_due_cents=member_balance_due_cents,
+        member_credit_balance_cents=member_credit_balance_cents,
         created_at=booking.created_at,
         cancelled_at=booking.cancelled_at,
     )

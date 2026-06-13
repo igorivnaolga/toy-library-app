@@ -1,7 +1,5 @@
 import "package:flutter/material.dart";
-import "package:provider/provider.dart";
 
-import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/pickup_date_banner.dart";
@@ -46,7 +44,6 @@ class ToyDetailActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthStore>();
     final colors = Theme.of(context).colorScheme;
 
     return Material(
@@ -69,10 +66,7 @@ class ToyDetailActionBar extends StatelessWidget {
                 )
               else if (!canBookToys)
                 ToyBookingHintBanner(
-                  message: isLoggedIn && !auth.membershipFeesPaid
-                      ? "Pay membership fees at the library or by bank transfer "
-                          "(see Membership tab) before booking toys."
-                      : "Complete membership setup to book toys from the catalog.",
+                  message: "Complete membership setup to book toys from the catalog.",
                 )
               else ...[
                 if (myBooking?.pickupLabel != null) ...[

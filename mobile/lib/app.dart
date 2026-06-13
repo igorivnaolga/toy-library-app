@@ -18,6 +18,7 @@ import "features/admin/admin_members_screen.dart";
 import "features/admin/admin_statistics_screen.dart";
 import "features/admin/admin_notifications_sheet.dart";
 import "features/auth/login_screen.dart";
+import "features/auth/registration_welcome_screen.dart";
 import "features/bookings/bookings_controller.dart";
 import "features/bookings/bookings_screen.dart";
 import "features/catalog/catalog_provider.dart";
@@ -105,6 +106,10 @@ class _AppShell extends StatelessWidget {
       );
     }
 
+    if (auth.showPostRegistrationWelcome) {
+      return const RegistrationWelcomeScreen();
+    }
+
     if (auth.needsMembershipOnboarding) {
       return const MembershipOnboardingScreen();
     }
@@ -123,6 +128,7 @@ class _RoleHome extends StatefulWidget {
 class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   String _lastReminderSignature = "";
   bool _memberRemindersBootstrapped = false;
+  String? _lastAuthUserId;
 
   @override
   void initState() {
@@ -138,6 +144,17 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _syncCatalogForAuthChange(AuthStore auth) {
+    final userId = auth.userId;
+    if (_lastAuthUserId == null) {
+      _lastAuthUserId = userId;
+      return;
+    }
+    if (_lastAuthUserId == userId) return;
+    _lastAuthUserId = userId;
+    unawaited(context.read<CatalogController>().clearAllFilters());
   }
 
   @override
@@ -234,6 +251,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     context.watch<BookingsController>();
     context.watch<LoansController>();
     _syncMemberRemindersIfChanged(auth);
+    _syncCatalogForAuthChange(auth);
     final tabs = _tabsForRole(auth.role);
 
     return DefaultTabController(

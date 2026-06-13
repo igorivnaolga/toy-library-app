@@ -334,7 +334,6 @@ class _StatsFilterPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,6 +351,7 @@ class _StatsFilterPanel extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+              side: BorderSide(color: colors.outlineVariant),
               textStyle: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

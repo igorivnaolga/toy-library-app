@@ -49,3 +49,69 @@ class EmptyStateMessage extends StatelessWidget {
     );
   }
 }
+
+/// Expandable section header + body (collapsed by default in callers).
+class CollapsibleSection extends StatelessWidget {
+  const CollapsibleSection({
+    super.key,
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    required this.children,
+  });
+
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: theme.colorScheme.surfaceContainerLowest,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(title, style: context.sectionHeader),
+                  ),
+                  AnimatedRotation(
+                    turns: expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: children,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

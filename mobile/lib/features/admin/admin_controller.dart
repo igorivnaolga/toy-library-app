@@ -4,6 +4,7 @@ import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
 import "../payments/payment_models.dart";
+import "../loans/loan_models.dart";
 import "admin_models.dart";
 import "admin_statistics_models.dart";
 
@@ -348,6 +349,11 @@ class AdminController extends ChangeNotifier {
     return parsePaymentList(json);
   }
 
+  Future<List<LoanItem>> loadMemberLoans(String userId) async {
+    final json = await _client.getJson("/api/v1/admin/users/$userId/loans");
+    return parseLoanList(json);
+  }
+
   Future<List<PaymentItem>> markMembershipPaid(
     String userId, {
     required String method,
@@ -366,6 +372,18 @@ class AdminController extends ChangeNotifier {
     final json = await _client.postJson(
       "/api/v1/payments/$paymentId/mark-paid",
       {"method": method},
+    );
+    return PaymentItem.fromJson(json);
+  }
+
+  Future<PaymentItem> recordMemberTopUp(
+    String userId, {
+    required int amountCents,
+    required String method,
+  }) async {
+    final json = await _client.postJson(
+      "/api/v1/payments/users/$userId/top-up",
+      {"amount_cents": amountCents, "method": method},
     );
     return PaymentItem.fromJson(json);
   }

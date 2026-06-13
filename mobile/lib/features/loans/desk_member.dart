@@ -5,12 +5,14 @@ class DeskMember {
     required this.fullName,
     required this.email,
     this.balanceDueCents = 0,
+    this.creditBalanceCents = 0,
   });
 
   final String userId;
   final String fullName;
   final String email;
   final int balanceDueCents;
+  final int creditBalanceCents;
 
   factory DeskMember.fromJson(Map<String, dynamic> json) {
     return DeskMember(
@@ -18,6 +20,7 @@ class DeskMember {
       fullName: json["full_name"]?.toString() ?? "",
       email: json["email"]?.toString() ?? "",
       balanceDueCents: (json["balance_due_cents"] as num?)?.toInt() ?? 0,
+      creditBalanceCents: (json["credit_balance_cents"] as num?)?.toInt() ?? 0,
     );
   }
 

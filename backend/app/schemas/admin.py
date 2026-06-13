@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.schemas.booking import BookingOut
+from app.schemas.loan import LoanOut
 from app.schemas.principal import KidProfile
 
 
@@ -65,6 +66,15 @@ class AdminMemberDetailOut(AdminMemberOut):
         0,
         ge=0,
         description="Total pending balance in NZD cents.",
+    )
+    credit_balance_cents: int = Field(
+        0,
+        ge=0,
+        description="Unapplied account credit from top-ups (NZD cents).",
+    )
+    loans: list[LoanOut] = Field(
+        default_factory=list,
+        description="Member loan history (newest checkouts first).",
     )
 
 

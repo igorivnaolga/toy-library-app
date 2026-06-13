@@ -31,6 +31,7 @@ from app.services.pieces_from_setls import (
 from app.services.rental_price_from_setls import load_rental_prices
 
 _MAX_DISTINCT_AGE_RANGES = 100
+_MAX_DISTINCT_MANUFACTURERS = 200
 
 # Canonical seed export used by early development + the CSV->DB import script.
 CSV_PATH = (
@@ -373,6 +374,81 @@ def update_toy_in_db(
         session.close()
 
 
+def delete_toy_in_db(toy_id: str) -> bool | None:
+    """
+    Delete a DB-backed toy row (and cascaded ``toy_images``).
+
+    Returns ``None`` when the database catalog is unavailable, ``False`` when the
+    toy is missing. Raises ``ValueError`` when bookings or loans reference the toy.
+    """
+    if _db_toy_count() == 0:
+        return None
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return False
+
+    from app.models.booking import Booking
+    from app.models.loan import Loan
+
+    photo_filename: str | None = None
+    session = session_scope()
+    try:
+        toy = session.scalar(
+            select(ToyORM)
+            .options(joinedload(ToyORM.image))
+            .where(ToyORM.toy_id == toy_id_norm)
+        )
+        if toy is None:
+            return False
+
+        booking_refs = (
+            session.scalar(
+                select(func.count())
+                .select_from(Booking)
+                .where(Booking.toy_id == toy_id_norm)
+            )
+            or 0
+        )
+        loan_refs = (
+            session.scalar(
+                select(func.count())
+                .select_from(Loan)
+                .where(Loan.toy_id == toy_id_norm)
+            )
+            or 0
+        )
+        if booking_refs > 0 or loan_refs > 0:
+            raise ValueError(
+                "This toy cannot be deleted because it has booking or loan history."
+            )
+
+        if toy.image and toy.image.filename:
+            photo_filename = toy.image.filename.strip() or None
+
+        session.delete(toy)
+        session.commit()
+    finally:
+        session.close()
+
+    if photo_filename:
+        from app.services.supabase_storage import (
+            delete_toy_photo,
+            toy_photos_storage_enabled,
+        )
+        from app.services.toy_photo import resolve_toy_images_root
+
+        if toy_photos_storage_enabled():
+            delete_toy_photo(photo_filename)
+        else:
+            root = resolve_toy_images_root()
+            if root is not None:
+                path = root / photo_filename
+                if path.is_file():
+                    path.unlink(missing_ok=True)
+
+    return True
+
+
 def _validate_toy_pieces(total: int | None, missing: int | None) -> None:
     if total is not None and missing is not None and missing > total:
         raise ValueError("missing_pieces cannot exceed total_pieces.")
@@ -617,4 +693,40 @@ def distinct_age_ranges() -> list[str]:
             session.close()
 
     values = [t.age_range for t in load_all_toys() if t.age_range]
+    return _dedupe_sort(values)
+
+
+def distinct_manufacturers() -> list[str]:
+    """Distinct non-empty ``manufacturer`` values for admin toy forms."""
+
+    def _dedupe_sort(raw_values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for raw in raw_values:
+            value = raw.strip()
+            if not value:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(value)
+        out.sort(key=str.lower)
+        return out[:_MAX_DISTINCT_MANUFACTURERS]
+
+    if _db_toy_count() > 0:
+        session = session_scope()
+        try:
+            stmt = (
+                select(ToyORM.manufacturer)
+                .where(ToyORM.manufacturer.is_not(None))
+                .where(ToyORM.manufacturer != "")
+                .distinct()
+            )
+            rows = session.scalars(stmt).all()
+            return _dedupe_sort([r for r in rows if r is not None])
+        finally:
+            session.close()
+
+    values = [t.manufacturer for t in load_all_toys() if t.manufacturer]
     return _dedupe_sort(values)

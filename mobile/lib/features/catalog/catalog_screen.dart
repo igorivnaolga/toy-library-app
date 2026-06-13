@@ -34,25 +34,36 @@ class _CatalogScreenState extends State<CatalogScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   Timer? _searchDebounce;
+  late final CatalogController _catalog;
 
   @override
   void initState() {
     super.initState();
-    final catalog = context.read<CatalogController>();
-    _searchController.text = catalog.searchQuery;
+    _catalog = context.read<CatalogController>();
+    _searchController.text = _catalog.searchQuery;
+    _catalog.addListener(_syncSearchFieldFromCatalog);
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      catalog.loadInitial();
+      _catalog.loadInitial();
       if (context.read<AuthStore>().canBookToys) {
         context.read<LoansController>().loadMyLoans(activeOnly: true);
       }
     });
   }
 
+  void _syncSearchFieldFromCatalog() {
+    if (!mounted) return;
+    final query = _catalog.searchQuery;
+    if (_searchController.text == query) return;
+    _searchController.text = query;
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _catalog.removeListener(_syncSearchFieldFromCatalog);
     _searchController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -264,21 +275,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!context.mounted || created == null) return;
     await context.read<CatalogController>().refresh();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Toy ${created.toyId} added."),
-        action: SnackBarAction(
-          label: "Open",
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => ToyDetailScreen(toyId: created.toyId),
-              ),
-            );
-          },
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text("Toy ${created.toyId} added."),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: "Open",
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ToyDetailScreen(toyId: created.toyId),
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
   }
 
   @override

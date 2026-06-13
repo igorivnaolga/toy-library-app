@@ -1,3 +1,4 @@
+import "dart:async";
 import "dart:io";
 
 import "package:flutter/material.dart";
@@ -9,13 +10,34 @@ import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/combobox_field.dart";
 import "../../core/toy_photo_url.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_photo_placeholder.dart";
 
+/// Result from the admin add/edit toy bottom sheet.
+sealed class ToyFormSheetOutcome {
+  const ToyFormSheetOutcome();
+}
+
+final class ToyFormSaved extends ToyFormSheetOutcome {
+  const ToyFormSaved(this.toy);
+  final ToyItem toy;
+}
+
+final class ToyFormDeleted extends ToyFormSheetOutcome {
+  const ToyFormDeleted({
+    required this.toyId,
+    required this.toyName,
+  });
+
+  final String toyId;
+  final String toyName;
+}
+
 /// Admin form to edit toy metadata via `PATCH /api/v1/admin/toys/{id}`.
-Future<ToyItem?> showToyEditSheet(
+Future<ToyFormSheetOutcome?> showToyEditSheet(
   BuildContext context, {
   required ToyItem toy,
 }) {
@@ -23,19 +45,30 @@ Future<ToyItem?> showToyEditSheet(
 }
 
 /// Admin form to add a toy via `POST /api/v1/admin/toys`.
-Future<ToyItem?> showToyCreateSheet(BuildContext context) {
-  return showToyFormSheet(context);
+Future<ToyItem?> showToyCreateSheet(BuildContext context) async {
+  final outcome = await showToyFormSheet(context);
+  return outcome is ToyFormSaved ? outcome.toy : null;
 }
 
-Future<ToyItem?> showToyFormSheet(
+Future<ToyFormSheetOutcome?> showToyFormSheet(
   BuildContext context, {
   ToyItem? toy,
 }) async {
-  return showModalBottomSheet<ToyItem>(
+  await context.read<CatalogController>().loadFormOptions();
+  if (!context.mounted) return null;
+
+  return showModalBottomSheet<ToyFormSheetOutcome>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (context) => _ToyFormSheet(toy: toy),
+    useRootNavigator: true,
+    builder: (sheetContext) {
+      final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.92;
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: _ToyFormSheet(toy: toy),
+      );
+    },
   );
 }
 
@@ -63,6 +96,12 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
   final ImagePicker _picker = ImagePicker();
   String? _pickedPhotoPath;
   bool _saving = false;
+  bool _deleting = false;
+  bool _renamingCategory = false;
+  Timer? _nameDuplicateDebounce;
+  String? _nameDuplicateMessage;
+  bool _checkingNameDuplicate = false;
+  int _nameDuplicateRequestId = 0;
 
   @override
   void initState() {
@@ -84,10 +123,148 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
     _hireCharge = TextEditingController(
       text: cents == null ? "" : (cents / 100).toStringAsFixed(2),
     );
+    _category.addListener(_onCategoryFieldChanged);
+    _name.addListener(_onNameChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<CatalogController>().loadFormOptions());
+    });
+  }
+
+  void _onCategoryFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  String _duplicateNameMessage(String name, String toyId) =>
+      'A toy named "$name" already exists (ID $toyId).';
+
+  void _onNameChanged() {
+    if (!widget.isCreate) return;
+
+    _nameDuplicateDebounce?.cancel();
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _nameDuplicateMessage = null;
+        _checkingNameDuplicate = false;
+      });
+      return;
+    }
+
+    final local =
+        context.read<CatalogController>().toyWithExactName(name);
+    if (local != null) {
+      if (!mounted) return;
+      setState(() {
+        _nameDuplicateMessage = _duplicateNameMessage(name, local.toyId);
+        _checkingNameDuplicate = false;
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _nameDuplicateMessage = null;
+      _checkingNameDuplicate = true;
+    });
+    _nameDuplicateDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_checkNameDuplicateRemote(name));
+    });
+  }
+
+  Future<void> _checkNameDuplicateRemote(String name) async {
+    final requestId = ++_nameDuplicateRequestId;
+    try {
+      final existing =
+          await context.read<CatalogController>().findToyByExactName(name);
+      if (!mounted ||
+          requestId != _nameDuplicateRequestId ||
+          _name.text.trim() != name) {
+        return;
+      }
+      setState(() {
+        _checkingNameDuplicate = false;
+        _nameDuplicateMessage = existing == null
+            ? null
+            : _duplicateNameMessage(name, existing.toyId);
+      });
+    } catch (_) {
+      if (!mounted || requestId != _nameDuplicateRequestId) return;
+      setState(() => _checkingNameDuplicate = false);
+    }
+  }
+
+  Future<void> _renameSelectedCategory() async {
+    final selected = context.read<CatalogController>().categoryMatchingLabel(
+          _category.text,
+        );
+    if (selected == null || _renamingCategory) return;
+
+    final renameController = TextEditingController(text: selected.label);
+    final newLabel = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Rename category"),
+          content: TextField(
+            controller: renameController,
+            autofocus: true,
+            style: fieldTextStyle(context),
+            cursorColor: fieldCursorColor(context),
+            decoration: labeledInputDecoration(
+              context,
+              labelText: "Category name",
+              helperText: "Updates this category for all toys in the catalog.",
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, renameController.text.trim()),
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+    renameController.dispose();
+    if (newLabel == null || newLabel.isEmpty || newLabel == selected.label) {
+      return;
+    }
+
+    setState(() => _renamingCategory = true);
+    final catalog = context.read<CatalogController>();
+    try {
+      final updated = await catalog.updateCategoryLabel(
+        code: selected.code,
+        label: newLabel,
+      );
+      if (!mounted) return;
+      _category.text = updated.label;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Category renamed to "${updated.label}".')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException ? e.message : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) setState(() => _renamingCategory = false);
+    }
   }
 
   @override
   void dispose() {
+    _nameDuplicateDebounce?.cancel();
+    _name.removeListener(_onNameChanged);
+    _category.removeListener(_onCategoryFieldChanged);
     _name.dispose();
     _category.dispose();
     _ageRange.dispose();
@@ -183,6 +360,21 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
       return;
     }
 
+    if (widget.isCreate) {
+      if (_nameDuplicateMessage != null) return;
+      final existing = await context
+          .read<CatalogController>()
+          .findToyByExactName(_name.text.trim());
+      if (!mounted) return;
+      if (existing != null) {
+        setState(() {
+          _nameDuplicateMessage =
+              _duplicateNameMessage(_name.text.trim(), existing.toyId);
+        });
+        return;
+      }
+    }
+
     final totalPieces = _parseOptionalCount(_totalPieces, "Total pieces");
     if (totalPieces == -1) return;
     final missingPieces =
@@ -235,7 +427,7 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
         saved = await catalog.uploadToyPhoto(saved.toyId, _pickedPhotoPath!);
       }
       if (!mounted) return;
-      Navigator.pop(context, saved);
+      Navigator.pop(context, ToyFormSaved(saved));
     } catch (e) {
       if (!mounted) return;
       final message = e is ApiException ? e.message : e.toString();
@@ -247,9 +439,54 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final toy = widget.toy;
+    if (toy == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) => _DeleteToyConfirmDialog(toy: toy),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    final catalog = context.read<CatalogController>();
+    try {
+      await catalog.deleteToy(toy.toyId, notify: false);
+      if (!mounted) return;
+      Navigator.pop(
+        context,
+        ToyFormDeleted(toyId: toy.toyId, toyName: toy.name),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException ? e.message : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final catalog = context.watch<CatalogController>();
+    final categoryOptions = mergeComboboxOptions(
+      catalog.categories.map((item) => item.label),
+      currentValue: _category.text,
+    );
+    final ageRangeOptions = mergeComboboxOptions(
+      catalog.ageRangeOptions,
+      currentValue: _ageRange.text,
+    );
+    final manufacturerOptions = mergeComboboxOptions(
+      catalog.manufacturerOptions,
+      currentValue: _manufacturer.text,
+    );
+    final selectedCategory = catalog.categoryMatchingLabel(_category.text);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
@@ -286,23 +523,46 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
               controller: _name,
               style: fieldTextStyle(context),
               cursorColor: fieldCursorColor(context),
-              decoration: labeledInputDecoration(context, labelText: "Name"),
+              decoration: labeledInputDecoration(
+                context,
+                labelText: "Name",
+                errorText: _nameDuplicateMessage,
+                helperText: widget.isCreate &&
+                        _checkingNameDuplicate &&
+                        _nameDuplicateMessage == null
+                    ? "Checking name…"
+                    : null,
+              ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            ComboboxField(
               controller: _category,
-              style: fieldTextStyle(context),
-              cursorColor: fieldCursorColor(context),
-              decoration:
-                  labeledInputDecoration(context, labelText: "Category"),
+              labelText: "Category",
+              options: categoryOptions,
+              helperText: selectedCategory == null
+                  ? "Pick an existing category or type a new one"
+                  : "Tap the pencil to rename this category for all toys",
+              trailing: selectedCategory == null
+                  ? null
+                  : IconButton(
+                      tooltip: "Rename category",
+                      onPressed:
+                          _renamingCategory ? null : _renameSelectedCategory,
+                      icon: _renamingCategory
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.edit_outlined, size: 20),
+                    ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            ComboboxField(
               controller: _ageRange,
-              style: fieldTextStyle(context),
-              cursorColor: fieldCursorColor(context),
-              decoration:
-                  labeledInputDecoration(context, labelText: "Age range"),
+              labelText: "Age range",
+              options: ageRangeOptions,
+              helperText: "Pick an existing age range or type a new one",
             ),
             const SizedBox(height: 12),
             TextField(
@@ -316,14 +576,11 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            ComboboxField(
               controller: _manufacturer,
-              style: fieldTextStyle(context),
-              cursorColor: fieldCursorColor(context),
-              decoration: labeledInputDecoration(
-                context,
-                labelText: "Manufacturer",
-              ),
+              labelText: "Manufacturer",
+              options: manufacturerOptions,
+              helperText: "Pick an existing manufacturer or type a new one",
             ),
             const SizedBox(height: 12),
             TextField(
@@ -382,11 +639,123 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
                   ? (widget.isCreate ? "Adding…" : "Saving…")
                   : (widget.isCreate ? "Add toy" : "Save changes"),
               large: true,
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving ||
+                      _deleting ||
+                      _checkingNameDuplicate ||
+                      _nameDuplicateMessage != null)
+                  ? null
+                  : _save,
             ),
+            if (!widget.isCreate) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: (_saving || _deleting) ? null : _confirmDelete,
+                icon: _deleting
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      )
+                    : Icon(
+                        Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                label: Text(
+                  _deleting ? "Deleting…" : "Delete toy",
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DeleteToyConfirmDialog extends StatefulWidget {
+  const _DeleteToyConfirmDialog({required this.toy});
+
+  final ToyItem toy;
+
+  @override
+  State<_DeleteToyConfirmDialog> createState() =>
+      _DeleteToyConfirmDialogState();
+}
+
+class _DeleteToyConfirmDialogState extends State<_DeleteToyConfirmDialog> {
+  late final TextEditingController _idController;
+
+  @override
+  void initState() {
+    super.initState();
+    _idController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    super.dispose();
+  }
+
+  bool get _matches => _idController.text.trim() == widget.toy.toyId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final toy = widget.toy;
+
+    return AlertDialog(
+      title: const Text("Delete toy?"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'This will permanently remove "${toy.name}" from the catalog.',
+            style: context.listSecondary(),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Type ${toy.toyId} below to confirm.",
+            style: context.listSubtitle.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _idController,
+            autofocus: true,
+            style: fieldTextStyle(context),
+            cursorColor: fieldCursorColor(context),
+            decoration: labeledInputDecoration(
+              context,
+              labelText: "Toy ID",
+              hintText: toy.toyId,
+            ),
+            onChanged: (_) => setState(() {}),
+            onSubmitted: _matches ? (_) => Navigator.pop(context, true) : null,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancel"),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: colors.error),
+          onPressed: _matches ? () => Navigator.pop(context, true) : null,
+          child: const Text("Delete permanently"),
+        ),
+      ],
     );
   }
 }

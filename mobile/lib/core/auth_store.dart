@@ -64,6 +64,8 @@ class AuthStore extends ChangeNotifier {
   int membershipDueCents = 0;
   bool membershipFeesPaid = true;
   int balanceDueCents = 0;
+  int creditBalanceCents = 0;
+  bool showPostRegistrationWelcome = false;
 
   bool get isAuthConfigured => _supabase != null;
 
@@ -75,8 +77,21 @@ class AuthStore extends ChangeNotifier {
   bool get isVolunteer => role == AppRole.volunteer;
   bool get isAdmin => role == AppRole.admin;
 
-  bool get canBookToys =>
-      (isMember || isVolunteer) && membershipFeesPaid;
+  bool get canBookToys => isMember || isVolunteer;
+
+  bool get hasPendingMembershipFees =>
+      (isMember || isVolunteer) && !membershipFeesPaid;
+
+  void markPostRegistrationWelcome() {
+    showPostRegistrationWelcome = true;
+    notifyListeners();
+  }
+
+  void dismissPostRegistrationWelcome() {
+    if (!showPostRegistrationWelcome) return;
+    showPostRegistrationWelcome = false;
+    notifyListeners();
+  }
 
   /// Logged-in non-admin still needs onboarding when the backend has no tier yet.
   bool get needsMembershipOnboarding {
@@ -207,6 +222,7 @@ class AuthStore extends ChangeNotifier {
         membershipDueCents = (me["membership_due_cents"] as num?)?.toInt() ?? 0;
         membershipFeesPaid = me["membership_fees_paid"] != false;
         balanceDueCents = (me["balance_due_cents"] as num?)?.toInt() ?? 0;
+        creditBalanceCents = (me["credit_balance_cents"] as num?)?.toInt() ?? 0;
         unawaited(
           PushNotificationService.instance.syncWithBackend(
             backend,
@@ -245,6 +261,8 @@ class AuthStore extends ChangeNotifier {
     membershipDueCents = 0;
     membershipFeesPaid = true;
     balanceDueCents = 0;
+    creditBalanceCents = 0;
+    showPostRegistrationWelcome = false;
     error = null;
     profileLoading = false;
   }

@@ -86,6 +86,11 @@ class MeOut(ProfileContactOut):
         ge=0,
         description="Total pending balance (membership, bond, and rentals) in NZD cents.",
     )
+    credit_balance_cents: int = Field(
+        0,
+        ge=0,
+        description="Unapplied account credit from top-ups (NZD cents).",
+    )
 
 
 class ProfileUpdateIn(ProfileContactOut):

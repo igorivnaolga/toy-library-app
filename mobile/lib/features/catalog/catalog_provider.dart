@@ -15,6 +15,7 @@ class CatalogController extends ChangeNotifier {
 
   List<CategoryItem> categories = [];
   List<String> ageRangeOptions = [];
+  List<String> manufacturerOptions = [];
   List<ToyItem> toys = [];
   bool loading = false;
   bool loadingMore = false;
@@ -49,6 +50,142 @@ class CatalogController extends ChangeNotifier {
   }
 
   Future<void> refresh() => loadInitial();
+
+  /// Loads category / meta lists for admin toy forms without reloading toys.
+  Future<void> loadFormOptions() async {
+    try {
+      await _loadCategories();
+      await _loadToysMeta();
+      _fillFormOptionsFromLoadedToys();
+      error = null;
+    } on ApiException catch (e) {
+      _fillFormOptionsFromLoadedToys();
+      error = e.message;
+    } catch (e) {
+      _fillFormOptionsFromLoadedToys();
+      error = e.toString();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  void _fillFormOptionsFromLoadedToys() {
+    if (ageRangeOptions.isEmpty) {
+      ageRangeOptions = _distinctSorted(
+        toys.map((toy) => toy.ageRange).whereType<String>(),
+      );
+    }
+    if (manufacturerOptions.isEmpty) {
+      manufacturerOptions = _distinctSorted(
+        toys.map((toy) => toy.manufacturer).whereType<String>(),
+      );
+    }
+  }
+
+  List<String> _distinctSorted(Iterable<String> values) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final raw in values) {
+      final value = raw.trim();
+      if (value.isEmpty) continue;
+      final key = value.toLowerCase();
+      if (seen.add(key)) out.add(value);
+    }
+    out.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return out;
+  }
+
+  Future<CategoryItem> updateCategoryLabel({
+    required String code,
+    required String label,
+  }) async {
+    final oldLabel = categories
+        .where((item) => item.code == code)
+        .map((item) => item.label)
+        .firstOrNull;
+    final json = await _client.patchJson(
+      "/api/v1/admin/categories/${Uri.encodeComponent(code)}",
+      {"label": label.trim()},
+    );
+    final updated = CategoryItem.fromJson(json);
+    categories = [
+      for (final item in categories)
+        if (item.code == updated.code) updated else item,
+    ]..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+    if (oldLabel != null) {
+      final oldKey = oldLabel.trim().toLowerCase();
+      toys = [
+        for (final toy in toys)
+          if (toy.category?.trim().toLowerCase() == oldKey)
+            ToyItem(
+              toyId: toy.toyId,
+              name: toy.name,
+              category: updated.label,
+              ageRange: toy.ageRange,
+              status: toy.status,
+              availability: toy.availability,
+              manufacturer: toy.manufacturer,
+              description: toy.description,
+              photoFile: toy.photoFile,
+              totalPieces: toy.totalPieces,
+              missingPieces: toy.missingPieces,
+              missingPiecesDetail: toy.missingPiecesDetail,
+              rentalPriceCents: toy.rentalPriceCents,
+              pieceLines: toy.pieceLines,
+            )
+          else
+            toy,
+      ];
+    }
+    notifyListeners();
+    return updated;
+  }
+
+  CategoryItem? categoryMatchingLabel(String? label) {
+    final needle = label?.trim().toLowerCase();
+    if (needle == null || needle.isEmpty) return null;
+    for (final category in categories) {
+      if (category.label.trim().toLowerCase() == needle) {
+        return category;
+      }
+    }
+    return null;
+  }
+
+  ToyItem? toyWithExactName(String name, {String? excludeToyId}) {
+    final key = name.trim().toLowerCase();
+    if (key.isEmpty) return null;
+    for (final toy in toys) {
+      if (excludeToyId != null && toy.toyId == excludeToyId) continue;
+      if (toy.name.trim().toLowerCase() == key) return toy;
+    }
+    return null;
+  }
+
+  Future<ToyItem?> findToyByExactName(
+    String name, {
+    String? excludeToyId,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+
+    final local = toyWithExactName(trimmed, excludeToyId: excludeToyId);
+    if (local != null) return local;
+
+    final json = await _client.getJson("/api/v1/toys", {
+      "q": trimmed,
+      "page": "1",
+      "limit": "50",
+    });
+    final data = json["data"] as List<dynamic>? ?? [];
+    final key = trimmed.toLowerCase();
+    for (final raw in data) {
+      final toy = ToyItem.fromJson(raw as Map<String, dynamic>);
+      if (excludeToyId != null && toy.toyId == excludeToyId) continue;
+      if (toy.name.trim().toLowerCase() == key) return toy;
+    }
+    return null;
+  }
 
   bool get hasActiveFilters =>
       searchQuery.trim().isNotEmpty ||
@@ -194,6 +331,19 @@ class CatalogController extends ChangeNotifier {
     return updated;
   }
 
+  Future<void> deleteToy(String toyId, {bool notify = true}) async {
+    await _client.deleteJson(
+      "/api/v1/admin/toys/${Uri.encodeComponent(toyId)}",
+    );
+    toys = toys.where((item) => item.toyId != toyId).toList();
+    if (total > 0) {
+      total -= 1;
+    }
+    if (notify) {
+      notifyListeners();
+    }
+  }
+
   Future<void> _reloadToysOnly() async {
     loading = true;
     loadingMore = false;
@@ -224,9 +374,14 @@ class CatalogController extends ChangeNotifier {
 
   Future<void> _loadToysMeta() async {
     final json = await _client.getJson("/api/v1/toys/meta");
-    final raw = json["age_ranges"] as List<dynamic>? ?? [];
+    final ageRaw = json["age_ranges"] as List<dynamic>? ?? [];
     ageRangeOptions =
-        raw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+        ageRaw.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+    final manufacturerRaw = json["manufacturers"] as List<dynamic>? ?? [];
+    manufacturerOptions = manufacturerRaw
+        .map((e) => e.toString().trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   Future<void> _fetchToyPage({required bool reset}) async {

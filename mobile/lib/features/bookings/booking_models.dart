@@ -14,6 +14,8 @@ class BookingItem {
     this.memberName,
     this.memberEmail,
     this.rentalPriceCents,
+    this.memberBalanceDueCents = 0,
+    this.memberCreditBalanceCents = 0,
   });
 
   final String bookingId;
@@ -29,6 +31,8 @@ class BookingItem {
   final String? memberName;
   final String? memberEmail;
   final int? rentalPriceCents;
+  final int memberBalanceDueCents;
+  final int memberCreditBalanceCents;
 
   bool get isPending => status.toLowerCase() == "pending";
   bool get isCancelled => status.toLowerCase() == "cancelled";
@@ -51,6 +55,10 @@ class BookingItem {
       memberName: json["member_name"]?.toString(),
       memberEmail: json["member_email"]?.toString(),
       rentalPriceCents: (json["rental_price_cents"] as num?)?.toInt(),
+      memberBalanceDueCents:
+          (json["member_balance_due_cents"] as num?)?.toInt() ?? 0,
+      memberCreditBalanceCents:
+          (json["member_credit_balance_cents"] as num?)?.toInt() ?? 0,
     );
   }
 

@@ -142,3 +142,7 @@ class ToysMetaOut(BaseModel):
         default_factory=list,
         description="Non-empty distinct age_range labels, sorted case-insensitively.",
     )
+    manufacturers: list[str] = Field(
+        default_factory=list,
+        description="Non-empty distinct manufacturer labels, sorted case-insensitively.",
+    )

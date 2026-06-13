@@ -1,14 +1,22 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/section_header.dart";
+import "../catalog/toy_detail_screen.dart";
+import "../loans/loan_due_date_section.dart";
+import "../loans/loan_list_tile.dart";
+import "../loans/loan_models.dart";
 import "../profile/kid_profile.dart";
 import "../profile/profile_avatar.dart";
 import "../profile/profile_labels.dart";
 import "../payments/payment_models.dart";
+import "../payments/payment_list_by_date.dart";
 import "admin_controller.dart";
+import "admin_loans_screen.dart";
 import "admin_models.dart";
 
 /// Admin view of a member profile with editable membership, children, and notes.
@@ -32,18 +40,25 @@ class AdminMemberProfileScreen extends StatefulWidget {
 class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   AdminMemberDetail? _member;
   List<PaymentItem> _payments = const [];
+  List<LoanItem> _loans = const [];
   String? _selectedTier;
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  bool _activeLoansExpanded = true;
+  bool _returnedLoansExpanded = false;
+  bool _paymentsExpanded = false;
+  String? _payingPaymentId;
+  bool _recordingMembership = false;
+  bool _recordingTopUp = false;
+  String? _loansLoadError;
+  int _loadToken = 0;
 
   bool _editingMembership = false;
   bool _editingChildren = false;
   bool _editingNotes = false;
 
   final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _kidController = TextEditingController();
-  DateTime? _kidBirthDate;
   List<KidProfile> _editableKids = [];
 
   static const _tierOptions = [
@@ -62,29 +77,46 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   @override
   void dispose() {
     _notesController.dispose();
-    _kidController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() {
       _loading = true;
       _error = null;
+      _loansLoadError = null;
     });
     try {
       final admin = context.read<AdminController>();
       final member = await admin.loadMemberDetail(widget.userId);
       final payments = await admin.loadMemberPayments(widget.userId);
-      if (!mounted) return;
+      List<LoanItem> loans = member.loans;
+      String? loansError;
+      if (loans.isEmpty) {
+        try {
+          loans = await admin.loadMemberLoans(widget.userId);
+        } catch (e) {
+          loansError = adminActionErrorMessage(e);
+        }
+      }
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _member = member;
         _payments = payments;
+        _loans = loans;
+        _loansLoadError = loansError;
         _selectedTier = member.membershipTier;
-        _notesController.text = member.adminNotes ?? "";
+        if (!_editingNotes) {
+          _notesController.text = member.adminNotes ?? "";
+        }
+        if (_editingChildren) {
+          _editableKids = List<KidProfile>.from(member.kids);
+        }
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
       setState(() {
         _error = adminActionErrorMessage(e);
         _loading = false;
@@ -123,34 +155,67 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     }
   }
 
-  Future<void> _saveChildren() async {
+  Future<void> _saveKidsList(
+    List<KidProfile> kids, {
+    String? successMessage,
+  }) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!mounted) return;
+    final admin = context.read<AdminController>();
+    final kidsPayload = kids.map((k) => k.toJson()).toList();
+
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      final updated = await context.read<AdminController>().updateMemberProfile(
-            widget.userId,
-            kids: _editableKids.map((k) => k.toJson()).toList(),
-          );
-      if (!mounted) return;
-      setState(() {
-        _member = updated;
-        _editingChildren = false;
-        _kidController.clear();
-        _kidBirthDate = null;
-        _saving = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Children updated")),
+      final updated = await admin.updateMemberProfile(
+        widget.userId,
+        kids: kidsPayload,
       );
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _member = updated;
+          _editableKids = List<KidProfile>.from(updated.kids);
+          _saving = false;
+          _error = null;
+        });
+        if (successMessage != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(successMessage)),
+          );
+        }
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = adminActionErrorMessage(e);
+        if (e is ApiException) {
+          _error = e.message;
+        }
         _saving = false;
       });
     }
+  }
+
+  Future<void> _addKid(String name, DateTime birthDate) async {
+    final cleaned = name.trim();
+    final date = DateTime(birthDate.year, birthDate.month, birthDate.day);
+    final nextKids = [
+      ..._editableKids,
+      KidProfile(name: cleaned, birthDate: date),
+    ];
+    await _saveKidsList(nextKids, successMessage: "Added $cleaned");
+  }
+
+  Future<void> _removeKid(int index) async {
+    if (index < 0 || index >= _editableKids.length) return;
+    final nextKids = [
+      ..._editableKids.sublist(0, index),
+      ..._editableKids.sublist(index + 1),
+    ];
+    await _saveKidsList(nextKids);
   }
 
   Future<void> _saveNotes() async {
@@ -194,12 +259,13 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
 
   void _toggleChildrenEdit() {
     if (_saving) return;
+    if (_editingChildren) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() {
       _editingChildren = !_editingChildren;
       if (_editingChildren) {
         _editableKids = List<KidProfile>.from(_member?.kids ?? []);
-        _kidController.clear();
-        _kidBirthDate = null;
       }
     });
   }
@@ -211,48 +277,6 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
       if (_editingNotes) {
         _notesController.text = _member?.adminNotes ?? "";
       }
-    });
-  }
-
-  Future<void> _pickKidBirthDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _kidBirthDate ?? DateTime(DateTime.now().year - 5),
-      firstDate: DateTime(1990),
-      lastDate: DateTime.now(),
-      helpText: "Child date of birth",
-    );
-    if (picked != null) setState(() => _kidBirthDate = picked);
-  }
-
-  void _addKid() {
-    final name = _kidController.text.trim();
-    if (name.isEmpty || _kidBirthDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Enter a name and date of birth")),
-      );
-      return;
-    }
-    final date = _kidBirthDate!;
-    setState(() {
-      _editableKids = [
-        ..._editableKids,
-        KidProfile(
-          name: name,
-          birthDate: DateTime(date.year, date.month, date.day),
-        ),
-      ];
-      _kidController.clear();
-      _kidBirthDate = null;
-    });
-  }
-
-  void _removeKid(int index) {
-    setState(() {
-      _editableKids = [
-        ..._editableKids.sublist(0, index),
-        ..._editableKids.sublist(index + 1),
-      ];
     });
   }
 
@@ -270,9 +294,9 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   }
 
   Future<void> _markMembershipPaid(String method) async {
-    if (_saving) return;
+    if (_recordingMembership) return;
     setState(() {
-      _saving = true;
+      _recordingMembership = true;
       _error = null;
     });
     try {
@@ -286,7 +310,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
       setState(() {
         _payments = updated;
         _member = member;
-        _saving = false;
+        _recordingMembership = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Membership payment recorded")),
@@ -295,15 +319,15 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
       if (!mounted) return;
       setState(() {
         _error = adminActionErrorMessage(e);
-        _saving = false;
+        _recordingMembership = false;
       });
     }
   }
 
   Future<void> _markPaymentPaid(PaymentItem payment, String method) async {
-    if (_saving) return;
+    if (_payingPaymentId != null) return;
     setState(() {
-      _saving = true;
+      _payingPaymentId = payment.paymentId;
       _error = null;
     });
     try {
@@ -315,13 +339,20 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
       setState(() {
         _member = member;
         _payments = payments;
-        _saving = false;
+        _payingPaymentId = null;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Recorded payment for ${payment.description ?? payment.typeLabel}",
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = adminActionErrorMessage(e);
-        _saving = false;
+        _payingPaymentId = null;
       });
     }
   }
@@ -368,6 +399,107 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showTopUpSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => _TopUpSheet(
+        onSubmit: (amountCents, method) async {
+          Navigator.pop(sheetContext);
+          if (!mounted) return;
+          await _recordTopUp(amountCents, method);
+        },
+      ),
+    );
+  }
+
+  Future<void> _recordTopUp(int amountCents, String method) async {
+    if (_recordingTopUp) return;
+    setState(() {
+      _recordingTopUp = true;
+      _error = null;
+    });
+    try {
+      final admin = context.read<AdminController>();
+      await admin.recordMemberTopUp(
+        widget.userId,
+        amountCents: amountCents,
+        method: method,
+      );
+      final member = await admin.loadMemberDetail(widget.userId);
+      final payments = await admin.loadMemberPayments(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _member = member;
+        _payments = payments;
+        _recordingTopUp = false;
+        _paymentsExpanded = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Recorded top-up of ${formatDueCents(amountCents)}"),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = adminActionErrorMessage(e);
+        _recordingTopUp = false;
+      });
+    }
+  }
+
+  Future<void> _reloadLoans() async {
+    try {
+      final loans = await context
+          .read<AdminController>()
+          .loadMemberLoans(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _loans = loans;
+        _loansLoadError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loansLoadError = adminActionErrorMessage(e);
+      });
+    }
+  }
+
+  Future<void> _openCheckInForDueDate(DateTime dueDate) async {
+    final name = _member?.displayName ??
+        widget.initialMember?.displayName ??
+        "Member";
+    final initialLoans = _loans
+        .where(
+          (loan) =>
+              loan.isActive && _loanSameDay(loan.returnSessionDate, dueDate),
+        )
+        .toList();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminMemberCheckInScreen(
+          memberUserId: widget.userId,
+          memberName: name,
+          dueDate: dueDate,
+          initialLoans: initialLoans,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _reloadLoans();
+  }
+
+  void _openToy(String toyId) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ToyDetailScreen(toyId: toyId),
       ),
     );
   }
@@ -439,72 +571,64 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                 _AdminProfileSection(
                   title: "Payments",
                   children: [
-                    if (member != null && member.balanceDueCents > 0) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: _AdminMemberPaymentsBody(
+                        member: member,
+                        payments: _payments,
+                        expanded: _paymentsExpanded,
+                        payingPaymentId: _payingPaymentId,
+                        recordingMembership: _recordingMembership,
+                        recordingTopUp: _recordingTopUp,
+                        onToggle: () => setState(
+                          () => _paymentsExpanded = !_paymentsExpanded,
+                        ),
+                        onMarkMembershipPaid: () => _showMarkPaidSheet(),
+                        onMarkPaymentPaid: (payment) =>
+                            _showMarkPaidSheet(payment: payment),
+                        onAddTopUp: _showTopUpSheet,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _AdminProfileSection(
+                  title: "Loans",
+                  children: [
+                    if (_loansLoadError != null)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Text(
-                          "Balance owing: ${formatDueCents(member.balanceDueCents)}",
-                          style: context.cardTitle.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
+                          _loansLoadError!,
+                          style: TextStyle(color: theme.colorScheme.error),
                         ),
                       ),
-                    ],
-                    if (member != null && !member.membershipFeesPaid) ...[
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          member.balanceDueCents > 0 ? 0 : 16,
-                          16,
-                          8,
-                        ),
-                        child: Text(
-                          "Membership due: ${formatDueCents(member.membershipDueCents)}",
-                          style: context.listSubtitle,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: BrandChipButton(
-                          label: _saving
-                              ? "Recording…"
-                              : "Record membership paid",
-                          onPressed: _saving
-                              ? null
-                              : () => _showMarkPaidSheet(),
-                        ),
-                      ),
-                    ],
-                    if (_payments.isEmpty)
+                    if (_loans.isEmpty && _loansLoadError == null)
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text(
-                          member?.membershipFeesPaid == true
-                              ? "No payment records yet."
-                              : "No payment rows loaded.",
+                          "No loans yet.",
                           style: context.listSubtitle,
                         ),
                       )
-                    else
-                      for (final payment in _payments) ...[
-                        ListTile(
-                          title: Text(
-                            payment.description ??
-                                "${payment.typeLabel} — ${payment.amountLabel}",
+                    else if (_loans.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: _AdminMemberLoansBody(
+                          loans: _loans,
+                          activeExpanded: _activeLoansExpanded,
+                          onToggleActive: () => setState(
+                            () => _activeLoansExpanded = !_activeLoansExpanded,
                           ),
-                          subtitle: Text(payment.statusLabel),
-                          trailing: payment.isPending
-                              ? TextButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => _showMarkPaidSheet(
-                                            payment: payment,
-                                          ),
-                                  child: const Text("Mark paid"),
-                                )
-                              : null,
+                          returnedExpanded: _returnedLoansExpanded,
+                          onToggleReturned: () => setState(
+                            () => _returnedLoansExpanded =
+                                !_returnedLoansExpanded,
+                          ),
+                          onOpenDueDate: _openCheckInForDueDate,
+                          onOpenToy: _openToy,
                         ),
-                      ],
+                      ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -552,7 +676,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                         child: DropdownButtonFormField<String>(
-                          initialValue: _selectedTier,
+                          value: _selectedTier,
                           decoration: labeledInputDecoration(
                             context,
                             labelText: "Membership type",
@@ -593,17 +717,12 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                       child: _editingChildren
                           ? _ChildrenEditor(
+                              key: const ValueKey("admin-children-editor"),
                               kids: _editableKids,
-                              kidController: _kidController,
-                              kidBirthDate: _kidBirthDate,
                               saving: _saving,
-                              onPickBirthDate: _pickKidBirthDate,
                               onAddKid: _addKid,
                               onRemoveKid: _removeKid,
-                              onClearBirthDate: () =>
-                                  setState(() => _kidBirthDate = null),
                               formatBirthDate: _formatBirthDate,
-                              onSave: _saveChildren,
                             )
                           : member == null || member.kids.isEmpty
                               ? Text(
@@ -674,34 +793,499 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   }
 }
 
-class _ChildrenEditor extends StatelessWidget {
-  const _ChildrenEditor({
-    required this.kids,
-    required this.kidController,
-    required this.kidBirthDate,
-    required this.saving,
-    required this.onPickBirthDate,
-    required this.onAddKid,
-    required this.onRemoveKid,
-    required this.onClearBirthDate,
-    required this.formatBirthDate,
-    required this.onSave,
+class _AdminMemberPaymentsBody extends StatelessWidget {
+  const _AdminMemberPaymentsBody({
+    required this.member,
+    required this.payments,
+    required this.expanded,
+    required this.payingPaymentId,
+    required this.recordingMembership,
+    required this.recordingTopUp,
+    required this.onToggle,
+    required this.onMarkMembershipPaid,
+    required this.onMarkPaymentPaid,
+    required this.onAddTopUp,
   });
 
-  final List<KidProfile> kids;
-  final TextEditingController kidController;
-  final DateTime? kidBirthDate;
-  final bool saving;
-  final VoidCallback onPickBirthDate;
-  final VoidCallback onAddKid;
-  final ValueChanged<int> onRemoveKid;
-  final VoidCallback onClearBirthDate;
-  final String Function(DateTime) formatBirthDate;
-  final VoidCallback onSave;
+  final AdminMemberDetail? member;
+  final List<PaymentItem> payments;
+  final bool expanded;
+  final String? payingPaymentId;
+  final bool recordingMembership;
+  final bool recordingTopUp;
+  final VoidCallback onToggle;
+  final VoidCallback onMarkMembershipPaid;
+  final ValueChanged<PaymentItem> onMarkPaymentPaid;
+  final VoidCallback onAddTopUp;
+
+  bool _isMembershipCharge(PaymentItem payment) =>
+      payment.paymentType == "membership" || payment.paymentType == "bond";
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final balanceCents = member?.balanceDueCents ?? 0;
+    final creditCents = member?.creditBalanceCents ?? 0;
+    final pendingPayments = payments.where((p) => p.isPending).toList();
+    final pendingCount = pendingPayments.length;
+    final pendingMembershipCharges =
+        pendingPayments.where(_isMembershipCharge).toList();
+    final showMembershipSummary = member != null &&
+        !member!.membershipFeesPaid &&
+        member!.membershipDueCents > 0 &&
+        pendingMembershipCharges.isEmpty;
+    final chargesLabel = pendingCount > 0
+        ? "Charges ($pendingCount pending)"
+        : "Charges (${payments.length})";
+    final paymentActionsBusy =
+        payingPaymentId != null || recordingMembership || recordingTopUp;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.account_balance_wallet_outlined,
+              color: balanceCents > 0
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    balanceCents > 0
+                        ? "Balance owing: ${formatDueCents(balanceCents)}"
+                        : creditCents > 0
+                            ? "Account credit: ${formatDueCents(creditCents)}"
+                            : "Nothing owing",
+                    style: context.cardTitle.copyWith(
+                      color: balanceCents > 0 ? theme.colorScheme.error : null,
+                    ),
+                  ),
+                  if (creditCents > 0 && balanceCents > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        "Account credit: ${formatDueCents(creditCents)}",
+                        style: context.listSubtitle,
+                      ),
+                    ),
+                  if (pendingCount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        pendingCount == 1
+                            ? "1 pending charge below"
+                            : "$pendingCount pending charges below",
+                        style: context.listSubtitle,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (pendingMembershipCharges.length > 1) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: paymentActionsBusy ? null : onMarkMembershipPaid,
+              child: Text(
+                recordingMembership
+                    ? "Recording membership payment…"
+                    : "Mark all membership paid",
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+        BrandChipButton(
+          label: recordingTopUp ? "Recording top-up…" : "Add top-up",
+          onPressed: paymentActionsBusy ? null : onAddTopUp,
+        ),
+        const SizedBox(height: 12),
+        CollapsibleSection(
+          title: payments.isEmpty ? "Charges" : chargesLabel,
+          expanded: expanded,
+          onToggle: onToggle,
+          children: [
+            if (showMembershipSummary) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text("Membership", style: context.bodyText),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          formatDueCents(member!.membershipDueCents),
+                          style: context.bodyText.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const BookingStatusChip(status: "pending", width: 88),
+                        const Spacer(),
+                        _AdminMarkPaidChip(
+                          processing: recordingMembership,
+                          enabled: !paymentActionsBusy,
+                          onPressed: onMarkMembershipPaid,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (payments.isNotEmpty)
+                Divider(
+                  height: 1,
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+            ],
+            if (payments.isEmpty &&
+                (member == null || member!.membershipFeesPaid || !showMembershipSummary))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                child: Text(
+                  "No payment records yet.",
+                  style: context.listSubtitle,
+                ),
+              )
+            else if (payments.isNotEmpty)
+              PaymentsGroupedByDate(
+                payments: payments,
+                itemBuilder: (payment) => _AdminPaymentRow(
+                  payment: payment,
+                  processing: payingPaymentId == payment.paymentId,
+                  actionsEnabled: !paymentActionsBusy,
+                  onMarkPaid: () => onMarkPaymentPaid(payment),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminPaymentRow extends StatelessWidget {
+  const _AdminPaymentRow({
+    required this.payment,
+    required this.processing,
+    required this.actionsEnabled,
+    required this.onMarkPaid,
+  });
+
+  final PaymentItem payment;
+  final bool processing;
+  final bool actionsEnabled;
+  final VoidCallback onMarkPaid;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = payment.description ?? payment.typeLabel;
+    final amountColor = payment.isCreditGrant && !payment.isPending
+        ? theme.colorScheme.primary
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(title, style: context.bodyText),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                payment.displayAmountLabel,
+                style: context.bodyText.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: amountColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (payment.isPending)
+                const BookingStatusChip(status: "pending", width: 88)
+              else
+                Text(
+                  payment.statusLabel,
+                  style: context.listSubtitle.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+              const Spacer(),
+              if (payment.isPending)
+                _AdminMarkPaidChip(
+                  processing: processing,
+                  enabled: actionsEnabled,
+                  onPressed: onMarkPaid,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminMarkPaidChip extends StatelessWidget {
+  const _AdminMarkPaidChip({
+    required this.processing,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool processing;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (processing) {
+      return const SizedBox(
+        width: 100,
+        height: 32,
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    return BrandChipButton(
+      label: "Mark paid",
+      fixedWidth: 100,
+      variant: BrandChipButtonVariant.outlined,
+      onPressed: enabled ? onPressed : null,
+    );
+  }
+}
+
+bool _loanSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+class _AdminMemberLoansBody extends StatelessWidget {
+  const _AdminMemberLoansBody({
+    required this.loans,
+    required this.activeExpanded,
+    required this.onToggleActive,
+    required this.returnedExpanded,
+    required this.onToggleReturned,
+    required this.onOpenDueDate,
+    required this.onOpenToy,
+  });
+
+  final List<LoanItem> loans;
+  final bool activeExpanded;
+  final VoidCallback onToggleActive;
+  final bool returnedExpanded;
+  final VoidCallback onToggleReturned;
+  final ValueChanged<DateTime> onOpenDueDate;
+  final ValueChanged<String> onOpenToy;
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = groupLoansBySection(loans);
+    final activeCount = sections.activeByDueDate.fold<int>(
+      0,
+      (sum, group) => sum + group.loans.length,
+    );
+
+    Widget activeGroups() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var g = 0; g < sections.activeByDueDate.length; g++) ...[
+            if (g > 0) const SizedBox(height: 12),
+            LoanDueDateSection(
+              group: sections.activeByDueDate[g],
+              onHeaderTap: () =>
+                  onOpenDueDate(sections.activeByDueDate[g].dueDate),
+              children: [
+                for (final loan in sections.activeByDueDate[g].loans)
+                  LoanListTile(
+                    item: loan,
+                    loading: false,
+                    inGroup: true,
+                    onOpen: () {},
+                  ),
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (activeCount > 0)
+          CollapsibleSection(
+            title: "Active ($activeCount)",
+            expanded: activeExpanded,
+            onToggle: onToggleActive,
+            children: [activeGroups()],
+          ),
+        if (activeCount > 0 && sections.returned.isNotEmpty)
+          const SizedBox(height: 16),
+        if (sections.returned.isNotEmpty)
+          CollapsibleSection(
+            title: "Loan history (${sections.returned.length})",
+            expanded: returnedExpanded,
+            onToggle: onToggleReturned,
+            children: [
+              for (var i = 0; i < sections.returned.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                LoanListTile(
+                  item: sections.returned[i],
+                  loading: false,
+                  onOpen: () => onOpenToy(sections.returned[i].toyId),
+                ),
+              ],
+            ],
+          ),
+        if (activeCount == 0 &&
+            sections.returned.isEmpty &&
+            loans.isNotEmpty) ...[
+          const SectionHeader("Loans"),
+          for (var i = 0; i < loans.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            LoanListTile(
+              item: loans[i],
+              loading: false,
+              onOpen: loans[i].isActive ? () {} : () => onOpenToy(loans[i].toyId),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _ChildrenEditor extends StatefulWidget {
+  const _ChildrenEditor({
+    super.key,
+    required this.kids,
+    required this.saving,
+    required this.onAddKid,
+    required this.onRemoveKid,
+    required this.formatBirthDate,
+  });
+
+  final List<KidProfile> kids;
+  final bool saving;
+  final Future<void> Function(String name, DateTime birthDate) onAddKid;
+  final Future<void> Function(int index) onRemoveKid;
+  final String Function(DateTime) formatBirthDate;
+
+  @override
+  State<_ChildrenEditor> createState() => _ChildrenEditorState();
+}
+
+class _ChildrenEditorState extends State<_ChildrenEditor> {
+  late final TextEditingController _nameController;
+  DateTime? _birthDate;
+  bool _adding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickBirthDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await showDatePicker(
+      context: context,
+      useRootNavigator: true,
+      initialDate: _birthDate ?? DateTime(DateTime.now().year - 5),
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now(),
+      helpText: "Child date of birth",
+    );
+    if (picked != null && mounted) {
+      setState(() => _birthDate = picked);
+    }
+  }
+
+  Future<void> _submitKid() async {
+    if (_adding || widget.saving) return;
+    final name = _nameController.text.trim();
+    final birthDate = _birthDate;
+    if (name.isEmpty || birthDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a name and date of birth")),
+      );
+      return;
+    }
+    setState(() => _adding = true);
+    try {
+      await widget.onAddKid(name, birthDate);
+    } finally {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _nameController.clear();
+        setState(() {
+          _birthDate = null;
+          _adding = false;
+        });
+      });
+    }
+  }
+
+  Future<void> _removeKid(int index) async {
+    if (_adding || widget.saving) return;
+    setState(() => _adding = true);
+    try {
+      await widget.onRemoveKid(index);
+    } finally {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _adding = false);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final kids = widget.kids;
+    final busy = widget.saving || _adding;
+    final birthDate = _birthDate;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -716,13 +1300,14 @@ class _ChildrenEditor extends StatelessWidget {
               return InputChip(
                 label: Text(entry.value.displayLabel),
                 deleteIcon: const Icon(Icons.close, size: 18),
-                onDeleted: saving ? null : () => onRemoveKid(entry.key),
+                onDeleted: busy ? null : () => _removeKid(entry.key),
               );
             }).toList(),
           ),
         const SizedBox(height: 12),
         TextField(
-          controller: kidController,
+          controller: _nameController,
+          enabled: !busy,
           style: fieldTextStyle(context),
           cursorColor: fieldCursorColor(context),
           decoration: labeledInputDecoration(
@@ -734,31 +1319,38 @@ class _ChildrenEditor extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         InkWell(
-          onTap: saving ? null : onPickBirthDate,
+          onTap: busy ? null : _pickBirthDate,
           borderRadius: BorderRadius.circular(12),
           child: InputDecorator(
             decoration: labeledInputDecoration(
               context,
               labelText: "Date of birth",
               fillColor: theme.colorScheme.surface,
-              suffixIcon: kidBirthDate == null
+              suffixIcon: birthDate == null
                   ? Icon(
                       Icons.calendar_today_outlined,
                       size: 20,
                       color: theme.colorScheme.onSurface
                           .withValues(alpha: 0.55),
                     )
-                  : IconButton(
-                      tooltip: "Clear date",
-                      icon: const Icon(Icons.clear, size: 20),
-                      onPressed: saving ? null : onClearBirthDate,
+                  : GestureDetector(
+                      onTap: busy ? null : () => setState(() => _birthDate = null),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Icon(
+                          Icons.clear,
+                          size: 20,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.55),
+                        ),
+                      ),
                     ),
             ),
             child: Text(
-              kidBirthDate == null
+              birthDate == null
                   ? "Select date"
-                  : formatBirthDate(kidBirthDate!),
-              style: kidBirthDate == null
+                  : widget.formatBirthDate(birthDate),
+              style: birthDate == null
                   ? fieldPlaceholderStyle(context)
                   : fieldTextStyle(context),
             ),
@@ -766,16 +1358,128 @@ class _ChildrenEditor extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         BrandChipButton(
-          label: "Add child",
-          onPressed: saving ? null : onAddKid,
-        ),
-        const SizedBox(height: 12),
-        BrandChipButton(
-          label: saving ? "Saving…" : "Save children",
-          large: true,
-          onPressed: saving ? null : onSave,
+          label: busy ? "Saving…" : "Add child",
+          onPressed: busy ? null : _submitKid,
         ),
       ],
+    );
+  }
+}
+
+class _TopUpSheet extends StatefulWidget {
+  const _TopUpSheet({
+    required this.onSubmit,
+  });
+
+  final Future<void> Function(int amountCents, String method) onSubmit;
+
+  @override
+  State<_TopUpSheet> createState() => _TopUpSheetState();
+}
+
+class _TopUpSheetState extends State<_TopUpSheet> {
+  late final TextEditingController _amountController;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit(String method) async {
+    if (_submitting) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final cents = parseDollarAmountToCents(_amountController.text);
+    if (cents == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid dollar amount.")),
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await widget.onSubmit(cents, method);
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, bottomInset),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: Text("Add top-up", style: context.cardTitle),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: TextField(
+                controller: _amountController,
+                autofocus: true,
+                enabled: !_submitting,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                style: fieldTextStyle(context),
+                cursorColor: fieldCursorColor(context),
+                decoration: labeledInputDecoration(
+                  context,
+                  labelText: "Amount (NZD)",
+                  hintText: "e.g. 20.00",
+                  fillColor: theme.colorScheme.surface,
+                ),
+                textInputAction: TextInputAction.done,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                "Payment method",
+                style: context.groupLabel,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: const Text("Cash"),
+              enabled: !_submitting,
+              onTap: _submitting ? null : () => _submit("cash"),
+            ),
+            ListTile(
+              leading: const Icon(Icons.credit_card_outlined),
+              title: const Text("EFTPOS"),
+              enabled: !_submitting,
+              onTap: _submitting ? null : () => _submit("eftpos"),
+            ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_outlined),
+              title: const Text("Bank transfer"),
+              enabled: !_submitting,
+              onTap: _submitting ? null : () => _submit("bank"),
+            ),
+            if (_submitting)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -15,10 +15,11 @@ already contains categories, while the public API should prefer DB as source of 
 import csv
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db.session import get_engine, session_scope
 from app.models.category import Category as CategoryORM
+from app.models.toy import Toy as ToyORM
 from app.repositories.toy_repo import load_all_toys
 from app.schemas.category import CategoryOut
 from app.utils.csv_text import (
@@ -231,3 +232,64 @@ def list_categories() -> list[CategoryOut]:
         return _list_categories_db()
 
     return list_categories_csv()
+
+
+def _category_out_from_orm(category: CategoryORM) -> CategoryOut:
+    return CategoryOut(
+        code=category.code,
+        label=category.label,
+        max_renewals=category.max_renewals,
+        reservable=category.reservable,
+        toy_count_current=category.toy_count_current,
+        toy_count_total=category.toy_count_total,
+        pct=category.pct_label,
+    )
+
+
+def update_category_label(code: str, label: str) -> CategoryOut | None:
+    """
+    Rename a DB-backed category and update toys that use the old label.
+
+    Returns ``None`` when the category is missing or the catalog is CSV-only.
+    """
+    cleaned_code = code.strip()
+    cleaned_label = label.strip()
+    if not cleaned_code:
+        raise ValueError("Category code is required.")
+    if not cleaned_label:
+        raise ValueError("Category label is required.")
+    if get_engine() is None or _db_category_count() == 0:
+        return None
+
+    session = session_scope()
+    try:
+        category = session.scalar(
+            select(CategoryORM).where(CategoryORM.code == cleaned_code)
+        )
+        if category is None:
+            return None
+
+        old_label = category.label.strip()
+        if old_label.lower() == cleaned_label.lower():
+            return _category_out_from_orm(category)
+
+        duplicate = session.scalar(
+            select(CategoryORM).where(
+                func.lower(CategoryORM.label) == cleaned_label.lower(),
+                CategoryORM.code != cleaned_code,
+            )
+        )
+        if duplicate is not None:
+            raise ValueError("A category with this label already exists.")
+
+        category.label = cleaned_label
+        session.execute(
+            update(ToyORM)
+            .where(func.lower(ToyORM.category_label) == old_label.lower())
+            .values(category_label=cleaned_label)
+        )
+        session.commit()
+        session.refresh(category)
+        return _category_out_from_orm(category)
+    finally:
+        session.close()

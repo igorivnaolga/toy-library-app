@@ -34,8 +34,10 @@ from app.repositories.loan_repo import (
     mark_loan_returned,
 )
 from app.repositories.toy_repo import get_toy_by_id
+from app.models.payment import PAYMENT_STATUS_PENDING
 from app.services.payment_service import (
     PaymentError,
+    apply_existing_credit_to_pending_charges,
     apply_rental_payment_action,
     create_rental_payment_for_loan,
 )
@@ -257,6 +259,17 @@ def _apply_checkout_payment(
     payment_method: str | None,
     recorded_by: uuid.UUID | None,
 ) -> None:
+    if payment is None:
+        return
+    if recorded_by is not None:
+        apply_existing_credit_to_pending_charges(
+            session,
+            payment.user_id,
+            recorded_by=recorded_by,
+        )
+        session.refresh(payment)
+        if payment.status != PAYMENT_STATUS_PENDING:
+            return
     if rental_payment == "pending":
         return
     if recorded_by is None:

@@ -152,6 +152,27 @@ class LoanItem {
   String get deskSubtitle => "$memberLabel · $listSubtitle";
 }
 
+List<LoanItem> parseLoanList(Map<String, dynamic> json) {
+  return parseLoanItemsList(json["data"]);
+}
+
+List<LoanItem> parseLoanItemsList(Object? raw) {
+  if (raw is! List) {
+    return [];
+  }
+  final items = <LoanItem>[];
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    try {
+      items.add(LoanItem.fromJson(Map<String, dynamic>.from(entry)));
+    } catch (_) {
+      // Skip malformed rows from partial API responses.
+    }
+  }
+  sortLoansList(items);
+  return items;
+}
+
 class LoanSections {
   const LoanSections({
     required this.activeByDueDate,
@@ -259,4 +280,36 @@ String formatDisplayDate(DateTime date) {
     "Dec",
   ];
   return "${date.day} ${months[date.month - 1]} ${date.year}";
+}
+
+/// Desk check-in search: optionally member name, toy name, toy id, or loan id.
+List<LoanItem> filterCheckInLoans(
+  List<LoanItem> loans, {
+  String query = "",
+  String? memberUserId,
+  DateTime? dueDate,
+  bool includeMemberInSearch = true,
+}) {
+  var result = loans;
+  final memberId = memberUserId?.trim();
+  if (memberId != null && memberId.isNotEmpty) {
+    result = result.where((loan) => loan.userId == memberId).toList();
+  }
+  if (dueDate != null) {
+    final key = _dateOnly(dueDate);
+    result = result
+        .where((loan) => _dateOnly(loan.returnSessionDate) == key)
+        .toList();
+  }
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return result;
+  return result.where((loan) {
+    final toyName = (loan.toyName ?? "").toLowerCase();
+    final matchesToy = toyName.contains(q) ||
+        loan.toyId.toLowerCase().contains(q) ||
+        loan.loanId.toLowerCase().contains(q);
+    if (!includeMemberInSearch) return matchesToy;
+    final member = (loan.memberName ?? "").toLowerCase();
+    return matchesToy || member.contains(q);
+  }).toList();
 }

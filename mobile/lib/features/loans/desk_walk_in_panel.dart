@@ -193,6 +193,7 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       context,
       memberLabel: member.displayLabel,
       memberBalanceDueCents: member.balanceDueCents,
+      memberCreditBalanceCents: member.creditBalanceCents,
       lines: _selectedToys
           .map(
             (toy) => DeskCheckoutLine(
@@ -288,6 +289,16 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                     label: _selectedMember!.displayLabel,
                     onClear: busy ? null : _clearMember,
                   ),
+                  if (_selectedMember!.creditBalanceCents > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      "Account credit: "
+                      "${formatDueCents(_selectedMember!.creditBalanceCents)}",
+                      style: context.listSubtitle.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ],
                   if (_selectedMember!.balanceDueCents > 0) ...[
                     const SizedBox(height: 4),
                     Text(

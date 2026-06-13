@@ -3,6 +3,7 @@ library;
 
 import "../bookings/booking_models.dart";
 import "../profile/kid_profile.dart";
+import "../loans/loan_models.dart";
 
 class AdminNotifications {
   const AdminNotifications({
@@ -165,6 +166,8 @@ class AdminMemberDetail extends AdminMember {
     this.membershipDueCents = 0,
     this.membershipFeesPaid = true,
     this.balanceDueCents = 0,
+    this.creditBalanceCents = 0,
+    this.loans = const [],
   });
 
   final List<KidProfile> kids;
@@ -173,6 +176,8 @@ class AdminMemberDetail extends AdminMember {
   final int membershipDueCents;
   final bool membershipFeesPaid;
   final int balanceDueCents;
+  final int creditBalanceCents;
+  final List<LoanItem> loans;
 
   factory AdminMemberDetail.fromJson(Map<String, dynamic> json) {
     return AdminMemberDetail(
@@ -195,6 +200,8 @@ class AdminMemberDetail extends AdminMember {
           (json["membership_due_cents"] as num?)?.toInt() ?? 0,
       membershipFeesPaid: json["membership_fees_paid"] != false,
       balanceDueCents: (json["balance_due_cents"] as num?)?.toInt() ?? 0,
+      creditBalanceCents: (json["credit_balance_cents"] as num?)?.toInt() ?? 0,
+      loans: parseLoanItemsList(json["loans"]),
     );
   }
 }

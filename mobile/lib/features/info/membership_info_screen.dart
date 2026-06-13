@@ -88,13 +88,17 @@ class MembershipInfoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (!auth.isGuest) ...[
-            MemberBalanceCard(balanceDueCents: auth.balanceDueCents),
+            MemberBalanceCard(
+              balanceDueCents: auth.balanceDueCents,
+              creditBalanceCents: auth.creditBalanceCents,
+            ),
             const SizedBox(height: 12),
           ],
           if (!auth.membershipFeesPaid) ...[
             PaymentInstructionsCard(
               amountDueCents: auth.membershipDueCents,
               memberEmail: auth.email,
+              showBookingHint: true,
             ),
             const SizedBox(height: 12),
           ],

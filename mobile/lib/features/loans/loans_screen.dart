@@ -91,7 +91,7 @@ class _LoansScreenState extends State<LoansScreen> {
   }
 }
 
-class _MyLoansView extends StatelessWidget {
+class _MyLoansView extends StatefulWidget {
   const _MyLoansView({
     required this.onRenew,
     required this.onOpenToy,
@@ -101,6 +101,13 @@ class _MyLoansView extends StatelessWidget {
   final Future<void> Function(LoanItem item) onRenew;
   final ValueChanged<String> onOpenToy;
   final Future<void> Function() onRefresh;
+
+  @override
+  State<_MyLoansView> createState() => _MyLoansViewState();
+}
+
+class _MyLoansViewState extends State<_MyLoansView> {
+  bool _returnedExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -113,12 +120,12 @@ class _MyLoansView extends StatelessWidget {
           return _ErrorState(
             message: c.myLoansError!,
             loading: c.myLoansLoading,
-            onRetry: onRefresh,
+            onRetry: widget.onRefresh,
           );
         }
         if (c.myLoans.isEmpty) {
           return RefreshIndicator(
-            onRefresh: onRefresh,
+            onRefresh: widget.onRefresh,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: const [
@@ -137,7 +144,7 @@ class _MyLoansView extends StatelessWidget {
         final sections = groupLoansBySection(c.myLoans);
 
         return RefreshIndicator(
-          onRefresh: onRefresh,
+          onRefresh: widget.onRefresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -154,9 +161,9 @@ class _MyLoansView extends StatelessWidget {
                         item: loan,
                         loading: c.myLoansLoading,
                         inGroup: true,
-                        onOpen: () => onOpenToy(loan.toyId),
+                        onOpen: () => widget.onOpenToy(loan.toyId),
                         onRenew: loan.canRenew
-                            ? () => onRenew(loan)
+                            ? () => widget.onRenew(loan)
                             : null,
                       ),
                   ],
@@ -166,15 +173,23 @@ class _MyLoansView extends StatelessWidget {
                   sections.returned.isNotEmpty)
                 const SizedBox(height: 20),
               if (sections.returned.isNotEmpty) ...[
-                const SectionHeader("Returned"),
-                for (var i = 0; i < sections.returned.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  LoanListTile(
-                    item: sections.returned[i],
-                    loading: c.myLoansLoading,
-                    onOpen: () => onOpenToy(sections.returned[i].toyId),
-                  ),
-                ],
+                CollapsibleSection(
+                  title: "Returned (${sections.returned.length})",
+                  expanded: _returnedExpanded,
+                  onToggle: () =>
+                      setState(() => _returnedExpanded = !_returnedExpanded),
+                  children: [
+                    for (var i = 0; i < sections.returned.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 8),
+                      LoanListTile(
+                        item: sections.returned[i],
+                        loading: c.myLoansLoading,
+                        onOpen: () =>
+                            widget.onOpenToy(sections.returned[i].toyId),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ],
           ),

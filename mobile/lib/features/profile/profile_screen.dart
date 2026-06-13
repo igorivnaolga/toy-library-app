@@ -212,6 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.only(bottom: 20),
               child: MemberBalanceCard(
                 balanceDueCents: auth.balanceDueCents,
+                creditBalanceCents: auth.creditBalanceCents,
                 payments: _payments,
               ),
             ),
