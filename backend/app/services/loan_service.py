@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.core.availability import AVAILABLE, normalize_availability
-from app.core.library_sessions import library_now
+from app.core.library_sessions import (
+    LIBRARY_TIMEZONE,
+    first_session_on_or_after,
+    library_now,
+    loan_return_deadline,
+    loan_return_session_date,
+)
 from app.models.booking import BOOKING_STATUS_PENDING
 from app.models.category import Category
 from app.models.loan import DEFAULT_LOAN_DAYS, LOAN_STATUS_ACTIVE, Loan
@@ -56,14 +62,50 @@ def _get_toy_row(session: Session, toy_id: str) -> Toy | None:
 
 
 def _due_date_from_checkout(checkout_day: date) -> date:
-    return checkout_day + timedelta(days=DEFAULT_LOAN_DAYS)
+    """Due on the first library session on or after checkout + loan period."""
+    anchor = checkout_day + timedelta(days=DEFAULT_LOAN_DAYS)
+    return first_session_on_or_after(anchor)
 
 
-def _is_overdue(loan: Loan, today: date | None = None) -> bool:
+def _resolve_check_time(
+    *,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> datetime:
+    if now is not None:
+        return now
+    if today is not None:
+        # Date-only checks assume midday (before typical session end).
+        return datetime.combine(today, time(12, 0), tzinfo=LIBRARY_TIMEZONE)
+    return library_now()
+
+
+def _is_overdue(
+    loan: Loan,
+    *,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> bool:
     if loan.status != LOAN_STATUS_ACTIVE:
         return False
-    ref = today or library_now().date()
-    return loan.due_date < ref
+    check = _resolve_check_time(now=now, today=today)
+    return check >= loan_return_deadline(loan.due_date)
+
+
+def loan_is_due_today(
+    loan: Loan,
+    *,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> bool:
+    """True on the due date while the return session is still open."""
+    if loan.status != LOAN_STATUS_ACTIVE:
+        return False
+    check = _resolve_check_time(now=now, today=today)
+    return_session = loan_return_session_date(loan.due_date)
+    if check.date() != return_session:
+        return False
+    return not _is_overdue(loan, now=check)
 
 
 def renewals_remaining_for_loan(
@@ -314,7 +356,9 @@ def renew_loan_for_user(
             "Someone has booked this toy after your due date — renewal is not available.",
         )
 
-    new_due = loan.due_date + timedelta(days=DEFAULT_LOAN_DAYS)
+    new_due = first_session_on_or_after(
+        loan.due_date + timedelta(days=DEFAULT_LOAN_DAYS)
+    )
     extend_loan_due_date(session, loan, new_due)
     session.flush()
 
@@ -335,5 +379,10 @@ def list_active_loans_service(session: Session) -> list[Loan]:
     return list_active_loans(session)
 
 
-def loan_is_overdue(loan: Loan, *, today: date | None = None) -> bool:
-    return _is_overdue(loan, today)
+def loan_is_overdue(
+    loan: Loan,
+    *,
+    now: datetime | None = None,
+    today: date | None = None,
+) -> bool:
+    return _is_overdue(loan, now=now, today=today)

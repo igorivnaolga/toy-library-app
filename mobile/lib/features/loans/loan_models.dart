@@ -1,5 +1,7 @@
+import "../../core/loan_due_status.dart";
 import "../../core/toy_pieces.dart";
 import "../bookings/booking_models.dart";
+import "../duty/duty_session_models.dart";
 
 /// Loan row from `/api/v1/loans/me` and loan mutation endpoints.
 class LoanItem {
@@ -10,8 +12,10 @@ class LoanItem {
     required this.status,
     required this.checkedOutAt,
     required this.dueDate,
+    required this.returnSessionDate,
     required this.renewalCount,
     required this.isOverdue,
+    this.isDueToday = false,
     this.toyName,
     this.photoFile,
     this.bookingId,
@@ -32,10 +36,12 @@ class LoanItem {
   final String status;
   final DateTime checkedOutAt;
   final DateTime dueDate;
+  final DateTime returnSessionDate;
   final DateTime? returnedAt;
   final int renewalCount;
   final int? maxRenewals;
   final bool isOverdue;
+  final bool isDueToday;
   final int? renewalsRemaining;
   final String? memberName;
   final int? toyTotalPieces;
@@ -44,14 +50,26 @@ class LoanItem {
   bool get isActive => status.toLowerCase() == "active";
   bool get isReturned => status.toLowerCase() == "returned";
 
+  bool get effectiveIsOverdue =>
+      isActive && (isOverdue || isLoanOverdue(dueDate));
+
+  bool get effectiveIsDueToday =>
+      isActive &&
+      !effectiveIsOverdue &&
+      (isDueToday || isLoanDueToday(dueDate));
+
+  String get returnDateLabel => formatSessionDate(returnSessionDate);
+
   bool get canRenew =>
-      isActive && !isOverdue && (renewalsRemaining ?? 0) > 0;
+      isActive && !effectiveIsOverdue && (renewalsRemaining ?? 0) > 0;
 
   factory LoanItem.fromJson(Map<String, dynamic> json) {
     final due = parseApiDate(json["due_date"]);
     if (due == null) {
       throw FormatException("Invalid due_date: ${json["due_date"]}");
     }
+    final returnSession =
+        parseApiDate(json["return_session_date"]) ?? firstSessionOnOrAfter(due);
     return LoanItem(
       loanId: json["loan_id"]?.toString() ?? "",
       userId: json["user_id"]?.toString() ?? "",
@@ -62,12 +80,14 @@ class LoanItem {
       status: json["status"]?.toString() ?? "unknown",
       checkedOutAt: DateTime.parse(json["checked_out_at"] as String),
       dueDate: due,
+      returnSessionDate: returnSession,
       returnedAt: json["returned_at"] == null
           ? null
           : DateTime.tryParse(json["returned_at"].toString()),
       renewalCount: (json["renewal_count"] as num?)?.toInt() ?? 0,
       maxRenewals: (json["max_renewals"] as num?)?.toInt(),
       isOverdue: json["is_overdue"] == true,
+      isDueToday: json["is_due_today"] == true,
       renewalsRemaining: (json["renewals_remaining"] as num?)?.toInt(),
       memberName: json["member_name"]?.toString(),
       toyTotalPieces: (json["toy_total_pieces"] as num?)?.toInt(),
@@ -84,8 +104,13 @@ class LoanItem {
     if (isReturned && returnedAt != null) {
       return "Returned ${formatDisplayDate(returnedAt!)}";
     }
-    final parts = <String>["Due ${formatDisplayDate(dueDate)}"];
-    if (isOverdue) {
+    final parts = <String>[
+      if (effectiveIsDueToday)
+        "Due today"
+      else
+        "Due $returnDateLabel",
+    ];
+    if (effectiveIsOverdue) {
       parts.add("Overdue");
     }
     parts.addAll(_renewalSubtitleParts);
@@ -146,7 +171,10 @@ class LoanDueDateGroup {
   final DateTime dueDate;
   final List<LoanItem> loans;
 
-  bool get isOverdue => dueDate.isBefore(_todayDate());
+  bool get isOverdue => loans.any((loan) => loan.effectiveIsOverdue);
+
+  bool get isDueToday =>
+      !isOverdue && loans.any((loan) => loan.effectiveIsDueToday);
 }
 
 LoanSections groupLoansBySection(List<LoanItem> items) {
@@ -169,7 +197,7 @@ LoanSections groupLoansBySection(List<LoanItem> items) {
 List<LoanDueDateGroup> groupActiveLoansByDueDate(List<LoanItem> active) {
   final byDay = <DateTime, List<LoanItem>>{};
   for (final item in active) {
-    final day = _dateOnly(item.dueDate);
+    final day = _dateOnly(item.returnSessionDate);
     byDay.putIfAbsent(day, () => []).add(item);
   }
 
@@ -199,19 +227,15 @@ List<LoanDueDateGroup> groupActiveLoansByDueDate(List<LoanItem> active) {
 DateTime _dateOnly(DateTime date) =>
     DateTime(date.year, date.month, date.day);
 
-DateTime _todayDate() {
-  final now = DateTime.now();
-  return DateTime(now.year, now.month, now.day);
-}
-
 void sortLoansList(List<LoanItem> items) {
   items.sort((a, b) {
     if (a.isActive && b.isActive) {
-      final overdueOrder = (b.isOverdue ? 1 : 0).compareTo(a.isOverdue ? 1 : 0);
+      final overdueOrder =
+          (b.effectiveIsOverdue ? 1 : 0).compareTo(a.effectiveIsOverdue ? 1 : 0);
       if (overdueOrder != 0) {
         return overdueOrder;
       }
-      return a.dueDate.compareTo(b.dueDate);
+      return a.returnSessionDate.compareTo(b.returnSessionDate);
     }
     final aTime = a.returnedAt ?? a.checkedOutAt;
     final bTime = b.returnedAt ?? b.checkedOutAt;

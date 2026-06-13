@@ -9,7 +9,8 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.loan import Loan
-from app.services.loan_service import loan_is_overdue
+from app.core.library_sessions import loan_return_session_date
+from app.services.loan_service import loan_is_due_today, loan_is_overdue
 from app.utils.text import capitalize_first_letter
 
 
@@ -79,6 +80,9 @@ class LoanOut(BaseModel):
     status: str
     checked_out_at: datetime
     due_date: date
+    return_session_date: date = Field(
+        description="First Wed/Sat library session on or after due_date.",
+    )
     returned_at: datetime | None = None
     renewal_count: int = 0
     max_renewals: int | None = Field(
@@ -86,6 +90,7 @@ class LoanOut(BaseModel):
         description="Category limit for renewals (null if unknown).",
     )
     is_overdue: bool = False
+    is_due_today: bool = False
     renewals_remaining: int | None = None
 
     @field_validator("toy_name", mode="before")
@@ -133,9 +138,11 @@ def loan_out_from_model(
         status=loan.status,
         checked_out_at=loan.checked_out_at,
         due_date=loan.due_date,
+        return_session_date=loan_return_session_date(loan.due_date),
         returned_at=loan.returned_at,
         renewal_count=loan.renewal_count,
         max_renewals=max_renewals,
         is_overdue=loan_is_overdue(loan),
+        is_due_today=loan_is_due_today(loan),
         renewals_remaining=renewals_remaining,
     )

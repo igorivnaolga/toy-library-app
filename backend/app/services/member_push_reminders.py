@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.library_sessions import format_pickup_label, library_now
+from app.core.library_sessions import format_pickup_label, is_library_session_day, library_now, loan_return_session_date
 from app.models.booking import BOOKING_STATUS_PENDING, Booking
 from app.models.loan import LOAN_STATUS_ACTIVE, Loan
 from app.models.profile import Profile
@@ -19,8 +19,7 @@ from app.services.fcm_client import firebase_configured, send_push_notification
 from app.services.loan_service import loan_is_overdue
 
 EVE_REMINDER_HOUR = 18
-MORNING_REMINDER_HOUR = 8
-OVERDUE_REMINDER_HOUR = 9
+MORNING_REMINDER_HOUR = 9
 
 # Allow cron to run within the first 45 minutes of the slot hour.
 SLOT_MINUTE_WINDOW = 45
@@ -47,8 +46,6 @@ def _active_reminder_slot(now: datetime) -> str | None:
         return "eve"
     if hour == MORNING_REMINDER_HOUR:
         return "morning"
-    if hour == OVERDUE_REMINDER_HOUR:
-        return "overdue"
     return None
 
 
@@ -83,12 +80,13 @@ def collect_due_push_reminders(
         reminders.extend(
             _loan_reminders(
                 session,
-                due_date=tomorrow,
+                session_date=tomorrow,
                 kind="return_eve",
                 title="Toy return tomorrow",
                 body_for=lambda toy: f"Return {toy} on the next library session.",
             )
         )
+        reminders.extend(_overdue_session_eve_reminders(session, today=today))
     elif slot == "morning":
         reminders.extend(
             _booking_reminders(
@@ -106,16 +104,48 @@ def collect_due_push_reminders(
         reminders.extend(
             _loan_reminders(
                 session,
-                due_date=today,
+                session_date=today,
                 kind="return_day",
                 title="Toy return due today",
                 body_for=lambda toy: f"Return {toy} at the library today.",
             )
         )
-    elif slot == "overdue":
-        reminders.extend(_overdue_loan_reminders(session, today=today))
-
     return reminders
+
+
+def _overdue_session_eve_reminders(
+    session: Session,
+    *,
+    today: date,
+) -> list[PushReminder]:
+    """6 pm the evening before each library session, while the loan is overdue."""
+    tomorrow = today + timedelta(days=1)
+    if not is_library_session_day(tomorrow):
+        return []
+
+    rows = session.scalars(
+        select(Loan)
+        .options(joinedload(Loan.toy), joinedload(Loan.profile))
+        .where(Loan.status == LOAN_STATUS_ACTIVE)
+    ).unique().all()
+
+    session_label = format_pickup_label(tomorrow)
+    out: list[PushReminder] = []
+    for loan in rows:
+        if not loan_is_overdue(loan, today=today):
+            continue
+        if not _user_wants_reminders(loan.profile):
+            continue
+        toy = _toy_label(loan.toy.name if loan.toy else None, loan.toy_id)
+        out.append(
+            PushReminder(
+                user_id=loan.user_id,
+                dedupe_key=f"loan:{loan.id}:overdue_eve:{tomorrow.isoformat()}",
+                title="Toy overdue",
+                body=f"{toy} is overdue. Please return it tomorrow ({session_label}).",
+            )
+        )
+    return out
 
 
 def _booking_reminders(
@@ -159,37 +189,11 @@ def _booking_reminders(
 def _loan_reminders(
     session: Session,
     *,
-    due_date: date,
+    session_date: date,
     kind: str,
     title: str,
     body_for,
 ) -> list[PushReminder]:
-    rows = session.scalars(
-        select(Loan)
-        .options(joinedload(Loan.toy), joinedload(Loan.profile))
-        .where(
-            Loan.status == LOAN_STATUS_ACTIVE,
-            Loan.due_date == due_date,
-        )
-    ).unique().all()
-
-    out: list[PushReminder] = []
-    for loan in rows:
-        if not _user_wants_reminders(loan.profile):
-            continue
-        toy = _toy_label(loan.toy.name if loan.toy else None, loan.toy_id)
-        out.append(
-            PushReminder(
-                user_id=loan.user_id,
-                dedupe_key=f"loan:{loan.id}:{kind}:{due_date.isoformat()}",
-                title=title,
-                body=body_for(toy),
-            )
-        )
-    return out
-
-
-def _overdue_loan_reminders(session: Session, *, today: date) -> list[PushReminder]:
     rows = session.scalars(
         select(Loan)
         .options(joinedload(Loan.toy), joinedload(Loan.profile))
@@ -198,7 +202,7 @@ def _overdue_loan_reminders(session: Session, *, today: date) -> list[PushRemind
 
     out: list[PushReminder] = []
     for loan in rows:
-        if not loan_is_overdue(loan, today=today):
+        if loan_return_session_date(loan.due_date) != session_date:
             continue
         if not _user_wants_reminders(loan.profile):
             continue
@@ -206,9 +210,9 @@ def _overdue_loan_reminders(session: Session, *, today: date) -> list[PushRemind
         out.append(
             PushReminder(
                 user_id=loan.user_id,
-                dedupe_key=f"loan:{loan.id}:overdue:{today.isoformat()}",
-                title="Toy overdue",
-                body=f"{toy} is overdue. Please return it on Wed or Sat.",
+                dedupe_key=f"loan:{loan.id}:{kind}:{session_date.isoformat()}",
+                title=title,
+                body=body_for(toy),
             )
         )
     return out

@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
+import "../duty/duty_session_models.dart";
 import "loan_models.dart";
 
 /// Due-date group header for the member loans list.
@@ -10,11 +11,13 @@ class LoanDueDateHeader extends StatelessWidget {
     super.key,
     required this.dueDate,
     required this.isOverdue,
+    this.isDueToday = false,
     this.embedded = false,
   });
 
   final DateTime dueDate;
   final bool isOverdue;
+  final bool isDueToday;
   final bool embedded;
 
   @override
@@ -41,7 +44,7 @@ class LoanDueDateHeader extends StatelessWidget {
               Text("Due date", style: context.formSectionLabel),
               const SizedBox(height: 2),
               Text(
-                formatDisplayDate(dueDate),
+                formatSessionDate(dueDate),
                 style: context.cardTitle.copyWith(
                   color: dateColor,
                   fontSize: 17,
@@ -50,7 +53,24 @@ class LoanDueDateHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (isOverdue)
+        if (isDueToday)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF3C4),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text(
+              "Due today",
+              style: TextStyle(
+                color: Color(0xFFE65100),
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          )
+        else if (isOverdue)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(

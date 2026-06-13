@@ -13,6 +13,7 @@ from app.core.library_sessions import (
     is_allowed_pickup_date,
     is_within_duty_desk_window,
     session_end_datetime,
+    loan_return_deadline,
 )
 
 TZ = LIBRARY_TIMEZONE
@@ -82,6 +83,20 @@ def test_first_session_after_reservation_hold() -> None:
         date(2026, 6, 8),
         hold_days=14,
     ) == date(2026, 6, 24)
+
+
+def test_loan_return_deadline_on_session_due_date() -> None:
+    from datetime import datetime
+
+    deadline = loan_return_deadline(date(2026, 5, 20))
+    assert deadline == datetime(2026, 5, 20, 14, 30, tzinfo=TZ)
+
+
+def test_loan_return_deadline_after_non_session_due_date() -> None:
+    from datetime import datetime
+
+    deadline = loan_return_deadline(date(2026, 5, 22))  # Friday → Saturday
+    assert deadline == datetime(2026, 5, 23, 14, 0, tzinfo=TZ)
 
 
 def test_duty_desk_opens_thirty_minutes_before_session() -> None:

@@ -66,7 +66,7 @@ class LoanDeskSummary extends StatelessWidget {
                 Text(
                   loan.deskSubtitle,
                   style: subtitleStyle.copyWith(
-                    color: loan.isOverdue
+                    color: loan.effectiveIsOverdue
                         ? colors.error
                         : subtitleStyle.color,
                   ),

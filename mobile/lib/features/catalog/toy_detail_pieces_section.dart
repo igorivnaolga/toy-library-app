@@ -16,6 +16,7 @@ class ToyDetailPiecesSection extends StatefulWidget {
     required this.pieceLines,
     this.totalPieces,
     this.missingPieces,
+    this.canEdit = false,
     this.onSaved,
   });
 
@@ -23,6 +24,7 @@ class ToyDetailPiecesSection extends StatefulWidget {
   final List<ToyPieceLine> pieceLines;
   final int? totalPieces;
   final int? missingPieces;
+  final bool canEdit;
   final VoidCallback? onSaved;
 
   @override
@@ -210,7 +212,7 @@ class _ToyDetailPiecesSectionState extends State<ToyDetailPiecesSection> {
           title: Row(
             children: [
               const Expanded(child: ToyDetailSectionTitle(title: "Pieces")),
-              if (!_editing)
+              if (!_editing && widget.canEdit)
                 IconButton(
                   tooltip: "Edit pieces",
                   icon: const Icon(Icons.edit_outlined, size: 20),

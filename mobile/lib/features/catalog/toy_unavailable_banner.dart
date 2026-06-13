@@ -21,10 +21,11 @@ class ToyUnavailableBanner extends StatelessWidget {
       case "on_loan":
         final mine = myActiveLoan;
         if (mine != null) {
-          final due = formatDisplayDate(mine.dueDate);
-          final message = mine.isOverdue
-              ? "You have this toy on loan. It was due $due — please return it soon."
-              : "You have this toy on loan. Due back $due.";
+          final message = mine.effectiveIsDueToday
+              ? "You have this toy on loan. Please return it at today's library session."
+              : mine.effectiveIsOverdue
+              ? "You have this toy on loan. It was due ${mine.returnDateLabel} — please return it soon."
+              : "You have this toy on loan. Due back ${mine.returnDateLabel}.";
           return (
             icon: Icons.assignment_outlined,
             background: kBrandYellow.withValues(alpha: 0.22),

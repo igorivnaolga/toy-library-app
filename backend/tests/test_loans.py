@@ -8,8 +8,10 @@ import pytest
 from app.models.loan import DEFAULT_LOAN_DAYS, LOAN_STATUS_ACTIVE, LOAN_STATUS_RETURNED
 from app.services.loan_service import (
     LoanError,
+    _due_date_from_checkout,
     check_in_loan,
     check_out_from_booking,
+    loan_is_due_today,
     loan_is_overdue,
     renew_loan_for_user,
     renewals_remaining_for_loan,
@@ -29,6 +31,20 @@ def _loan(
     )
 
 
+def test_due_date_from_checkout_snaps_to_session() -> None:
+    # Checkout Mon 1 Jun + 14 days = Mon 15 Jun → Wed 17 Jun session.
+    assert _due_date_from_checkout(date(2026, 6, 1)) == date(2026, 6, 17)
+
+
+def test_loan_not_due_today_on_monday_before_return_session() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    loan = _loan(due_date=date(2026, 6, 15))  # Monday, return Wed 17 Jun
+    monday = datetime(2026, 6, 15, 10, 0, tzinfo=ZoneInfo("Pacific/Auckland"))
+    assert loan_is_due_today(loan, now=monday) is False
+
+
 def test_loan_is_overdue_when_active_and_past_due() -> None:
     loan = _loan(due_date=date(2026, 5, 1))
     assert loan_is_overdue(loan, today=date(2026, 5, 19)) is True
@@ -37,6 +53,26 @@ def test_loan_is_overdue_when_active_and_past_due() -> None:
 def test_loan_is_not_overdue_when_due_today() -> None:
     loan = _loan(due_date=date(2026, 5, 19))
     assert loan_is_overdue(loan, today=date(2026, 5, 19)) is False
+
+
+def test_loan_is_overdue_after_return_session_on_due_day() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    loan = _loan(due_date=date(2026, 5, 20))  # Wednesday
+    after_session = datetime(2026, 5, 20, 15, 0, tzinfo=ZoneInfo("Pacific/Auckland"))
+    assert loan_is_overdue(loan, now=after_session) is True
+
+
+def test_loan_is_due_today_before_return_session_ends() -> None:
+    from app.services.loan_service import loan_is_due_today
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    loan = _loan(due_date=date(2026, 5, 20))
+    during_session = datetime(2026, 5, 20, 13, 30, tzinfo=ZoneInfo("Pacific/Auckland"))
+    assert loan_is_due_today(loan, now=during_session) is True
+    assert loan_is_overdue(loan, now=during_session) is False
 
 
 def test_loan_is_not_overdue_when_returned() -> None:

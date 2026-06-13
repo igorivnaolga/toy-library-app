@@ -175,6 +175,12 @@ class DutyController extends ChangeNotifier {
     sortDutySessions(sessions);
   }
 
+  Future<OnDutyStatus> refreshOnDutyStatus() async {
+    onDutyStatus = await _fetchOnDutyStatus();
+    notifyListeners();
+    return onDutyStatus;
+  }
+
   Future<OnDutyStatus> _fetchOnDutyStatus() async {
     final json = await _client.getJson("/api/v1/duty/me/on-duty");
     return OnDutyStatus.fromJson(json);

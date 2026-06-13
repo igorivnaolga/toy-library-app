@@ -11,6 +11,7 @@ import "../bookings/booking_confirmed_dialog.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/bookings_controller.dart";
 import "../bookings/pickup_date_flow.dart";
+import "../duty/duty_controller.dart";
 import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
@@ -41,6 +42,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   bool _bookingInProgress = false;
   bool _cancellingInProgress = false;
   bool _reschedulingInProgress = false;
+  bool _onDutyRequested = false;
 
   @override
   void didChangeDependencies() {
@@ -53,6 +55,10 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     if (!_loansRequested && auth.canBookToys) {
       _loansRequested = true;
       context.read<LoansController>().loadMyLoans(activeOnly: true);
+    }
+    if (!_onDutyRequested && auth.isVolunteer && !auth.isAdmin) {
+      _onDutyRequested = true;
+      context.read<DutyController>().refreshOnDutyStatus();
     }
     if (_started) return;
     _started = true;
@@ -154,6 +160,9 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     final auth = context.watch<AuthStore>();
     final bookings = context.watch<BookingsController>();
     final loans = context.watch<LoansController>();
+    final duty = context.watch<DutyController>();
+    final canEditPieces =
+        auth.isAdmin || (auth.isVolunteer && duty.onDutyStatus.onDuty);
 
     return FutureBuilder<ToyItem>(
       future: _future,
@@ -374,6 +383,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   pieceLines: t.pieceLines,
                   totalPieces: t.totalPieces,
                   missingPieces: t.missingPieces,
+                  canEdit: canEditPieces,
                   onSaved: _retry,
                 ),
               ],

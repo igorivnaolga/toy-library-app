@@ -33,6 +33,7 @@ class LoanDueDateSection extends StatelessWidget {
           LoanDueDateHeader(
             dueDate: group.dueDate,
             isOverdue: group.isOverdue,
+            isDueToday: group.isDueToday,
             embedded: true,
           ),
           Padding(

@@ -1,4 +1,6 @@
+import "loan_due_status.dart";
 import "../features/bookings/booking_models.dart" show BookingItem, formatDisplayDate;
+import "../features/duty/duty_session_models.dart";
 import "../features/loans/loan_models.dart" show LoanItem;
 
 /// One scheduled local notification for a booking or loan reminder.
@@ -20,20 +22,16 @@ const _bookingIdBase = 1000;
 const _loanIdBase = 2000;
 const _idSpread = 800;
 
-/// Morning reminder on library days (Pacific/Auckland, device-local scheduling).
-const int pickupMorningHour = 8;
-const int pickupMorningMinute = 0;
-
-/// Evening reminder the day before pickup or return.
+/// Evening reminder the day before pickup, return, or an overdue return session.
 const int eveReminderHour = 18;
 const int eveReminderMinute = 0;
 
-/// Overdue reminder each morning while a loan is late.
-const int overdueMorningHour = 9;
-const int overdueMorningMinute = 0;
+/// Morning reminder on due/pickup day.
+const int pickupMorningHour = 9;
+const int pickupMorningMinute = 0;
 
-/// How many future mornings to queue overdue alerts.
-const int overdueDaysAhead = 7;
+/// How far ahead to queue overdue session-eve alerts (matches booking horizon).
+const int overdueReminderHorizonDays = 183;
 
 int reminderStableId(String key, int base, int slot) {
   return base + (key.hashCode.abs() % _idSpread) + slot;
@@ -105,7 +103,7 @@ List<ScheduledReminder> buildMemberReminders({
   for (final loan in loans) {
     if (!loan.isActive) continue;
 
-    final dueDay = _dateOnly(loan.dueDate);
+    final dueDay = _dateOnly(loan.returnSessionDate);
     final toy = _toyLabel(loan.toyName, loan.toyId);
     final eveDay = dueDay.subtract(const Duration(days: 1));
 
@@ -134,20 +132,25 @@ List<ScheduledReminder> buildMemberReminders({
       );
     }
 
-    if (loan.isOverdue || dueDay.isBefore(_dateOnly(clock))) {
-      for (var offset = 0; offset < overdueDaysAhead; offset++) {
-        final day = _dateOnly(clock).add(Duration(days: offset));
-        final overdueWhen =
-            _atLocalTime(day, overdueMorningHour, overdueMorningMinute);
-        if (!_isFuture(overdueWhen, clock)) continue;
+    if (isLoanOverdue(loan.dueDate, now: clock)) {
+      final sessions = LibrarySessionTimes.upcomingSessionDays(
+        from: clock,
+        withinDays: overdueReminderHorizonDays,
+      );
+      var slot = 0;
+      for (final sessionDay in sessions) {
+        final eveDay = sessionDay.subtract(const Duration(days: 1));
+        final eveWhen = _atLocalTime(eveDay, eveReminderHour, eveReminderMinute);
+        if (!_isFuture(eveWhen, clock)) continue;
         reminders.add(
           ScheduledReminder(
-            id: reminderStableId(loan.loanId, _loanIdBase, 10 + offset),
+            id: reminderStableId(loan.loanId, _loanIdBase, 10 + slot),
             title: "Toy overdue",
-            body: "$toy is overdue. Please return it on Wed or Sat.",
-            when: overdueWhen,
+            body: "Return $toy at tomorrow's library session.",
+            when: eveWhen,
           ),
         );
+        slot++;
       }
     }
   }

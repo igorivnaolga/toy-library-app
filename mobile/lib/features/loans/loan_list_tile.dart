@@ -72,7 +72,7 @@ class LoanListTile extends StatelessWidget {
                         Text(
                           subtitle,
                           style: subtitleStyle.copyWith(
-                            color: item.isOverdue
+                            color: item.effectiveIsOverdue
                                 ? colors.error
                                 : subtitleStyle.color,
                           ),

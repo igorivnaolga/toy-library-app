@@ -43,6 +43,16 @@ def session_end_datetime(pickup_date: date) -> datetime:
     return datetime.combine(pickup_date, SESSION_END[weekday], tzinfo=LIBRARY_TIMEZONE)
 
 
+def loan_return_session_date(due_date: date) -> date:
+    """First Wed/Sat session on or after the stored loan due date."""
+    return first_session_on_or_after(due_date)
+
+
+def loan_return_deadline(due_date: date) -> datetime:
+    """When an active loan becomes overdue (end of the return session)."""
+    return session_end_datetime(loan_return_session_date(due_date))
+
+
 def first_session_on_or_after(day: date) -> date:
     """First Wed/Sat library session on or after ``day`` (return date / due date)."""
     probe = day

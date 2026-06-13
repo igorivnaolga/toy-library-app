@@ -35,7 +35,7 @@ class _LoansScreenState extends State<LoansScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Renewed ${updated.toyName ?? updated.toyId} until ${formatDisplayDate(updated.dueDate)}",
+            "Renewed ${updated.toyName ?? updated.toyId} until ${updated.returnDateLabel}",
           ),
         ),
       );

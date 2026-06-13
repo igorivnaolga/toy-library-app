@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
 
-from app.core.auth_deps import get_optional_principal, require_roles
+from app.core.auth_deps import get_optional_principal, require_on_duty_desk
 from app.core.roles import Role
 from app.repositories.toy_repo import get_toy_piece_inventory_raw
 from app.schemas.principal import Principal
@@ -124,16 +124,16 @@ def get_toy(
     )
 
 
-_require_staff = require_roles(Role.VOLUNTEER)
+_require_on_duty_for_pieces = require_on_duty_desk()
 
 
 @router.patch("/{toy_id}/pieces", response_model=ToyOut)
 def update_toy_pieces(
     toy_id: str,
     body: ToyPiecesUpdate,
-    _: Principal = Depends(_require_staff),
+    _: Principal = Depends(_require_on_duty_for_pieces),
 ) -> ToyOut:
-    """Update piece inventory (admin or volunteer; no on-duty check)."""
+    """Update piece inventory (admin anytime; volunteer only while on desk duty)."""
     payload = body.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=422, detail="No fields to update.")
