@@ -9,16 +9,24 @@ import "library_info_copy.dart";
 /// Opens the Contact tab (or a contact route) scrolled to payment details.
 void openContactPaymentDetails(BuildContext context) {
   final auth = context.read<AuthStore>();
+  final tabNav = context.read<MainTabNavigation>();
   final tabIndex = contactTabIndexForRole(auth.role);
   final navigator = Navigator.of(context);
+  final poppedProfile = navigator.canPop();
 
   if (tabIndex != null) {
-    navigator.pop();
-    context.read<MainTabNavigation>().openContactPayments(tabIndex);
+    if (poppedProfile) {
+      navigator.pop();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      tabNav.openContactPayments(tabIndex);
+    });
     return;
   }
 
-  navigator.pop();
+  if (poppedProfile) {
+    navigator.pop();
+  }
   navigator.push(
     MaterialPageRoute<void>(
       builder: (_) => Scaffold(

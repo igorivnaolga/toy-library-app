@@ -20,6 +20,7 @@ class AdminStatisticsScreen extends StatefulWidget {
 
 class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
   final TextEditingController _sessionDateInput = TextEditingController();
+  final FocusNode _sessionDateFocus = FocusNode();
 
   String _period = "month";
   DateTime? _sessionDate;
@@ -36,6 +37,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
 
   @override
   void dispose() {
+    _sessionDateFocus.dispose();
     _sessionDateInput.dispose();
     super.dispose();
   }
@@ -86,6 +88,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
       _period = "session";
       _syncSessionInput(date);
     });
+    _sessionDateFocus.unfocus();
     await _reload();
   }
 
@@ -93,7 +96,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
     final parsed = parseSessionDateInput(_sessionDateInput.text);
     if (parsed == null) {
       setState(() {
-        _sessionDateError = "Use dd/mm/yyyy or yyyy-mm-dd.";
+        _sessionDateError = "Enter the date as dd/mm/yyyy.";
       });
       return;
     }
@@ -131,12 +134,11 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
   }
 
   Future<void> _pickMonth() async {
-    final picked = await showDatePicker(
-      context: context,
-      helpText: "Choose month",
-      initialDate: DateTime(_year, _month),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(DateTime.now().year + 1, 12),
+    final picked = await showMonthYearPicker(
+      context,
+      initialYear: _year,
+      initialMonth: _month,
+      monthNames: _monthNames,
     );
     if (!mounted || picked == null) return;
     setState(() {
@@ -151,16 +153,13 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
   }
 
   Future<void> _pickYear() async {
-    final picked = await showDatePicker(
-      context: context,
-      helpText: "Choose year",
-      initialDate: DateTime(_year, 6),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(DateTime.now().year + 1, 12),
+    final picked = await showYearPicker(
+      context,
+      initialYear: _year,
     );
     if (!mounted || picked == null) return;
     setState(() {
-      _year = picked.year;
+      _year = picked;
       _period = "year";
       _sessionDate = null;
       _sessionDateError = null;
@@ -192,6 +191,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
                   ? periodLabel
                   : (overview?.periodLabel ?? "Loading…"),
               sessionDateInput: _sessionDateInput,
+              sessionDateFocus: _sessionDateFocus,
               sessionDateError: _sessionDateError,
               year: _year,
               month: _month,
@@ -303,6 +303,7 @@ class _StatsFilterPanel extends StatelessWidget {
     required this.period,
     required this.periodLabel,
     required this.sessionDateInput,
+    required this.sessionDateFocus,
     required this.sessionDateError,
     required this.year,
     required this.month,
@@ -316,6 +317,7 @@ class _StatsFilterPanel extends StatelessWidget {
   final String period;
   final String periodLabel;
   final TextEditingController sessionDateInput;
+  final FocusNode sessionDateFocus;
   final String? sessionDateError;
   final int year;
   final int month;
@@ -379,13 +381,14 @@ class _StatsFilterPanel extends StatelessWidget {
             const SizedBox(height: 10),
             TextField(
               controller: sessionDateInput,
+              focusNode: sessionDateFocus,
               style: fieldTextStyle(context),
               cursorColor: fieldCursorColor(context),
               keyboardType: TextInputType.datetime,
               decoration: labeledInputDecoration(
                 context,
                 labelText: "Session day",
-                hintText: "dd/mm/yyyy or yyyy-mm-dd",
+                hintText: "dd/mm/yyyy",
                 helperText: "Wednesday or Saturday only",
                 errorText: sessionDateError,
                 suffixIcon: IconButton(
@@ -485,6 +488,132 @@ const _monthNames = [
   "November",
   "December",
 ];
+
+/// Month + year picker for stats filters (clearer than a day calendar).
+Future<DateTime?> showMonthYearPicker(
+  BuildContext context, {
+  required int initialYear,
+  required int initialMonth,
+  required List<String> monthNames,
+}) {
+  final firstYear = 2020;
+  final lastYear = DateTime.now().year + 1;
+  var year = initialYear.clamp(firstYear, lastYear);
+  var month = initialMonth.clamp(1, 12);
+
+  return showDialog<DateTime>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text("Choose month"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<int>(
+                  value: year,
+                  decoration: labeledInputDecoration(
+                    context,
+                    labelText: "Year",
+                  ),
+                  items: [
+                    for (var y = firstYear; y <= lastYear; y++)
+                      DropdownMenuItem(value: y, child: Text("$y")),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => year = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: month,
+                  decoration: labeledInputDecoration(
+                    context,
+                    labelText: "Month",
+                  ),
+                  items: [
+                    for (var m = 1; m <= 12; m++)
+                      DropdownMenuItem(
+                        value: m,
+                        child: Text(monthNames[m - 1]),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => month = value);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text("Cancel"),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(DateTime(year, month)),
+                style: brandFilledButtonStyle(),
+                child: const Text("Apply"),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<int?> showYearPicker(
+  BuildContext context, {
+  required int initialYear,
+}) {
+  final firstYear = 2020;
+  final lastYear = DateTime.now().year + 1;
+  var year = initialYear.clamp(firstYear, lastYear);
+
+  return showDialog<int>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text("Choose year"),
+            content: DropdownButtonFormField<int>(
+              value: year,
+              decoration: labeledInputDecoration(
+                context,
+                labelText: "Year",
+              ),
+              items: [
+                for (var y = firstYear; y <= lastYear; y++)
+                  DropdownMenuItem(value: y, child: Text("$y")),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setDialogState(() => year = value);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text("Cancel"),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(year),
+                style: brandFilledButtonStyle(),
+                child: const Text("Apply"),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
 class _OverviewGrid extends StatelessWidget {
   const _OverviewGrid({required this.overview});

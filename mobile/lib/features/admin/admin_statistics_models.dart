@@ -179,13 +179,10 @@ String formatSessionInputDate(DateTime date) {
   return "$d/$m/${date.year}";
 }
 
-/// Parse typed session date: yyyy-mm-dd or dd/mm/yyyy.
+/// Parse typed session date (dd/mm/yyyy).
 DateTime? parseSessionDateInput(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
-
-  final iso = parseApiDate(trimmed);
-  if (iso != null) return iso;
 
   final slash = trimmed.split("/");
   if (slash.length == 3) {
@@ -194,7 +191,11 @@ DateTime? parseSessionDateInput(String raw) {
     var year = int.tryParse(slash[2].trim());
     if (day != null && month != null && year != null) {
       if (year < 100) year += 2000;
-      return DateTime(year, month, day);
+      try {
+        return DateTime(year, month, day);
+      } on ArgumentError {
+        return null;
+      }
     }
   }
   return null;

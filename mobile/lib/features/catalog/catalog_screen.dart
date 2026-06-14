@@ -9,6 +9,7 @@ import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "../../core/search_field.dart";
 import "../loans/loans_controller.dart";
+import "../membership/membership_onboarding_screen.dart";
 import "catalog_provider.dart";
 import "toy_catalog_list_tile.dart";
 import "toy_detail_screen.dart";
@@ -298,7 +299,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = context.watch<AuthStore>().isAdmin;
+    final auth = context.watch<AuthStore>();
+    final isAdmin = auth.isAdmin;
+    final needsMembership = auth.needsMembershipOnboarding;
 
     return Scaffold(
       primary: false,
@@ -313,6 +316,44 @@ class _CatalogScreenState extends State<CatalogScreen> {
           : null,
       body: Column(
         children: [
+        if (needsMembership)
+          Material(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const MembershipOnboardingScreen(),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Finish setting up your membership to book toys.",
+                        style: context.bodyText.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const MembershipOnboardingScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text("Choose membership"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: TextField(

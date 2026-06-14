@@ -4,7 +4,9 @@ import "package:provider/provider.dart";
 import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "auth_messages.dart";
+import "forgot_password_screen.dart";
 import "registration_screen.dart";
+import "registration_validation.dart";
 
 /// Login / registration UI for members/admins.
 class LoginScreen extends StatefulWidget {
@@ -17,25 +19,63 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _emailFocus = FocusNode();
+  AuthStore? _auth;
+  String? _emailError;
+  bool _emailTouched = false;
+  bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailFocus.addListener(_onEmailFocusChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AuthStore>().clearError();
+    });
+  }
+
+  void _onEmailFocusChange() {
+    if (!_emailFocus.hasFocus) {
+      _validateEmail(force: true);
+    }
+  }
+
+  void _validateEmail({bool force = false}) {
+    if (!force && !_emailTouched) return;
+    final error = RegistrationValidation.requiredEmail(_email.text);
+    if (error != _emailError) {
+      setState(() => _emailError = error);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _auth ??= context.read<AuthStore>();
+  }
 
   String? _validate() {
-    final email = _email.text.trim();
-    final password = _password.text;
-    if (email.isEmpty || !email.contains("@")) {
-      return "Enter a valid email.";
-    }
-    if (password.length < 6) {
-      return "Password must be at least 6 characters.";
+    _validateEmail(force: true);
+    if (_emailError != null) return _emailError;
+    if (_password.text.isEmpty) {
+      return "Enter your password.";
     }
     return null;
+  }
+
+  void _clearAuthError(AuthStore auth) {
+    auth.clearError();
   }
 
   Future<void> _handleSignIn() async {
     final validationError = _validate();
     if (validationError != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(validationError)));
+      if (validationError != _emailError) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(validationError)));
+      }
       return;
     }
     final auth = context.read<AuthStore>();
@@ -54,8 +94,25 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _openForgotPassword() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ForgotPasswordScreen(initialEmail: _email.text.trim()),
+      ),
+    );
+  }
+
+  void _openRegistration() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const RegistrationScreen()),
+    );
+  }
+
   @override
   void dispose() {
+    _emailFocus.removeListener(_onEmailFocusChange);
+    _emailFocus.dispose();
+    _auth?.clearError();
     _email.dispose();
     _password.dispose();
     super.dispose();
@@ -64,6 +121,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(title: const Text("Sign in or register")),
       body: ListView(
@@ -71,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           if (!auth.isAuthConfigured)
             Card(
-              color: Theme.of(context).colorScheme.errorContainer,
+              color: theme.colorScheme.errorContainer,
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
@@ -80,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   "flutter run --dart-define-from-file=env/dev.json "
                   "--dart-define=USE_ADB_REVERSE=true",
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    color: theme.colorScheme.onErrorContainer,
                   ),
                 ),
               ),
@@ -88,35 +147,57 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!auth.isAuthConfigured) const SizedBox(height: 12),
           TextField(
             controller: _email,
+            focusNode: _emailFocus,
             keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            autofillHints: const [AutofillHints.email],
             style: fieldTextStyle(context),
             cursorColor: fieldCursorColor(context),
-            decoration: labeledInputDecoration(context, labelText: "Email"),
+            decoration: labeledInputDecoration(
+              context,
+              labelText: "Email",
+              errorText: _emailError,
+            ),
+            onChanged: (_) {
+              _emailTouched = true;
+              _validateEmail();
+              _clearAuthError(auth);
+            },
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _password,
-            obscureText: true,
+            obscureText: _obscurePassword,
+            autofillHints: const [AutofillHints.password],
             style: fieldTextStyle(context),
             cursorColor: fieldCursorColor(context),
-            decoration: labeledInputDecoration(context, labelText: "Password"),
+            decoration: labeledInputDecoration(
+              context,
+              labelText: "Password",
+              suffixIcon: passwordVisibilitySuffix(
+                context,
+                visible: !_obscurePassword,
+                onToggle: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            onChanged: (_) => _clearAuthError(auth),
           ),
-          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: auth.loading ? null : _openForgotPassword,
+              child: const Text("Forgot password?"),
+            ),
+          ),
+          const SizedBox(height: 8),
           FilledButton(
             onPressed: auth.loading ? null : _handleSignIn,
             child: const Text("Sign in"),
           ),
           const SizedBox(height: 8),
           OutlinedButton(
-            onPressed: auth.loading
-                ? null
-                : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const RegistrationScreen(),
-                      ),
-                    );
-                  },
+            onPressed: auth.loading ? null : _openRegistration,
             child: const Text("Join the library"),
           ),
           if (auth.loading)
@@ -124,14 +205,21 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: EdgeInsets.only(top: 12),
               child: Center(child: CircularProgressIndicator()),
             ),
-          if (auth.error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                auth.error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+          if (auth.error != null) ...[
+            const SizedBox(height: 12),
+            Card(
+              color: theme.colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  auth.error!,
+                  style: TextStyle(
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                ),
               ),
             ),
+          ],
         ],
       ),
     );

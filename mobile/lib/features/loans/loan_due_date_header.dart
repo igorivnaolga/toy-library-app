@@ -3,7 +3,6 @@ import "package:flutter/material.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../duty/duty_session_models.dart";
-import "loan_models.dart";
 
 /// Due-date group header for the member loans list.
 class LoanDueDateHeader extends StatelessWidget {

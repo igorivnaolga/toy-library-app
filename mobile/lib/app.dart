@@ -32,7 +32,6 @@ import "features/duty/duty_screen.dart";
 import "features/info/contact_screen.dart";
 import "features/info/membership_info_screen.dart";
 import "features/info/library_info_copy.dart";
-import "features/membership/membership_onboarding_screen.dart";
 import "features/profile/profile_avatar.dart";
 import "features/profile/profile_controller.dart";
 import "features/profile/profile_screen.dart";
@@ -95,8 +94,24 @@ class ToyLibraryApp extends StatelessWidget {
   }
 }
 
-class _AppShell extends StatelessWidget {
+class _AppShell extends StatefulWidget {
   const _AppShell();
+
+  @override
+  State<_AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<_AppShell> {
+  bool _handledRestoredSession = false;
+
+  void _maybeHandleRestoredSession(AuthStore auth) {
+    if (_handledRestoredSession || auth.profileLoading) return;
+    _handledRestoredSession = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(context.read<AuthStore>().handleIncompleteRestoredSession());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -108,12 +123,10 @@ class _AppShell extends StatelessWidget {
       );
     }
 
+    _maybeHandleRestoredSession(auth);
+
     if (auth.showPostRegistrationWelcome) {
       return const RegistrationWelcomeScreen();
-    }
-
-    if (auth.needsMembershipOnboarding) {
-      return const MembershipOnboardingScreen();
     }
 
     return const _RoleHome();
@@ -131,7 +144,6 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   String _lastReminderSignature = "";
   bool _memberRemindersBootstrapped = false;
   String? _lastAuthUserId;
-  MainTabNavigation? _tabNav;
 
   @override
   void initState() {
@@ -140,49 +152,11 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncAdminNotifications();
       _bootstrapMemberReminders();
-      _attachTabNavigation();
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _attachTabNavigation();
-  }
-
-  void _attachTabNavigation() {
-    final nav = context.read<MainTabNavigation>();
-    if (identical(_tabNav, nav)) return;
-    _tabNav?.removeListener(_onMainTabNavigation);
-    _tabNav = nav;
-    _tabNav!.addListener(_onMainTabNavigation);
-  }
-
-  void _onMainTabNavigation() {
-    if (!mounted) return;
-    final nav = _tabNav;
-    final tabIndex = nav?.pendingTabIndex;
-    if (nav == null || tabIndex == null) return;
-
-    final tabController = DefaultTabController.maybeOf(context);
-    if (tabController == null) return;
-
-    nav.pendingTabIndex = null;
-    final requestGeneration = nav.generation;
-
-    tabController.animateTo(tabIndex);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future<void>.delayed(const Duration(milliseconds: 350), () {
-        if (!mounted) return;
-        if (nav.generation != requestGeneration) return;
-        nav.completeContactPaymentsScroll();
-      });
     });
   }
 
   @override
   void dispose() {
-    _tabNav?.removeListener(_onMainTabNavigation);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -302,6 +276,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
       child: Builder(
         builder: (context) {
           final tabController = DefaultTabController.of(context);
+          context.read<MainTabNavigation>().bindTabController(tabController);
           return AnimatedBuilder(
             animation: tabController,
             builder: (context, _) {

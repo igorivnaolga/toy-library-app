@@ -15,6 +15,7 @@ from app.schemas.registration_validation import (
     validate_email,
     validate_free_text,
     validate_full_name,
+    validate_nz_mobile,
     validate_nz_phone,
     validate_optional_address_line,
     validate_optional_free_text,
@@ -155,7 +156,7 @@ class RegistrationCompleteIn(BaseModel):
     def _validate_mobile_phone(cls, value: str | None) -> str:
         if value is None or not value.strip():
             raise ValueError("Enter your mobile phone number.")
-        return validate_nz_phone(value)
+        return validate_nz_mobile(value)
 
     @field_validator("alt_contact_name")
     @classmethod

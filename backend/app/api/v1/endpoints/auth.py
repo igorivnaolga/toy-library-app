@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,12 +11,14 @@ from app.db.session import get_db
 from app.core.roles import parse_role
 from app.repositories.profile_repo import (
     apply_membership_choice,
+    auth_email_is_registered,
     complete_registration,
     get_profile_by_id,
     kids_from_profile,
     update_profile,
 )
 from app.schemas.principal import MeOut, Principal, ProfileUpdateIn, RegistrationCompleteIn
+from app.schemas.registration_validation import validate_email
 from app.services.payment_service import (
     balance_summary,
     create_membership_payments_for_tier,
@@ -25,6 +27,23 @@ from app.services.payment_service import (
 )
 
 router = APIRouter()
+
+
+class EmailRegisteredOut(BaseModel):
+    registered: bool
+
+
+@router.get("/email-registered", response_model=EmailRegisteredOut)
+def email_registered(
+    email: str = Query(..., min_length=3, max_length=254, description="Email address to look up."),
+    db: Session = Depends(get_db),
+) -> EmailRegisteredOut:
+    """Public check used by the sign-in screen after invalid credentials."""
+    try:
+        cleaned = validate_email(email)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return EmailRegisteredOut(registered=auth_email_is_registered(db, cleaned))
 
 
 def _contact_fields_from_profile(profile) -> dict:

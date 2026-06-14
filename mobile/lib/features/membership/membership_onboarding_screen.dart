@@ -33,8 +33,12 @@ class _MembershipOnboardingScreenState
         "membership_tier": tier,
       });
       await auth.refreshProfile(silent: true);
-      if (mounted && !auth.membershipFeesPaid) {
+      if (!mounted) return;
+      if (!auth.membershipFeesPaid) {
         auth.markPostRegistrationWelcome();
+      }
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
       }
     } catch (e) {
       setState(() => _error = e.toString());

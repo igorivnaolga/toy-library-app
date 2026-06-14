@@ -26,6 +26,8 @@ class AdminController extends ChangeNotifier {
   StatsCatalog? statsCatalog;
   ToyPopularity? toyPopularity;
   int _breakdownRequestId = 0;
+  int _overviewRequestId = 0;
+  int _popularityRequestId = 0;
 
   bool notificationsLoading = false;
   bool pendingLoading = false;
@@ -70,6 +72,7 @@ class AdminController extends ChangeNotifier {
     int? year,
     int? month,
   }) async {
+    final requestId = ++_overviewRequestId;
     statsLoading = true;
     statsError = null;
     notifyListeners();
@@ -83,13 +86,17 @@ class AdminController extends ChangeNotifier {
           month: month,
         ),
       );
+      if (requestId != _overviewRequestId) return;
       statsOverview = StatsOverview.fromJson(json);
       statsError = null;
     } catch (e) {
+      if (requestId != _overviewRequestId) return;
       statsError = e.toString();
     } finally {
-      statsLoading = false;
-      notifyListeners();
+      if (requestId == _overviewRequestId) {
+        statsLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -147,6 +154,7 @@ class AdminController extends ChangeNotifier {
     int? year,
     int? month,
   }) async {
+    final requestId = ++_popularityRequestId;
     try {
       final json = await _client.getJson(
         "/api/v1/admin/stats/toys/popularity",
@@ -157,9 +165,11 @@ class AdminController extends ChangeNotifier {
           month: month,
         ),
       );
+      if (requestId != _popularityRequestId) return;
       toyPopularity = ToyPopularity.fromJson(json);
       notifyListeners();
     } catch (e) {
+      if (requestId != _popularityRequestId) return;
       toyPopularity = null;
       statsError ??= e.toString();
       notifyListeners();

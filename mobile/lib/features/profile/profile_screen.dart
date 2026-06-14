@@ -16,7 +16,6 @@ import "../duty/duty_session_models.dart";
 import "../duty/volunteer_duty_shifts_section.dart";
 import "../../core/api_client.dart";
 import "contact_details_body.dart";
-import "member_contact_info.dart";
 
 /// Editable user profile opened from the AppBar avatar button.
 class ProfileScreen extends StatefulWidget {

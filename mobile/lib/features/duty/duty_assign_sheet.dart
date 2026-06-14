@@ -119,7 +119,7 @@ class _DutyAssignScreenState extends State<DutyAssignScreen> {
     if (q.isEmpty) return const [];
 
     var results = _filterLocal(q);
-    if (q.length >= 1) {
+    if (q.isNotEmpty) {
       try {
         final remote =
             await context.read<DutyController>().searchRosterMembers(q);

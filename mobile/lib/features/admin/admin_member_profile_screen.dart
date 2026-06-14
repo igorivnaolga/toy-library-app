@@ -785,7 +785,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                         child: DropdownButtonFormField<String>(
-                          value: _selectedTier,
+                          initialValue: _selectedTier,
                           decoration: labeledInputDecoration(
                             context,
                             labelText: "Membership type",

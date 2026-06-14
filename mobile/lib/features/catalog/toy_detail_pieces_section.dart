@@ -36,7 +36,7 @@ class _ToyDetailPiecesSectionState extends State<ToyDetailPiecesSection> {
   bool _saving = false;
   late List<ToyPieceLine> _lines;
   final Set<int> _selected = {};
-  final ExpansionTileController _tileController = ExpansionTileController();
+  final ExpansibleController _tileController = ExpansibleController();
 
   @override
   void initState() {

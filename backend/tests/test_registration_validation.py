@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.principal import RegistrationCompleteIn
+from app.schemas.registration_validation import validate_email
 
 
 def _valid_payload(**overrides):
@@ -38,7 +39,12 @@ def test_registration_rejects_invalid_full_name(full_name):
         RegistrationCompleteIn(**_valid_payload(full_name=full_name))
 
 
-def test_registration_rejects_invalid_email_fields_via_phone():
+def test_registration_rejects_invalid_mobile_phone():
+    with pytest.raises(ValidationError):
+        RegistrationCompleteIn(**_valid_payload(mobile_phone="0312345678"))
+
+
+def test_registration_rejects_invalid_phone_fields():
     with pytest.raises(ValidationError):
         RegistrationCompleteIn(**_valid_payload(mobile_phone="abc"))
 
@@ -69,3 +75,21 @@ def test_registration_rejects_invalid_child_name():
                 kids=[{"name": "Sam123", "birth_date": "2020-01-01"}],
             )
         )
+
+
+@pytest.mark.parametrize(
+    "email",
+    [
+        "user@gmal.com",
+        "user@gmail.con",
+        "user@hotmial.com",
+    ],
+)
+def test_validate_email_rejects_common_provider_typos(email):
+    with pytest.raises(ValueError) as exc:
+        validate_email(email)
+    assert "email provider" in str(exc.value).lower()
+
+
+def test_validate_email_accepts_correct_provider():
+    assert validate_email("user@gmail.com") == "user@gmail.com"

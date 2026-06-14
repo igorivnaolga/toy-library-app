@@ -455,7 +455,7 @@ class _DutyBody extends StatelessWidget {
               )
             : null,
         scrollHeader:
-            pastSectionTitle != null ? SectionHeader(pastSectionTitle!) : null,
+            pastSectionTitle != null ? SectionHeader(pastSectionTitle) : null,
         children: [
           const SizedBox(height: 80),
           Center(
@@ -479,7 +479,7 @@ class _DutyBody extends StatelessWidget {
             )
           : null,
       scrollHeader:
-          pastSectionTitle != null ? SectionHeader(pastSectionTitle!) : null,
+          pastSectionTitle != null ? SectionHeader(pastSectionTitle) : null,
       children: _slotTiles(context, items, isPast: isPast),
     );
   }

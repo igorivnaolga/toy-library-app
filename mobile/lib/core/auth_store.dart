@@ -7,6 +7,7 @@ import "api_client.dart";
 import "api_exception.dart";
 import "push_notifications.dart";
 import "reminder_sync.dart";
+import "../features/auth/auth_error_messages.dart";
 import "../features/profile/kid_profile.dart";
 import "../features/profile/member_contact_info.dart";
 
@@ -66,6 +67,7 @@ class AuthStore extends ChangeNotifier {
   int balanceDueCents = 0;
   int creditBalanceCents = 0;
   bool showPostRegistrationWelcome = false;
+  bool _freshAuthAttempt = false;
 
   bool get isAuthConfigured => _supabase != null;
 
@@ -93,6 +95,12 @@ class AuthStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearError() {
+    if (error == null) return;
+    error = null;
+    notifyListeners();
+  }
+
   /// Logged-in non-admin still needs onboarding when the backend has no tier yet.
   bool get needsMembershipOnboarding {
     if (!isLoggedIn || isAdmin) return false;
@@ -110,18 +118,47 @@ class AuthStore extends ChangeNotifier {
     }
     loading = true;
     error = null;
+    _freshAuthAttempt = true;
     notifyListeners();
     try {
       await supa.auth
           .signInWithPassword(email: email.trim(), password: password);
       await refreshProfile(silent: false);
     } on AuthException catch (e) {
-      error = e.message;
+      error = await _resolveSignInError(e, email.trim());
     } catch (e) {
-      error = e.toString();
+      error = signInErrorMessage(e);
     } finally {
       loading = false;
       notifyListeners();
+    }
+  }
+
+  Future<String> _resolveSignInError(AuthException exception, String email) async {
+    if (!isInvalidSignInCredentials(
+      exception.message,
+      statusCode: exception.statusCode,
+    )) {
+      return signInErrorMessage(exception.message);
+    }
+    final registered = await _lookupEmailRegistered(email);
+    if (registered == false) {
+      return signInNotMemberMessage;
+    }
+    return signInWrongPasswordMessage;
+  }
+
+  Future<bool?> _lookupEmailRegistered(String email) async {
+    final backend = _backend;
+    if (backend == null || email.isEmpty) return null;
+    try {
+      final json = await backend.getJson(
+        "/api/v1/auth/email-registered",
+        {"email": email},
+      );
+      return json["registered"] as bool?;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -135,14 +172,55 @@ class AuthStore extends ChangeNotifier {
     }
     loading = true;
     error = null;
+    _freshAuthAttempt = true;
     notifyListeners();
     try {
       await supa.auth.signUp(email: email.trim(), password: password);
       await refreshProfile(silent: false);
     } on AuthException catch (e) {
-      error = e.message;
+      error = signUpErrorMessage(e.message);
     } catch (e) {
-      error = e.toString();
+      error = signUpErrorMessage(e);
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Drops stale Supabase sessions that never finished membership setup so the
+  /// app opens on the public catalog with Sign in (not the membership picker).
+  Future<void> handleIncompleteRestoredSession() async {
+    if (profileLoading || !isLoggedIn || isAdmin) return;
+    if (_freshAuthAttempt) {
+      _freshAuthAttempt = false;
+      return;
+    }
+    if (!needsMembershipOnboarding) return;
+    await signOut();
+  }
+
+  /// Sends a password-reset email via Supabase. Always returns true on success;
+  /// the UI uses generic copy so callers cannot infer whether the email exists.
+  Future<bool> requestPasswordReset({required String email}) async {
+    final supa = _supabase;
+    if (supa == null) {
+      error =
+          "Auth is not configured. Start the app with SUPABASE_URL and SUPABASE_ANON_KEY.";
+      notifyListeners();
+      return false;
+    }
+    loading = true;
+    error = null;
+    notifyListeners();
+    try {
+      await supa.auth.resetPasswordForEmail(email.trim());
+      return true;
+    } on AuthException catch (e) {
+      error = passwordResetErrorMessage(e.message);
+      return false;
+    } catch (e) {
+      error = passwordResetErrorMessage(e);
+      return false;
     } finally {
       loading = false;
       notifyListeners();
@@ -234,7 +312,7 @@ class AuthStore extends ChangeNotifier {
       } catch (e) {
         lastError = e;
         if (attempt < maxAttempts - 1 && isJwtClockSkewError(e)) continue;
-        throw lastError!;
+        throw lastError;
       }
     }
   }

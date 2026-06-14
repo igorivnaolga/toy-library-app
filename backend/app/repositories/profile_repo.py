@@ -30,6 +30,20 @@ def get_user_email(session: Session, user_id: uuid.UUID) -> str | None:
     return email or None
 
 
+def auth_email_is_registered(session: Session, email: str) -> bool:
+    """True when Supabase auth already has an account for this email."""
+    cleaned = email.strip().lower()
+    if not cleaned:
+        return False
+    row = session.execute(
+        text(
+            "select 1 from auth.users where lower(email::text) = :email limit 1"
+        ),
+        {"email": cleaned},
+    ).scalar_one_or_none()
+    return row is not None
+
+
 def kids_from_profile(profile: Profile) -> list[KidProfile]:
     """Read structured kids, falling back to legacy `kids_names`."""
     raw = profile.kids or []

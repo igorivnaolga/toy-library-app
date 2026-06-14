@@ -22,15 +22,15 @@ Future<void> showAuthSuccessDialog(
 
 String signedInMessage({required bool needsMembershipOnboarding}) {
   if (needsMembershipOnboarding) {
-    return "You are signed in. Choose your membership type on the next screen to "
-        "continue.";
+    return "You are signed in. Tap Choose membership on the catalog to finish "
+        "setting up your account.";
   }
   return "Welcome back! You are signed in to Church Corner Toy Library.";
 }
 
 const accountCreatedMessage =
     "Your account was created and you are signed in. "
-    "Choose your membership type on the next screen to continue.";
+    "Tap Choose membership on the catalog to finish setting up your account.";
 
 const emailConfirmationMessage =
     "We sent a confirmation link to your email. "

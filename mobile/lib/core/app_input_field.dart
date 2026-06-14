@@ -151,6 +151,23 @@ Widget? searchClearSuffix(
   );
 }
 
+Widget passwordVisibilitySuffix(
+  BuildContext context, {
+  required bool visible,
+  required VoidCallback onToggle,
+}) {
+  final muted =
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: kTextMutedAlpha);
+  return IconButton(
+    icon: Icon(
+      visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+      color: muted,
+    ),
+    onPressed: onToggle,
+    tooltip: visible ? "Hide password" : "Show password",
+  );
+}
+
 TextStyle searchFieldTextStyle(BuildContext context) => fieldTextStyle(context);
 
 Widget searchLoadingSuffix() {

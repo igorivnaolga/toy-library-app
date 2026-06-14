@@ -107,7 +107,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             RegistrationValidation.requiredAddressLine(_form.addressLine1) ??
             RegistrationValidation.optionalAddressLine(_form.addressLine2) ??
             RegistrationValidation.requiredSuburb(_form.suburb) ??
-            RegistrationValidation.requiredNzPhone(_form.mobilePhone) ??
+            RegistrationValidation.requiredNzMobile(_form.mobilePhone) ??
             RegistrationValidation.requiredEmail(_form.email);
       case 1:
         for (final kid in _form.kids) {
@@ -478,7 +478,7 @@ class _FamilyStep extends StatelessWidget {
           controller: mobilePhone,
           label: "Mobile phone",
           keyboardType: TextInputType.phone,
-          validator: RegistrationValidation.requiredNzPhone,
+          validator: RegistrationValidation.requiredNzMobile,
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
