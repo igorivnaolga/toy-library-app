@@ -9,9 +9,13 @@ import "../../core/brand_chip_button.dart";
 import "profile_avatar.dart";
 import "profile_controller.dart";
 import "profile_labels.dart";
+import "../info/contact_navigation.dart";
 import "../payments/member_balance_card.dart";
 import "../payments/payment_models.dart";
+import "../duty/duty_session_models.dart";
+import "../duty/volunteer_duty_shifts_section.dart";
 import "../../core/api_client.dart";
+import "contact_details_body.dart";
 import "member_contact_info.dart";
 
 /// Editable user profile opened from the AppBar avatar button.
@@ -27,6 +31,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   DateTime? _kidBirthDate;
   bool _editingChildren = false;
   bool _contactExpanded = false;
+  bool _dutyExpanded = false;
   List<PaymentItem> _payments = const [];
   bool _paymentsLoading = false;
 
@@ -154,15 +159,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return "${date.day} ${months[date.month - 1]} ${date.year}";
   }
 
-  bool _hasContactDetails(MemberContactInfo contact) {
-    return contact.hasAddress ||
-        (contact.parentBName?.trim().isNotEmpty ?? false) ||
-        (contact.mobilePhone?.trim().isNotEmpty ?? false) ||
-        (contact.altContactName?.trim().isNotEmpty ?? false) ||
-        (contact.heardAboutUs?.trim().isNotEmpty ?? false) ||
-        (contact.skills?.trim().isNotEmpty ?? false);
-  }
-
   Future<void> _signOut() async {
     await context.read<AuthStore>().signOut();
     if (!mounted) return;
@@ -178,6 +174,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       role: auth.role,
       membershipTier: auth.membershipTier,
     );
+    final showDutyShifts =
+        auth.isVolunteer || auth.membershipTier == "duty";
 
     return Scaffold(
       appBar: AppBar(
@@ -214,6 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 balanceDueCents: auth.balanceDueCents,
                 creditBalanceCents: auth.creditBalanceCents,
                 payments: _payments,
+                onHowToPay: () => openContactPaymentDetails(context),
               ),
             ),
           _ProfileSection(
@@ -255,18 +254,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          if (_hasContactDetails(profile.contact)) ...[
+          if (showDutyShifts) ...[
             const SizedBox(height: 24),
             _CollapsibleProfileSection(
-              title: "Contact & membership form",
-              expanded: _contactExpanded,
-              onToggle: () =>
-                  setState(() => _contactExpanded = !_contactExpanded),
+              title: "Duty shifts",
+              expanded: _dutyExpanded,
+              onToggle: () => setState(() => _dutyExpanded = !_dutyExpanded),
               children: [
-                _ContactDetailsBody(contact: profile.contact),
+                VolunteerDutyShiftsBody(
+                  active: _dutyExpanded,
+                  loadSessions: () async {
+                    final client = context.read<BackendClient>();
+                    final json =
+                        await client.getJson("/api/v1/duty/me/sessions");
+                    return VolunteerDutySessionGroups.fromJson(json);
+                  },
+                ),
               ],
             ),
           ],
+          const SizedBox(height: 24),
+          _CollapsibleProfileSection(
+            title: "Contact & membership form",
+            expanded: _contactExpanded,
+            onToggle: () =>
+                setState(() => _contactExpanded = !_contactExpanded),
+            children: [
+              ContactDetailsBody(contact: profile.contact),
+            ],
+          ),
           const SizedBox(height: 24),
           _ProfileSection(
             title: "Children",
@@ -460,60 +476,6 @@ class _ProfileHeader extends StatelessWidget {
         ],
         const SizedBox(height: 8),
       ],
-    );
-  }
-}
-
-class _ContactDetailsBody extends StatelessWidget {
-  const _ContactDetailsBody({required this.contact});
-
-  final MemberContactInfo contact;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <(String, String)>[];
-    void add(String label, String? value) {
-      final trimmed = value?.trim();
-      if (trimmed == null || trimmed.isEmpty) return;
-      rows.add((label, trimmed));
-    }
-
-    add("Parent B", contact.parentBName);
-    if (contact.hasAddress) add("Address", contact.formattedAddress);
-    add("Mobile phone", contact.mobilePhone);
-    add("Emergency contact", contact.altContactName);
-    add("Emergency address", contact.altContactAddress);
-    add("Emergency phone", contact.altContactPhone);
-    add("How you heard about us", contact.heardAboutUs);
-    add("Skills you can offer", contact.skills);
-    if (contact.textRemindersConsent != null) {
-      add(
-        "Text reminders",
-        contact.textRemindersConsent! ? "Yes" : "No",
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (contact.textRemindersConsent == true) ...[
-            Text(
-              "Pickup, return, and overdue reminders are sent to this phone "
-              "when notifications are allowed.",
-              style: context.emptyState,
-            ),
-            const SizedBox(height: 12),
-          ],
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const SizedBox(height: 12),
-            Text(rows[i].$1, style: context.formSectionLabel),
-            const SizedBox(height: 4),
-            Text(rows[i].$2, style: context.listSubtitle),
-          ],
-        ],
-      ),
     );
   }
 }

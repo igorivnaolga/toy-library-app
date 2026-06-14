@@ -138,9 +138,35 @@ def list_pending_bookings_ready_for_checkout(
     )
 
 
+def list_pending_bookings_for_user(
+    session: Session,
+    user_id: uuid.UUID,
+) -> list[Booking]:
+    """All pending reservations for one member (includes future pickup days)."""
+    return list(
+        session.scalars(
+            select(Booking)
+            .options(
+                joinedload(Booking.toy).joinedload(Toy.image),
+                joinedload(Booking.profile),
+            )
+            .where(
+                Booking.status == BOOKING_STATUS_PENDING,
+                Booking.user_id == user_id,
+                Booking.pickup_date.is_not(None),
+            )
+            .order_by(Booking.pickup_date.asc(), Booking.created_at.asc())
+        )
+        .unique()
+        .all()
+    )
+
+
 def get_pending_booking_for_toy(session: Session, toy_id: str) -> Booking | None:
     return session.scalar(
-        select(Booking).where(
+        select(Booking)
+        .options(joinedload(Booking.profile))
+        .where(
             Booking.toy_id == toy_id,
             Booking.status == BOOKING_STATUS_PENDING,
         )

@@ -24,10 +24,17 @@ import "admin_cv_scan_panel.dart";
 
 /// Admin desk: separate check-out and check-in flows (CV-ready check-in).
 class AdminLoansScreen extends StatefulWidget {
-  const AdminLoansScreen({super.key, this.volunteerDeskMode = false});
+  const AdminLoansScreen({
+    super.key,
+    this.volunteerDeskMode = false,
+    this.refreshOnMainTabIndex,
+  });
 
   /// When true, desk access requires an admin-confirmed duty shift today.
   final bool volunteerDeskMode;
+
+  /// When set, reload desk data each time this bottom-nav tab is selected.
+  final int? refreshOnMainTabIndex;
 
   @override
   State<AdminLoansScreen> createState() => _AdminLoansScreenState();
@@ -356,12 +363,51 @@ class _MemberCheckInHeader extends StatelessWidget {
 }
 
 class _AdminLoansScreenState extends State<AdminLoansScreen> {
+  TabController? _mainTabController;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LoansController>().loadVolunteerDesk();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDesk());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final index = widget.refreshOnMainTabIndex;
+    if (index == null) return;
+    final controller = DefaultTabController.maybeOf(context);
+    if (controller == null || identical(controller, _mainTabController)) {
+      return;
+    }
+    _mainTabController?.removeListener(_onMainTabChanged);
+    _mainTabController = controller;
+    _mainTabController!.addListener(_onMainTabChanged);
+    if (controller.index == index) {
+      _loadDesk();
+    }
+  }
+
+  @override
+  void dispose() {
+    _mainTabController?.removeListener(_onMainTabChanged);
+    super.dispose();
+  }
+
+  void _onMainTabChanged() {
+    final controller = _mainTabController;
+    final index = widget.refreshOnMainTabIndex;
+    if (controller == null || index == null || controller.indexIsChanging) {
+      return;
+    }
+    if (controller.index == index) {
+      _loadDesk();
+    }
+  }
+
+  void _loadDesk() {
+    if (!mounted) return;
+    context.read<LoansController>().loadVolunteerDesk();
   }
 
   Future<void> _checkOut(BookingItem booking) async {
@@ -573,6 +619,7 @@ class _CheckOutTabState extends State<_CheckOutTab> {
             children: [
               DeskWalkInPanel(
                 loading: c.deskLoading,
+                allowEarlyReservationCheckout: true,
                 onDraftChanged: (active) {
                   if (_walkInDraft != active) {
                     setState(() => _walkInDraft = active);
@@ -585,6 +632,8 @@ class _CheckOutTabState extends State<_CheckOutTab> {
                     const SnackBar(content: Text("Walk-in toy checked out")),
                   );
                 },
+                onCheckOutReservation: widget.onCheckOut,
+                onOpenToy: widget.onOpenToy,
               ),
               const SizedBox(height: 16),
               if (today.isEmpty && earlier.isEmpty && !_walkInDraft) ...[
@@ -718,10 +767,16 @@ class _CheckInTabState extends State<_CheckInTab> {
                 const SizedBox(height: 12),
               ],
               if (all.isEmpty)
-                const Center(
-                  child: Text(
-                    "No toys currently on loan.",
-                    textAlign: TextAlign.center,
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      c.deskError ??
+                          (c.deskLoading
+                              ? "Loading loans…"
+                              : "No toys currently on loan."),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 )
               else if (filtered.isEmpty)
@@ -775,56 +830,71 @@ class _CheckoutTile extends StatelessWidget {
       color: colors.surfaceContainerLowest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ToyPhotoTile(toyId: booking.toyId),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onOpen,
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      booking.toyName ?? booking.toyId,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.cardTitle,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      booking.deskSubtitle,
-                      style: context.listSubtitle,
-                    ),
-                    if (booking.pickupLabel != null &&
-                        booking.pickupLabel!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        booking.pickupLabel!,
-                        style: context.listSubtitle,
+                    ToyPhotoTile(toyId: booking.toyId),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            booking.toyName ?? booking.toyId,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.cardTitle,
+                          ),
+                          if (booking.toyId.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              booking.toyId,
+                              style: context.listSubtitle,
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            booking.deskSubtitle,
+                            style: context.listSubtitle,
+                          ),
+                          if (booking.pickupLabel != null &&
+                              booking.pickupLabel!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              booking.pickupLabel!,
+                              style: context.listSubtitle,
+                            ),
+                          ],
+                          if (booking.rentalPriceLabel != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              "Hire ${booking.rentalPriceLabel}",
+                              style: context.listSubtitle,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                    if (booking.rentalPriceLabel != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        "Hire ${booking.rentalPriceLabel}",
-                        style: context.listSubtitle,
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              BrandChipButton(
-                label: "Check out",
-                fixedWidth: 100,
-                onPressed: loading ? null : onCheckOut,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            BrandChipButton(
+              label: "Check out",
+              fixedWidth: 100,
+              onPressed: loading ? null : onCheckOut,
+            ),
+          ],
         ),
       ),
     );

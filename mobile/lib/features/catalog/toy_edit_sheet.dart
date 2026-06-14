@@ -781,6 +781,8 @@ class _ToyPhotoPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPicked = pickedPath != null && pickedPath!.isNotEmpty;
     final showNetwork = !hasPicked && hasExistingPhoto && existingToyId != null;
+    final photoCacheSize =
+        (160 * MediaQuery.of(context).devicePixelRatio).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -805,6 +807,9 @@ class _ToyPhotoPicker extends StatelessWidget {
                             photoFile: existingPhotoFile,
                           )!,
                           fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                          cacheWidth: photoCacheSize,
+                          cacheHeight: photoCacheSize,
                           errorBuilder: (_, __, ___) => const ToyPhotoPlaceholder(
                             expand: true,
                             borderRadius: 12,

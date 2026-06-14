@@ -244,6 +244,9 @@ class _AdminMemberTile extends StatelessWidget {
   final AdminMember member;
   final VoidCallback onTap;
 
+  bool get _showDutySessionsLabel =>
+      member.role == "volunteer" || member.membershipTier == "duty";
+
   @override
   Widget build(BuildContext context) {
     final tier = membershipTierLabel(member.membershipTier);
@@ -252,9 +255,20 @@ class _AdminMemberTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      title: Text(
-        member.displayName,
-        style: context.cardTitle,
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              member.displayName,
+              style: context.cardTitle,
+            ),
+          ),
+          if (_showDutySessionsLabel) ...[
+            const SizedBox(width: 8),
+            _DutySessionsBadge(count: member.dutySessionsCompleted),
+          ],
+        ],
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,6 +285,43 @@ class _AdminMemberTile extends StatelessWidget {
         ],
       ),
       isThreeLine: true,
+    );
+  }
+}
+
+class _DutySessionsBadge extends StatelessWidget {
+  const _DutySessionsBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final complete = isDutyRequirementMet(count);
+    final label = dutySessionsCompletedLabel(count);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: complete
+            ? kDutyCompleteBg
+            : kBrandYellow.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: complete ? kDutyCompleteBorder : kBrandYellow,
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: complete ? kDutyCompleteFg : kBrandOnYellow,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ),
     );
   }
 }

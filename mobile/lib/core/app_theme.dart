@@ -8,6 +8,10 @@ const Color kMembershipTierCardBg = Color(0xFFFFF6E0);
 const Color kStatusOnLoanBg = Color(0xFFFFE0B2);
 const Color kStatusOnLoanFg = Color(0xFFE65100);
 
+const Color kDutyCompleteBg = Color(0xFFE8F5E9);
+const Color kDutyCompleteBorder = Color(0xFF43A047);
+const Color kDutyCompleteFg = Color(0xFF1B5E20);
+
 const Color kModalSurface = Color(0xFFF6F4F0);
 
 /// Soft tint for grouped list date headers (bookings, loans).

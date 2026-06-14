@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.library_sessions import LIBRARY_TIMEZONE
 from app.services.member_push_reminders import (
+    DUTY_EVE_REMINDER_HOUR,
     EVE_REMINDER_HOUR,
     MORNING_REMINDER_HOUR,
     _active_reminder_slot,
@@ -12,6 +13,11 @@ from app.services.member_push_reminders import (
 def test_active_reminder_slot_eve() -> None:
     now = datetime(2026, 6, 3, EVE_REMINDER_HOUR, 10, tzinfo=LIBRARY_TIMEZONE)
     assert _active_reminder_slot(now) == "eve"
+
+
+def test_active_reminder_slot_duty_eve() -> None:
+    now = datetime(2026, 6, 3, DUTY_EVE_REMINDER_HOUR, 10, tzinfo=LIBRARY_TIMEZONE)
+    assert _active_reminder_slot(now) == "duty_eve"
 
 
 def test_active_reminder_slot_morning() -> None:

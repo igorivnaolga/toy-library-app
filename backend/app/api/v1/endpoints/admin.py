@@ -14,6 +14,11 @@ from app.core.auth_deps import require_admin
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.repositories.category_repo import update_category_label
+from app.repositories.duty_repo import (
+    count_completed_duty_sessions,
+    list_todays_unconfirmed_duty_sessions,
+    list_volunteer_booked_duty_sessions,
+)
 from app.repositories.profile_repo import (
     RECENT_MEMBERS_DAYS,
     approve_duty_volunteer,
@@ -37,15 +42,21 @@ from app.schemas.admin import (
     AdminMemberUpdateIn,
     AdminNotificationsOut,
 )
+from app.schemas.booking import booking_out_from_model
 from app.schemas.category import CategoryOut, CategoryUpdateIn
-from app.schemas.duty import DutySessionOut, duty_session_out_from_model
+from app.schemas.duty import (
+    DutySessionOut,
+    VolunteerDutyProfileOut,
+    duty_session_out_from_model,
+)
 from app.schemas.notification import MemberPushRemindersResult
 from app.models.category import Category
 from app.models.toy import Toy
 from app.schemas.loan import LoanOut, LoansListResponse, loan_out_from_model
-from app.schemas.principal import Principal
+from app.schemas.principal import Principal, ProfileContactOut
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
 from app.services.booking_service import list_bookings_for_admin_service
+from app.services.duty_service import split_volunteer_duty_sessions
 from app.services.loan_service import list_my_loans_service, renewals_remaining_for_loan
 from app.services.payment_service import (
     balance_summary,
@@ -253,6 +264,7 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
     payment_summary = membership_payment_summary(session, profile.id)
     account_balance = balance_summary(session, profile.id)
     loan_rows = list_my_loans_service(session, profile.id)
+    contact = ProfileContactOut.model_validate(profile)
     return AdminMemberDetailOut(
         user_id=str(profile.id),
         email=get_user_email(session, profile.id) or "",
@@ -262,6 +274,7 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
         volunteer_confirmed=bool(profile.volunteer_confirmed),
         membership_started_at=membership_started_at,
         membership_ends_at=membership_ends_at,
+        duty_sessions_completed=count_completed_duty_sessions(session, profile.id),
         kids=kids,
         avatar_path=profile.avatar_path,
         admin_notes=profile.admin_notes,
@@ -270,6 +283,7 @@ def _member_detail_out(session: Session, profile) -> AdminMemberDetailOut:
         balance_due_cents=account_balance.balance_due_cents,
         credit_balance_cents=account_balance.credit_balance_cents,
         loans=[_admin_loan_out(session, row) for row in loan_rows],
+        **contact.model_dump(),
     )
 
 
@@ -285,6 +299,32 @@ def get_member_detail(
     if profile.role not in ("member", "volunteer"):
         raise HTTPException(status_code=404, detail="Member not found")
     return _member_detail_out(db, profile)
+
+
+def _admin_volunteer_duty_profile_out(
+    db: Session,
+    volunteer_id: uuid.UUID,
+) -> VolunteerDutyProfileOut:
+    rows = list_volunteer_booked_duty_sessions(db, volunteer_id)
+    upcoming, completed = split_volunteer_duty_sessions(rows)
+    return VolunteerDutyProfileOut(
+        upcoming=[duty_session_out_from_model(row, db) for row in upcoming],
+        completed=[duty_session_out_from_model(row, db) for row in completed],
+    )
+
+
+@router.get("/users/{user_id}/duty-sessions", response_model=VolunteerDutyProfileOut)
+def get_member_duty_sessions(
+    user_id: uuid.UUID,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> VolunteerDutyProfileOut:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    return _admin_volunteer_duty_profile_out(db, user_id)
 
 
 def _admin_loan_out(db: Session, loan) -> LoanOut:

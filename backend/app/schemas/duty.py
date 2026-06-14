@@ -44,8 +44,26 @@ class DutySessionOut(BaseModel):
     created_at: datetime
 
 
+class DutyBookResponse(BaseModel):
+    session: DutySessionOut
+    volunteer_booked_count: int = Field(
+        0,
+        ge=0,
+        description="Total duty slots this volunteer has booked (past and upcoming).",
+    )
+    booking_milestone_message: str | None = Field(
+        None,
+        description="Optional thank-you message at booking milestones (e.g. third shift).",
+    )
+
+
 class DutySessionsListResponse(BaseModel):
     data: list[DutySessionOut]
+
+
+class VolunteerDutyProfileOut(BaseModel):
+    upcoming: list[DutySessionOut] = Field(default_factory=list)
+    completed: list[DutySessionOut] = Field(default_factory=list)
 
 
 class OnDutyResponse(BaseModel):

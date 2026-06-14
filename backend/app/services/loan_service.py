@@ -7,7 +7,7 @@ from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.core.availability import AVAILABLE, normalize_availability
+from app.core.availability import AVAILABLE, RESERVED, normalize_availability
 from app.core.library_sessions import (
     LIBRARY_TIMEZONE,
     first_session_on_or_after,
@@ -143,6 +143,17 @@ def _ensure_toy_available_for_checkout(toy: Toy) -> None:
         )
 
 
+def _ensure_toy_ready_for_booking_checkout(toy: Toy) -> None:
+    """Pending booking checkout: toy must be in library (available or reserved)."""
+    code = normalize_availability(toy.status)
+    if code in {AVAILABLE, RESERVED}:
+        return
+    raise LoanError(
+        "toy_not_available",
+        "This toy is not available for check-out right now.",
+    )
+
+
 def check_out_from_booking(
     session: Session,
     booking_id: uuid.UUID,
@@ -150,6 +161,7 @@ def check_out_from_booking(
     rental_payment: str = "pending",
     payment_method: str | None = None,
     recorded_by: uuid.UUID | None = None,
+    allow_early_pickup: bool = False,
 ) -> Loan:
     """Volunteer check-out: pending booking → active loan."""
     booking = get_booking_by_id(session, booking_id)
@@ -162,7 +174,7 @@ def check_out_from_booking(
             "Only pending bookings can be checked out.",
         )
 
-    if booking.pickup_date is not None:
+    if booking.pickup_date is not None and not allow_early_pickup:
         today = library_now().date()
         if booking.pickup_date > today:
             raise LoanError(
@@ -177,7 +189,7 @@ def check_out_from_booking(
     if get_active_loan_for_toy(session, toy.toy_id) is not None:
         raise LoanError("toy_on_loan", "This toy already has an active loan.")
 
-    _ensure_toy_available_for_checkout(toy)
+    _ensure_toy_ready_for_booking_checkout(toy)
 
     checkout_day = library_now().date()
     loan = create_loan(

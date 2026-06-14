@@ -61,6 +61,56 @@ def create_duty_session(
     return row
 
 
+def count_volunteer_duty_bookings(
+    session: Session,
+    volunteer_id: uuid.UUID,
+) -> int:
+    """All duty slots currently or previously booked by this volunteer."""
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(DutySession)
+            .where(DutySession.volunteer_id == volunteer_id)
+        )
+        or 0
+    )
+
+
+def count_completed_duty_sessions(
+    session: Session,
+    volunteer_id: uuid.UUID,
+    *,
+    today: date | None = None,
+) -> int:
+    """Past booked shifts (session day before today in library TZ)."""
+    today = today or library_now().date()
+    return int(
+        session.scalar(
+            select(func.count())
+            .select_from(DutySession)
+            .where(
+                DutySession.volunteer_id == volunteer_id,
+                DutySession.session_date < today,
+            )
+        )
+        or 0
+    )
+
+
+def list_volunteer_booked_duty_sessions(
+    session: Session,
+    volunteer_id: uuid.UUID,
+) -> list[DutySession]:
+    """All duty slots booked by this volunteer, oldest first."""
+    return list(
+        session.scalars(
+            select(DutySession)
+            .where(DutySession.volunteer_id == volunteer_id)
+            .order_by(DutySession.session_date, DutySession.start_time)
+        ).all()
+    )
+
+
 def delete_duty_session(session: Session, row: DutySession) -> None:
     session.delete(row)
     session.flush()

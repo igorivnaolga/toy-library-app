@@ -15,11 +15,13 @@ from app.db.session import get_db
 from app.repositories.duty_repo import (
     book_duty_session,
     cancel_duty_booking,
+    count_volunteer_duty_bookings,
     create_duty_session,
     delete_duty_session,
     get_active_duty_session_for_volunteer,
     get_duty_session_by_id,
     list_duty_sessions,
+    list_volunteer_booked_duty_sessions,
 )
 from app.repositories.profile_repo import list_roster_members, search_members_for_desk
 from app.services.duty_service import (
@@ -27,9 +29,12 @@ from app.services.duty_service import (
     assign_volunteer_to_session,
     clear_session_assignment,
     confirm_duty_session_for_admin,
+    duty_booking_milestone_message,
     ensure_roster_sessions,
+    split_volunteer_duty_sessions,
 )
 from app.schemas.duty import (
+    DutyBookResponse,
     DutySessionAssign,
     DutySessionCreate,
     DutySessionOut,
@@ -37,6 +42,7 @@ from app.schemas.duty import (
     DeskMemberOut,
     DeskMembersResponse,
     OnDutyResponse,
+    VolunteerDutyProfileOut,
     duty_session_out_from_model,
 )
 from app.schemas.principal import Principal
@@ -59,6 +65,15 @@ def _duty_http_error(exc: DutyError) -> HTTPException:
     elif exc.code in {"slot_unbooked", "not_duty_day"}:
         status = 409
     return HTTPException(status_code=status, detail=exc.message)
+
+
+def _volunteer_duty_profile_out(db: Session, volunteer_id: uuid.UUID) -> VolunteerDutyProfileOut:
+    rows = list_volunteer_booked_duty_sessions(db, volunteer_id)
+    upcoming, completed = split_volunteer_duty_sessions(rows)
+    return VolunteerDutyProfileOut(
+        upcoming=[duty_session_out_from_model(row, db) for row in upcoming],
+        completed=[duty_session_out_from_model(row, db) for row in completed],
+    )
 
 
 @router.get("/sessions", response_model=DutySessionsListResponse)
@@ -92,6 +107,16 @@ def my_on_duty_status(
         on_duty=True,
         session=duty_session_out_from_model(active, db),
     )
+
+
+@router.get("/me/sessions", response_model=VolunteerDutyProfileOut)
+def my_duty_sessions(
+    principal: Principal = Depends(_require_volunteer),
+    db: Session = Depends(get_db),
+) -> VolunteerDutyProfileOut:
+    if principal.role == Role.ADMIN:
+        return VolunteerDutyProfileOut()
+    return _volunteer_duty_profile_out(db, principal.id)
 
 
 @router.get("/members", response_model=DeskMembersResponse)
@@ -198,12 +223,12 @@ def remove_session(
     return {"ok": True}
 
 
-@router.post("/sessions/{session_id}/book", response_model=DutySessionOut)
+@router.post("/sessions/{session_id}/book", response_model=DutyBookResponse)
 def book_session(
     session_id: uuid.UUID,
     principal: Principal = Depends(_require_volunteer),
     db: Session = Depends(get_db),
-) -> DutySessionOut:
+) -> DutyBookResponse:
     if principal.role == Role.ADMIN:
         raise HTTPException(
             status_code=403,
@@ -219,7 +244,12 @@ def book_session(
     book_duty_session(db, row, principal.id)
     db.commit()
     row = get_duty_session_by_id(db, session_id) or row
-    return duty_session_out_from_model(row, db)
+    booked_count = count_volunteer_duty_bookings(db, principal.id)
+    return DutyBookResponse(
+        session=duty_session_out_from_model(row, db),
+        volunteer_booked_count=booked_count,
+        booking_milestone_message=duty_booking_milestone_message(booked_count),
+    )
 
 
 @router.post("/sessions/{session_id}/confirm", response_model=DutySessionOut)

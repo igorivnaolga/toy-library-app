@@ -49,7 +49,10 @@ def get_loan_by_id(session: Session, loan_id: uuid.UUID) -> Loan | None:
 def get_active_loan_for_toy(session: Session, toy_id: str) -> Loan | None:
     return session.scalar(
         select(Loan)
-        .options(joinedload(Loan.toy).joinedload(Toy.image))
+        .options(
+            joinedload(Loan.toy).joinedload(Toy.image),
+            joinedload(Loan.profile),
+        )
         .where(
             Loan.toy_id == toy_id,
             Loan.status == LOAN_STATUS_ACTIVE,

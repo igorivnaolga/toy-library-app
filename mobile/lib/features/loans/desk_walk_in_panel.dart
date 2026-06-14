@@ -8,8 +8,10 @@ import "../../core/app_input_field.dart";
 import "../../core/search_field.dart";
 import "../../core/brand_chip_button.dart";
 import "../catalog/catalog_models.dart";
+import "../bookings/booking_models.dart";
 import "desk_member.dart";
 import "desk_checkout_dialog.dart";
+import "desk_reservation_tile.dart";
 import "loans_controller.dart";
 import "../payments/payment_models.dart";
 
@@ -19,14 +21,25 @@ class DeskWalkInPanel extends StatefulWidget {
     super.key,
     required this.loading,
     required this.onCheckedOut,
+    this.allowEarlyReservationCheckout = false,
     this.onDraftChanged,
+    this.onCheckOutReservation,
+    this.onOpenToy,
   });
 
   final bool loading;
   final VoidCallback onCheckedOut;
 
+  /// When true, admins can check out reservations before the pickup day.
+  final bool allowEarlyReservationCheckout;
+
   /// Called when a member or toy is selected for walk-in (draft in progress).
   final ValueChanged<bool>? onDraftChanged;
+
+  /// When set, used to check out a member reservation from the panel.
+  final Future<void> Function(BookingItem booking)? onCheckOutReservation;
+
+  final ValueChanged<String>? onOpenToy;
 
   @override
   State<DeskWalkInPanel> createState() => _DeskWalkInPanelState();
@@ -44,8 +57,10 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
   List<DeskMember> _memberResults = [];
   bool _searchingToys = false;
   bool _searchingMembers = false;
+  bool _loadingReservations = false;
   bool _submitting = false;
   String? _error;
+  List<BookingItem> _memberReservations = const [];
 
   bool get _hasMember => _selectedMember != null;
 
@@ -76,11 +91,38 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _selectedToys.clear();
       _memberQuery.clear();
       _memberResults = [];
+      _memberReservations = const [];
       _toyQuery.clear();
       _toyResults = [];
       _error = null;
     });
     _notifyDraftChanged();
+  }
+
+  Future<void> _loadMemberReservations(String userId) async {
+    setState(() {
+      _loadingReservations = true;
+      _memberReservations = const [];
+      _error = null;
+    });
+    try {
+      final rows =
+          await context.read<LoansController>().loadMemberPendingBookings(
+                userId,
+              );
+      if (!mounted) return;
+      setState(() {
+        _memberReservations = rows;
+        _loadingReservations = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _memberReservations = const [];
+        _loadingReservations = false;
+        _error = loanActionErrorMessage(e);
+      });
+    }
   }
 
   void _selectMember(DeskMember member) {
@@ -91,6 +133,32 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       _error = null;
     });
     _notifyDraftChanged();
+    unawaited(_loadMemberReservations(member.userId));
+  }
+
+  Future<void> _checkOutReservation(BookingItem booking) async {
+    final handler = widget.onCheckOutReservation;
+    if (handler == null) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await handler(booking);
+      if (!mounted) return;
+      final member = _selectedMember;
+      if (member != null) {
+        await _loadMemberReservations(member.userId);
+      }
+      if (!mounted) return;
+      setState(() => _submitting = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = loanActionErrorMessage(e);
+      });
+    }
   }
 
   void _addToy(ToyItem toy) {
@@ -309,6 +377,46 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Text(
+                    "Reservations",
+                    style: context.groupLabel,
+                  ),
+                  const SizedBox(height: 6),
+                  if (_loadingReservations)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: LinearProgressIndicator(),
+                    )
+                  else if (_memberReservations.isEmpty)
+                    Text(
+                      "No pending reservations.",
+                      style: context.listSubtitle,
+                    )
+                  else
+                    Column(
+                      children: [
+                        for (var i = 0; i < _memberReservations.length; i++) ...[
+                          if (i > 0) const SizedBox(height: 8),
+                          DeskReservationTile(
+                            booking: _memberReservations[i],
+                            loading: busy,
+                            allowEarlyCheckout:
+                                widget.allowEarlyReservationCheckout,
+                            onOpen: widget.onOpenToy == null
+                                ? null
+                                : () => widget.onOpenToy!(
+                                      _memberReservations[i].toyId,
+                                    ),
+                            onCheckOut: widget.onCheckOutReservation == null
+                                ? null
+                                : () => _checkOutReservation(
+                                      _memberReservations[i],
+                                    ),
+                          ),
+                        ],
+                      ],
+                    ),
                 ],
               )
             else ...[

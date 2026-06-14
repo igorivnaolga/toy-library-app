@@ -59,29 +59,39 @@ class LoansController extends ChangeNotifier {
     deskLoading = true;
     deskError = null;
     notifyListeners();
-    try {
-      final pendingFuture = _client.getJson("/api/v1/bookings/pending");
-      final activeFuture = _client.getJson("/api/v1/loans/active");
-      pendingFuture.then((json) {
-        pendingCheckouts = _parseBookingList(json);
-        notifyListeners();
-      }).catchError((_) {});
-      final results = await Future.wait([pendingFuture, activeFuture]);
-      pendingCheckouts = _parseBookingList(results[0]);
-      activeLoans = _parseLoanList(results[1]);
-      deskError = null;
-    } on ApiException catch (e) {
-      deskError = _friendlyDeskMessage(e);
-      pendingCheckouts = [];
-      activeLoans = [];
-    } catch (e) {
-      deskError = e.toString();
-      pendingCheckouts = [];
-      activeLoans = [];
-    } finally {
-      deskLoading = false;
-      notifyListeners();
-    }
+
+    ApiException? activeError;
+
+    await Future.wait([
+      () async {
+        try {
+          final activeJson = await _client.getJson("/api/v1/loans/active");
+          activeLoans = _parseLoanList(activeJson);
+        } on ApiException catch (e) {
+          activeError = e;
+          activeLoans = [];
+        } catch (e) {
+          activeError = ApiException(e.toString());
+          activeLoans = [];
+        }
+      }(),
+      () async {
+        try {
+          final pendingJson =
+              await _client.getJson("/api/v1/bookings/pending");
+          pendingCheckouts = _parseBookingList(pendingJson);
+        } on ApiException {
+          pendingCheckouts = [];
+        } catch (_) {
+          pendingCheckouts = [];
+        }
+      }(),
+    ]);
+
+    deskError =
+        activeError == null ? null : _friendlyDeskMessage(activeError!);
+    deskLoading = false;
+    notifyListeners();
   }
 
   Future<MemberBalanceSummary> loadMemberBalanceSummary(String userId) async {
@@ -149,6 +159,14 @@ class LoansController extends ChangeNotifier {
     }
     final json = await _client.getJson("/api/v1/duty/members", {"q": trimmed});
     return parseDeskMemberList(json);
+  }
+
+  Future<List<BookingItem>> loadMemberPendingBookings(String userId) async {
+    final json = await _client.getJson(
+      "/api/v1/bookings/pending",
+      {"user_id": userId},
+    );
+    return _parseBookingList(json);
   }
 
   Future<List<ToyItem>> searchDeskToys(String query) async {
@@ -290,6 +308,10 @@ class LoansController extends ChangeNotifier {
       }
       return "Book a duty shift from the duty roster (calendar icon), "
           "then return to the desk on your shift day.";
+    }
+    final lower = e.message.toLowerCase();
+    if (lower.contains("timeout")) {
+      return "Desk load timed out. Pull down to refresh.";
     }
     return e.message;
   }

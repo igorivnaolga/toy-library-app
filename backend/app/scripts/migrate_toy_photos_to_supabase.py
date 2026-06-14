@@ -24,6 +24,7 @@ from app.services.supabase_storage import (
     upload_toy_photo_bytes,
 )
 from app.services.toy_photo import resolve_toy_images_root
+from app.services.toy_photo_normalize import normalize_toy_photo_bytes
 
 
 def main() -> None:
@@ -66,7 +67,19 @@ def main() -> None:
                 print(f"  missing local file: {toy.toy_id} -> {safe_name}")
                 continue
 
-            upload_toy_photo_bytes(safe_name, local_path.read_bytes())
+            try:
+                payload = normalize_toy_photo_bytes(local_path.read_bytes())
+            except ValueError as exc:
+                missing += 1
+                print(f"  invalid image: {toy.toy_id} -> {safe_name} ({exc})")
+                continue
+
+            new_filename = f"{toy.toy_id.strip()}.jpg"
+            upload_toy_photo_bytes(new_filename, payload)
+            if new_filename != safe_name:
+                from app.repositories.toy_repo import update_toy_photo_filename_in_db
+
+                update_toy_photo_filename_in_db(toy.toy_id, new_filename)
             uploaded += 1
             if uploaded % 50 == 0:
                 print(f"  uploaded {uploaded}...")

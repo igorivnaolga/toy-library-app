@@ -40,6 +40,11 @@ class MarkMembershipPaidIn(BaseModel):
     method: Literal["cash", "eftpos", "bank"]
 
 
+class MarkPaymentsPaidIn(BaseModel):
+    method: Literal["cash", "eftpos", "bank"]
+    payment_ids: list[uuid.UUID] = Field(min_length=1)
+
+
 class RecordTopUpIn(BaseModel):
     amount_cents: int = Field(ge=1, le=10_000_000)
     method: Literal["cash", "eftpos", "bank"]

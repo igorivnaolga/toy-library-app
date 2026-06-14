@@ -100,6 +100,63 @@ class OnDutyStatus {
   }
 }
 
+class DutyBookResult {
+  const DutyBookResult({
+    required this.session,
+    this.milestoneMessage,
+    this.bookedCount = 0,
+  });
+
+  final DutySessionItem session;
+  final String? milestoneMessage;
+  final int bookedCount;
+
+  factory DutyBookResult.fromJson(Map<String, dynamic> json) {
+    final sessionJson = json["session"];
+    return DutyBookResult(
+      session: sessionJson is Map<String, dynamic>
+          ? DutySessionItem.fromJson(sessionJson)
+          : DutySessionItem.fromJson(json),
+      milestoneMessage: json["booking_milestone_message"]?.toString(),
+      bookedCount: (json["volunteer_booked_count"] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class VolunteerDutySessionGroups {
+  const VolunteerDutySessionGroups({
+    this.upcoming = const [],
+    this.completed = const [],
+  });
+
+  final List<DutySessionItem> upcoming;
+  final List<DutySessionItem> completed;
+
+  factory VolunteerDutySessionGroups.fromJson(Map<String, dynamic> json) {
+    List<DutySessionItem> parseList(String key) {
+      final raw = json[key];
+      if (raw is! List<dynamic>) return [];
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map(DutySessionItem.fromJson)
+          .toList();
+    }
+
+    final upcoming = parseList("upcoming");
+    final completed = parseList("completed");
+    sortDutySessions(upcoming);
+    completed.sort((a, b) {
+      final dateOrder = b.sessionDate.compareTo(a.sessionDate);
+      if (dateOrder != 0) return dateOrder;
+      return b.startTime.compareTo(a.startTime);
+    });
+    return VolunteerDutySessionGroups(
+      upcoming: upcoming,
+      completed: completed,
+    );
+  }
+}
+
 /// Wed/Sat library session times (matches backend `library_sessions.py`).
 class LibrarySessionTimes {
   const LibrarySessionTimes._();

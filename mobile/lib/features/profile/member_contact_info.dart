@@ -33,6 +33,14 @@ class MemberContactInfo {
         (value) => value != null && value.trim().isNotEmpty,
       );
 
+  bool get hasRegistrationDetails =>
+      hasAddress ||
+      (parentBName?.trim().isNotEmpty ?? false) ||
+      (mobilePhone?.trim().isNotEmpty ?? false) ||
+      (altContactName?.trim().isNotEmpty ?? false) ||
+      (heardAboutUs?.trim().isNotEmpty ?? false) ||
+      (skills?.trim().isNotEmpty ?? false);
+
   String get formattedAddress {
     final lines = <String>[
       if (addressLine1?.trim().isNotEmpty == true) addressLine1!.trim(),

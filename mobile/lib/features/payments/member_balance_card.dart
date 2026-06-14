@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/brand_chip_button.dart";
 import "payment_list_by_date.dart";
 import "payment_models.dart";
 
@@ -11,11 +12,18 @@ class MemberBalanceCard extends StatelessWidget {
     required this.balanceDueCents,
     this.creditBalanceCents = 0,
     this.payments = const [],
+    this.onHowToPay,
   });
 
   final int balanceDueCents;
   final int creditBalanceCents;
   final List<PaymentItem> payments;
+  final VoidCallback? onHowToPay;
+
+  bool get _showsHowToPay =>
+      onHowToPay != null &&
+      (balanceDueCents > 0 ||
+          payments.any((payment) => payment.isPending));
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +77,16 @@ class MemberBalanceCard extends StatelessWidget {
               Text(
                 "Account credit: ${formatDueCents(creditBalanceCents)}",
                 style: context.listSubtitle,
+              ),
+            ],
+            if (_showsHowToPay) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: BrandChipButton(
+                  label: "How to pay",
+                  onPressed: onHowToPay,
+                ),
               ),
             ],
             if (payments.isNotEmpty) ...[

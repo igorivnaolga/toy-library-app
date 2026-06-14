@@ -7,7 +7,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.roles import Role
 from app.schemas.registration_validation import (
@@ -47,6 +47,8 @@ class Principal(BaseModel):
 
 
 class ProfileContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     parent_b_name: str | None = None
     address_line1: str | None = None
     address_line2: str | None = None

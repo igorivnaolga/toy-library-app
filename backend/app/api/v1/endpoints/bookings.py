@@ -25,6 +25,7 @@ from app.services.booking_service import (
     create_booking_for_user,
     list_bookings_for_user_service,
     list_pending_bookings_for_checkout_service,
+    list_pending_bookings_for_user_service,
     list_pickup_date_options,
     reschedule_booking_for_user,
 )
@@ -107,11 +108,18 @@ def list_my_bookings(
 
 @router.get("/pending", response_model=BookingsListResponse)
 def list_pending_for_checkout(
+    user_id: uuid.UUID | None = Query(
+        None,
+        description="When set, list all pending reservations for this member.",
+    ),
     db: Session = Depends(get_db),
     _: Principal = Depends(_require_on_duty),
 ) -> BookingsListResponse:
-    """Volunteer desk: pending bookings ready for check-out."""
-    rows = list_pending_bookings_for_checkout_service(db)
+    """Volunteer desk: pending bookings ready for check-out, or one member's reservations."""
+    if user_id is not None:
+        rows = list_pending_bookings_for_user_service(db, user_id)
+    else:
+        rows = list_pending_bookings_for_checkout_service(db)
     return BookingsListResponse(
         data=[booking_out_from_model(row) for row in rows],
     )

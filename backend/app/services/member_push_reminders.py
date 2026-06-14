@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.library_sessions import format_pickup_label, is_library_session_day, library_now, loan_return_session_date
 from app.models.booking import BOOKING_STATUS_PENDING, Booking
+from app.models.duty_session import DutySession
 from app.models.loan import LOAN_STATUS_ACTIVE, Loan
 from app.models.profile import Profile
 from app.models.push_notification_log import PushNotificationLog
@@ -19,6 +20,7 @@ from app.services.fcm_client import firebase_configured, send_push_notification
 from app.services.loan_service import loan_is_overdue
 
 EVE_REMINDER_HOUR = 18
+DUTY_EVE_REMINDER_HOUR = 17
 MORNING_REMINDER_HOUR = 9
 
 # Allow cron to run within the first 45 minutes of the slot hour.
@@ -42,6 +44,8 @@ def _active_reminder_slot(now: datetime) -> str | None:
     if now.minute >= SLOT_MINUTE_WINDOW:
         return None
     hour = now.hour
+    if hour == DUTY_EVE_REMINDER_HOUR:
+        return "duty_eve"
     if hour == EVE_REMINDER_HOUR:
         return "eve"
     if hour == MORNING_REMINDER_HOUR:
@@ -63,7 +67,9 @@ def collect_due_push_reminders(
     tomorrow = today + timedelta(days=1)
     reminders: list[PushReminder] = []
 
-    if slot == "eve":
+    if slot == "duty_eve":
+        reminders.extend(_duty_eve_reminders(session, session_date=tomorrow))
+    elif slot == "eve":
         reminders.extend(
             _booking_reminders(
                 session,
@@ -143,6 +149,55 @@ def _overdue_session_eve_reminders(
                 dedupe_key=f"loan:{loan.id}:overdue_eve:{tomorrow.isoformat()}",
                 title="Toy overdue",
                 body=f"{toy} is overdue. Please return it tomorrow ({session_label}).",
+            )
+        )
+    return out
+
+
+def _format_duty_time(value: time) -> str:
+    hour = value.hour
+    minute = value.minute
+    period = "pm" if hour >= 12 else "am"
+    display_hour = hour % 12 or 12
+    if minute == 0:
+        return f"{display_hour} {period}"
+    return f"{display_hour}:{minute:02d} {period}"
+
+
+def _duty_eve_reminders(
+    session: Session,
+    *,
+    session_date: date,
+) -> list[PushReminder]:
+    """5 pm the day before a booked volunteer duty shift."""
+    rows = session.scalars(
+        select(DutySession)
+        .options(joinedload(DutySession.volunteer))
+        .where(
+            DutySession.session_date == session_date,
+            DutySession.volunteer_id.is_not(None),
+        )
+        .order_by(DutySession.start_time)
+    ).unique().all()
+
+    date_label = format_pickup_label(session_date)
+    out: list[PushReminder] = []
+    for duty in rows:
+        if duty.volunteer_id is None:
+            continue
+        if not _user_wants_reminders(duty.volunteer):
+            continue
+        start = _format_duty_time(duty.start_time)
+        end = _format_duty_time(duty.end_time)
+        out.append(
+            PushReminder(
+                user_id=duty.volunteer_id,
+                dedupe_key=f"duty:{duty.id}:eve:{session_date.isoformat()}",
+                title="Volunteer duty tomorrow",
+                body=(
+                    f"You're on duty tomorrow ({date_label}), "
+                    f"{start}–{end}. Thank you for volunteering!"
+                ),
             )
         )
     return out

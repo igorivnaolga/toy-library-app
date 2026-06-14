@@ -58,21 +58,32 @@ class CollapsibleSection extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.children,
+    this.titleColor,
+    this.headerBackgroundColor,
+    this.headerBorderColor,
   });
 
   final String title;
   final bool expanded;
   final VoidCallback onToggle;
   final List<Widget> children;
+  final Color? titleColor;
+  final Color? headerBackgroundColor;
+  final Color? headerBorderColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Material(
-      color: theme.colorScheme.surfaceContainerLowest,
+      color: headerBackgroundColor ?? theme.colorScheme.surfaceContainerLowest,
       clipBehavior: Clip.antiAlias,
-      borderRadius: BorderRadius.circular(12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: headerBorderColor != null
+            ? BorderSide(color: headerBorderColor!, width: 1.5)
+            : BorderSide.none,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -83,7 +94,10 @@ class CollapsibleSection extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(title, style: context.sectionHeader),
+                    child: Text(
+                      title,
+                      style: context.sectionHeader.copyWith(color: titleColor),
+                    ),
                   ),
                   AnimatedRotation(
                     turns: expanded ? 0.5 : 0,

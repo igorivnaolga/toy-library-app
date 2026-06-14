@@ -50,6 +50,12 @@ class ToyItem {
     this.missingPiecesDetail,
     this.rentalPriceCents,
     this.pieceLines = const [],
+    this.reservedByName,
+    this.reservedByEmail,
+    this.reservationPickupLabel,
+    this.onLoanToName,
+    this.onLoanToEmail,
+    this.loanDueLabel,
   });
 
   final String toyId;
@@ -66,6 +72,16 @@ class ToyItem {
   final String? missingPiecesDetail;
   final int? rentalPriceCents;
   final List<ToyPieceLine> pieceLines;
+  final String? reservedByName;
+  final String? reservedByEmail;
+  final String? reservationPickupLabel;
+  final String? onLoanToName;
+  final String? onLoanToEmail;
+  final String? loanDueLabel;
+
+  bool get hasAdminHolderInfo =>
+      (reservedByName != null && reservedByName!.isNotEmpty) ||
+      (onLoanToName != null && onLoanToName!.isNotEmpty);
 
   String? get rentalPriceLabel {
     final cents = rentalPriceCents;
@@ -94,6 +110,12 @@ class ToyItem {
       missingPiecesDetail: json["missing_pieces_detail"]?.toString(),
       rentalPriceCents: (json["rental_price_cents"] as num?)?.toInt(),
       pieceLines: parseToyPieceLines(json["piece_lines"]),
+      reservedByName: json["reserved_by_name"]?.toString(),
+      reservedByEmail: json["reserved_by_email"]?.toString(),
+      reservationPickupLabel: json["reservation_pickup_label"]?.toString(),
+      onLoanToName: json["on_loan_to_name"]?.toString(),
+      onLoanToEmail: json["on_loan_to_email"]?.toString(),
+      loanDueLabel: json["loan_due_label"]?.toString(),
     );
   }
 }

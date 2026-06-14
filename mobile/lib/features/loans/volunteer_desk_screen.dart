@@ -9,6 +9,7 @@ import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
 import "desk_check_in_dialog.dart";
+import "desk_checkout_dialog.dart";
 import "desk_walk_in_panel.dart";
 import "loan_desk_summary.dart";
 import "loan_models.dart";
@@ -35,10 +36,28 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
   }
 
   Future<void> _checkOut(BookingItem booking) async {
+    final result = await showDeskCheckoutDialog(
+      context,
+      memberLabel: booking.memberLabel,
+      memberUserId: booking.userId,
+      lines: [
+        DeskCheckoutLine(
+          toyId: booking.toyId,
+          toyName: booking.toyName ?? booking.toyId,
+          rentalPriceCents: booking.rentalPriceCents,
+        ),
+      ],
+    );
+    if (result == null || !mounted) return;
+
     final controller = context.read<LoansController>();
     final catalog = context.read<CatalogController>();
     try {
-      await controller.checkOutFromBooking(booking.bookingId);
+      await controller.checkOutFromBooking(
+        booking.bookingId,
+        rentalPayment: result.rentalPayment,
+        paymentMethod: result.paymentMethod,
+      );
       await catalog.refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -53,6 +72,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(loanActionErrorMessage(e))),
       );
+      rethrow;
     }
   }
 
@@ -166,6 +186,8 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
                   }
                 },
                 onCheckedOut: _walkInCheckedOut,
+                onCheckOutReservation: _checkOut,
+                onOpenToy: _openToy,
               ),
               const SizedBox(height: 16),
               if (empty) ...[
@@ -247,53 +269,68 @@ class _PendingCheckoutTile extends StatelessWidget {
       color: colors.surfaceContainerLowest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ToyPhotoTile(
-                toyId: booking.toyId,
-                photoFile: booking.photoFile,
-                size: 80,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onOpen,
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      booking.toyName ?? booking.toyId,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.cardTitle,
+                    ToyPhotoTile(
+                      toyId: booking.toyId,
+                      photoFile: booking.photoFile,
+                      size: 80,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      booking.deskSubtitle,
-                      style: context.listSubtitle,
-                    ),
-                    if (booking.pickupLabel != null &&
-                        booking.pickupLabel!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        booking.pickupLabel!,
-                        style: context.listSubtitle,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            booking.toyName ?? booking.toyId,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.cardTitle,
+                          ),
+                          if (booking.toyId.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              booking.toyId,
+                              style: context.listSubtitle,
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            booking.deskSubtitle,
+                            style: context.listSubtitle,
+                          ),
+                          if (booking.pickupLabel != null &&
+                              booking.pickupLabel!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              booking.pickupLabel!,
+                              style: context.listSubtitle,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              BrandChipButton(
-                label: "Check out",
-                fixedWidth: 100,
-                onPressed: loading ? null : onCheckOut,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            BrandChipButton(
+              label: "Check out",
+              fixedWidth: 100,
+              onPressed: loading ? null : onCheckOut,
+            ),
+          ],
         ),
       ),
     );

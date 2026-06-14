@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.booking import BookingOut
 from app.schemas.loan import LoanOut
-from app.schemas.principal import KidProfile
+from app.schemas.principal import KidProfile, ProfileContactOut
 
 
 class AdminNotificationsOut(BaseModel):
@@ -43,13 +43,18 @@ class AdminMemberOut(BaseModel):
         None,
         description="Annual membership end (1 year after account creation).",
     )
+    duty_sessions_completed: int = Field(
+        0,
+        ge=0,
+        description="Past booked volunteer duty shifts (for duty-tier members).",
+    )
 
 
 class AdminMembersListResponse(BaseModel):
     data: list[AdminMemberOut]
 
 
-class AdminMemberDetailOut(AdminMemberOut):
+class AdminMemberDetailOut(AdminMemberOut, ProfileContactOut):
     kids: list[KidProfile] = Field(default_factory=list)
     avatar_path: str | None = None
     admin_notes: str | None = Field(

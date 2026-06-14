@@ -132,7 +132,24 @@ class _DutyScreenState extends State<DutyScreen> {
   Future<void> _book(DutySessionItem session) async {
     final controller = context.read<DutyController>();
     try {
-      await controller.bookSession(session.sessionId);
+      final result = await controller.bookSession(session.sessionId);
+      if (!mounted) return;
+      if (result.milestoneMessage != null &&
+          result.milestoneMessage!.trim().isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text("Thank you for volunteering"),
+            content: Text(result.milestoneMessage!),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text("Got it"),
+              ),
+            ],
+          ),
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Booked ${session.dateLabel}")),
@@ -328,14 +345,14 @@ class _DutyBody extends StatelessWidget {
 
     final sections = _sections();
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+    return _dutyScrollLayout(
+      context,
+      loadPast: false,
+      pinnedHeader: _DutySlotsSectionHeader(
+        title: "Upcoming slots",
+        onFindDate: () => findDutyDate(context),
+      ),
       children: [
-        _DutySlotsSectionHeader(
-          title: "Upcoming slots",
-          onFindDate: () => findDutyDate(context),
-        ),
         if (sections.upcoming.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
@@ -358,6 +375,68 @@ class _DutyBody extends StatelessWidget {
     );
   }
 
+  Widget _dutyScrollLayout(
+    BuildContext context, {
+    required List<Widget> children,
+    Widget? pinnedHeader,
+    Widget? scrollHeader,
+    bool loadPast = false,
+  }) {
+    final listPadding = const EdgeInsets.fromLTRB(12, 0, 12, 12);
+    final canLoadMore =
+        loadPast ? controller.canLoadMorePast : controller.canLoadMoreFuture;
+    final listChildren = [
+      if (scrollHeader != null) scrollHeader,
+      ...children,
+      if (canLoadMore || controller.loadingMore) _LoadMoreFooter(loading: controller.loadingMore),
+    ];
+
+    final scrollArea = _DutyScrollArea(
+      padding: pinnedHeader == null
+          ? const EdgeInsets.fromLTRB(12, 8, 12, 12)
+          : listPadding,
+      enabled: canLoadMore && !controller.loadingMore && !controller.loading,
+      onNearEnd: () {
+        if (loadPast) {
+          controller.loadMorePast();
+        } else {
+          controller.loadMoreFuture();
+        }
+      },
+      children: listChildren,
+    );
+
+    if (pinnedHeader == null) {
+      return scrollArea;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 12, 0),
+                child: pinnedHeader,
+              ),
+              Divider(
+                height: 1,
+                color: Theme.of(context)
+                    .colorScheme
+                    .outlineVariant
+                    .withValues(alpha: 0.65),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: scrollArea),
+      ],
+    );
+  }
+
   Widget _buildSlotList(
     BuildContext context,
     List<DutySessionItem> items, {
@@ -366,17 +445,18 @@ class _DutyBody extends StatelessWidget {
     String? pastSectionTitle,
   }) {
     if (items.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      return _dutyScrollLayout(
+        context,
+        loadPast: isPast,
+        pinnedHeader: showFindDate
+            ? _DutySlotsSectionHeader(
+                title: "Upcoming slots",
+                onFindDate: () => findDutyDate(context),
+              )
+            : null,
+        scrollHeader:
+            pastSectionTitle != null ? SectionHeader(pastSectionTitle!) : null,
         children: [
-          if (showFindDate)
-            _DutySlotsSectionHeader(
-              title: "Upcoming slots",
-              onFindDate: () => findDutyDate(context),
-            ),
-          if (pastSectionTitle != null)
-            SectionHeader(pastSectionTitle),
           const SizedBox(height: 80),
           Center(
             child: Text(
@@ -389,18 +469,18 @@ class _DutyBody extends StatelessWidget {
       );
     }
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      children: [
-        if (showFindDate)
-          _DutySlotsSectionHeader(
-            title: "Upcoming slots",
-            onFindDate: () => findDutyDate(context),
-          ),
-        if (pastSectionTitle != null) SectionHeader(pastSectionTitle),
-        ..._slotTiles(context, items, isPast: isPast),
-      ],
+    return _dutyScrollLayout(
+      context,
+      loadPast: isPast,
+      pinnedHeader: showFindDate
+          ? _DutySlotsSectionHeader(
+              title: "Upcoming slots",
+              onFindDate: () => findDutyDate(context),
+            )
+          : null,
+      scrollHeader:
+          pastSectionTitle != null ? SectionHeader(pastSectionTitle!) : null,
+      children: _slotTiles(context, items, isPast: isPast),
     );
   }
 
@@ -425,6 +505,94 @@ class _DutyBody extends StatelessWidget {
         ),
       ],
     ];
+  }
+}
+
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.loading});
+
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: loading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const SizedBox(height: 8),
+      ),
+    );
+  }
+}
+
+class _DutyScrollArea extends StatefulWidget {
+  const _DutyScrollArea({
+    required this.children,
+    required this.padding,
+    required this.onNearEnd,
+    this.enabled = true,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback onNearEnd;
+  final bool enabled;
+
+  @override
+  State<_DutyScrollArea> createState() => _DutyScrollAreaState();
+}
+
+class _DutyScrollAreaState extends State<_DutyScrollArea> {
+  final ScrollController _controller = ScrollController();
+  bool _nearEndHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DutyScrollArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled && !oldWidget.enabled) {
+      _nearEndHandled = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!widget.enabled || !_controller.hasClients) return;
+    final position = _controller.position;
+    if (position.maxScrollExtent <= 0) return;
+    if (position.pixels >= position.maxScrollExtent - 240) {
+      if (_nearEndHandled) return;
+      _nearEndHandled = true;
+      widget.onNearEnd();
+    } else if (position.pixels < position.maxScrollExtent - 320) {
+      _nearEndHandled = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      controller: _controller,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: widget.padding,
+      children: widget.children,
+    );
   }
 }
 

@@ -95,7 +95,9 @@ def list_active_loans(
 ) -> LoansListResponse:
     """Volunteer desk: all toys currently on loan."""
     rows = list_active_loans_service(db)
-    return LoansListResponse(data=[_loan_out(db, row) for row in rows])
+    # Desk check-in does not need renewal limits; skip per-loan category/booking
+    # lookups that would N+1 against Supabase and time out on large loan lists.
+    return LoansListResponse(data=[loan_out_from_model(row) for row in rows])
 
 
 @router.post("/check-out/booking", response_model=LoanOut)
@@ -111,6 +113,7 @@ def check_out_booking(
             rental_payment=body.rental_payment,
             payment_method=body.payment_method,
             recorded_by=principal.id,
+            allow_early_pickup=principal.role == Role.ADMIN,
         )
     except LoanError as e:
         raise _http_error(e) from e

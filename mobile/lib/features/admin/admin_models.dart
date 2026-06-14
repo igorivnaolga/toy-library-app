@@ -2,8 +2,9 @@
 library;
 
 import "../bookings/booking_models.dart";
-import "../profile/kid_profile.dart";
 import "../loans/loan_models.dart";
+import "../profile/kid_profile.dart";
+import "../profile/member_contact_info.dart";
 
 class AdminNotifications {
   const AdminNotifications({
@@ -118,6 +119,7 @@ class AdminMember {
     this.volunteerConfirmed = false,
     this.membershipStartedAt,
     this.membershipEndsAt,
+    this.dutySessionsCompleted = 0,
   });
 
   final String userId;
@@ -128,6 +130,7 @@ class AdminMember {
   final bool volunteerConfirmed;
   final DateTime? membershipStartedAt;
   final DateTime? membershipEndsAt;
+  final int dutySessionsCompleted;
 
   factory AdminMember.fromJson(Map<String, dynamic> json) {
     return AdminMember(
@@ -143,6 +146,8 @@ class AdminMember {
       membershipEndsAt: json["membership_ends_at"] == null
           ? null
           : DateTime.tryParse(json["membership_ends_at"].toString()),
+      dutySessionsCompleted:
+          (json["duty_sessions_completed"] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -160,6 +165,7 @@ class AdminMemberDetail extends AdminMember {
     super.volunteerConfirmed = false,
     super.membershipStartedAt,
     super.membershipEndsAt,
+    super.dutySessionsCompleted = 0,
     this.kids = const [],
     this.avatarPath,
     this.adminNotes,
@@ -168,6 +174,7 @@ class AdminMemberDetail extends AdminMember {
     this.balanceDueCents = 0,
     this.creditBalanceCents = 0,
     this.loans = const [],
+    this.contact = const MemberContactInfo(),
   });
 
   final List<KidProfile> kids;
@@ -178,6 +185,7 @@ class AdminMemberDetail extends AdminMember {
   final int balanceDueCents;
   final int creditBalanceCents;
   final List<LoanItem> loans;
+  final MemberContactInfo contact;
 
   factory AdminMemberDetail.fromJson(Map<String, dynamic> json) {
     return AdminMemberDetail(
@@ -193,6 +201,8 @@ class AdminMemberDetail extends AdminMember {
       membershipEndsAt: json["membership_ends_at"] == null
           ? null
           : DateTime.tryParse(json["membership_ends_at"].toString()),
+      dutySessionsCompleted:
+          (json["duty_sessions_completed"] as num?)?.toInt() ?? 0,
       kids: parseKidsList(json["kids"]),
       avatarPath: json["avatar_path"]?.toString(),
       adminNotes: json["admin_notes"]?.toString(),
@@ -202,6 +212,7 @@ class AdminMemberDetail extends AdminMember {
       balanceDueCents: (json["balance_due_cents"] as num?)?.toInt() ?? 0,
       creditBalanceCents: (json["credit_balance_cents"] as num?)?.toInt() ?? 0,
       loans: parseLoanItemsList(json["loans"]),
+      contact: MemberContactInfo.fromJson(json),
     );
   }
 }
@@ -350,4 +361,20 @@ String formatAdminDate(DateTime? value) {
     "Dec",
   ];
   return "${value.day} ${months[value.month - 1]} ${value.year}";
+}
+
+/// Duty volunteers are expected to complete this many shifts per year.
+const int kRequiredDutyShiftsCompleted = 3;
+
+bool isDutyRequirementMet(int completedShifts) =>
+    completedShifts >= kRequiredDutyShiftsCompleted;
+
+String dutySessionsCompletedLabel(int count) {
+  if (count == 1) return "1 duty shift completed";
+  return "$count duty shifts completed";
+}
+
+String adminDutyShiftsSectionTitle(int completedShifts) {
+  if (completedShifts == 1) return "Duty shifts · 1 completed";
+  return "Duty shifts · $completedShifts completed";
 }

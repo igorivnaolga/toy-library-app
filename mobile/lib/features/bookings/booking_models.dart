@@ -333,3 +333,26 @@ List<BookingItem> deskEarlierReady(List<BookingItem> items) {
       )
       .toList();
 }
+
+bool bookingReadyForDeskCheckout(
+  BookingItem item, {
+  bool allowEarlyForAdmin = false,
+}) {
+  if (!item.isPending || item.pickupDate == null) return false;
+  if (allowEarlyForAdmin) return true;
+  final today = calendarDay(DateTime.now());
+  return !calendarDay(item.pickupDate!).isAfter(today);
+}
+
+String bookingDeskStatusLabel(
+  BookingItem item, {
+  bool allowEarlyForAdmin = false,
+}) {
+  if (!item.isPending || item.pickupDate == null) return "Pending";
+  final today = calendarDay(DateTime.now());
+  final pickup = calendarDay(item.pickupDate!);
+  if (isSameCalendarDay(pickup, today)) return "Pickup today";
+  if (pickup.isBefore(today)) return "Ready for checkout";
+  if (allowEarlyForAdmin) return "Early pickup (admin)";
+  return "Upcoming";
+}

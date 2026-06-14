@@ -17,6 +17,7 @@ from app.services.payment_service import (
     credit_balance_cents,
     grant_volunteer_duty_credit,
     apply_existing_credit_to_pending_charges,
+    mark_payments_paid,
     membership_payment_summary,
     record_top_up,
 )
@@ -200,3 +201,57 @@ def test_grant_volunteer_duty_credit_is_idempotent() -> None:
         )
     assert result is existing
     create_mock.assert_not_called()
+
+
+def test_mark_payments_paid_marks_selected_pending_rows() -> None:
+    session = MagicMock()
+    user_id = uuid.uuid4()
+    recorded_by = uuid.uuid4()
+    payment_a = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        status="pending",
+    )
+    payment_b = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        status="pending",
+    )
+
+    def _get_payment(_session, payment_id):
+        if payment_id == payment_a.id:
+            return payment_a
+        if payment_id == payment_b.id:
+            return payment_b
+        return None
+
+    with patch(
+        "app.services.payment_service.get_payment_by_id",
+        side_effect=_get_payment,
+    ), patch(
+        "app.services.payment_service.mark_payment_status",
+        side_effect=lambda _session, payment, **kwargs: payment,
+    ) as mark_mock:
+        updated = mark_payments_paid(
+            session,
+            user_id,
+            [payment_a.id, payment_b.id],
+            method="cash",
+            recorded_by=recorded_by,
+        )
+
+    assert updated == [payment_a, payment_b]
+    assert mark_mock.call_count == 2
+
+
+def test_mark_payments_paid_rejects_empty_selection() -> None:
+    session = MagicMock()
+    with pytest.raises(PaymentError) as exc:
+        mark_payments_paid(
+            session,
+            uuid.uuid4(),
+            [],
+            method="cash",
+            recorded_by=uuid.uuid4(),
+        )
+    assert exc.value.code == "no_payments_selected"

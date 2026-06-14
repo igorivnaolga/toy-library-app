@@ -376,7 +376,13 @@ def list_members_for_admin(
                p.membership_tier,
                coalesce(p.volunteer_confirmed, false) as volunteer_confirmed,
                u.created_at as membership_started_at,
-               (u.created_at + interval '1 year') as membership_ends_at
+               (u.created_at + interval '1 year') as membership_ends_at,
+               (
+                 select count(*)::int
+                 from public.duty_sessions ds
+                 where ds.volunteer_id = p.id
+                   and ds.session_date < current_date
+               ) as duty_sessions_completed
         from public.profiles p
         join auth.users u on u.id = p.id
         where {where_clause}

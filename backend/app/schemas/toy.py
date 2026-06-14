@@ -75,6 +75,30 @@ class ToyOut(BaseModel):
         default=None,
         description="SETLS piece breakdown; included for admin/volunteer toy detail only.",
     )
+    reserved_by_name: str | None = Field(
+        default=None,
+        description="Admin toy detail: member with a pending reservation, if any.",
+    )
+    reserved_by_email: str | None = Field(
+        default=None,
+        description="Admin toy detail: email of member with pending reservation.",
+    )
+    reservation_pickup_label: str | None = Field(
+        default=None,
+        description='Admin toy detail: pickup session label, e.g. "Wednesday 21 May".',
+    )
+    on_loan_to_name: str | None = Field(
+        default=None,
+        description="Admin toy detail: member with an active loan, if any.",
+    )
+    on_loan_to_email: str | None = Field(
+        default=None,
+        description="Admin toy detail: email of member with active loan.",
+    )
+    loan_due_label: str | None = Field(
+        default=None,
+        description="Admin toy detail: loan return session label.",
+    )
 
     @field_validator("name", mode="before")
     @classmethod

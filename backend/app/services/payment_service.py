@@ -238,11 +238,42 @@ def mark_all_membership_payments_paid(
             "no_pending_membership",
             "This member has no pending membership payments.",
         )
+    return mark_payments_paid(
+        session,
+        user_id,
+        [payment.id for payment in pending],
+        method=method,
+        recorded_by=recorded_by,
+    )
+
+
+def mark_payments_paid(
+    session: Session,
+    user_id: uuid.UUID,
+    payment_ids: list[uuid.UUID],
+    *,
+    method: str,
+    recorded_by: uuid.UUID,
+) -> list[Payment]:
+    """Mark one or more pending payments as paid for a member."""
+    if not payment_ids:
+        raise PaymentError(
+            "no_payments_selected",
+            "Select at least one pending charge to mark as paid.",
+        )
     status = _METHOD_TO_STATUS.get(method)
     if status is None:
         raise PaymentError("invalid_method", "Payment method must be cash, eftpos, or bank.")
     updated: list[Payment] = []
-    for payment in pending:
+    for payment_id in payment_ids:
+        payment = get_payment_by_id(session, payment_id)
+        if payment is None or payment.user_id != user_id:
+            raise PaymentError("payment_not_found", "Payment not found.")
+        if payment.status != PAYMENT_STATUS_PENDING:
+            raise PaymentError(
+                "payment_not_pending",
+                "Only pending payments can be marked as paid.",
+            )
         updated.append(
             mark_payment_status(
                 session,

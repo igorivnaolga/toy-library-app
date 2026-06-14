@@ -9,9 +9,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_optional_principal, require_on_duty_desk
 from app.core.roles import Role
+from app.db.session import get_db
 from app.repositories.toy_repo import get_toy_piece_inventory_raw
 from app.schemas.principal import Principal
 from app.schemas.toy import (
@@ -23,6 +25,7 @@ from app.schemas.toy import (
     ToysMetaOut,
 )
 from app.services.pieces_from_setls import resolve_piece_lines_for_toy
+from app.services.toy_admin_context import enrich_toy_out_for_admin
 from app.services.toy_photo import (
     guess_media_type,
     resolve_toy_photo_path,
@@ -99,11 +102,14 @@ def _staff_can_view_piece_lines(principal: Principal | None) -> bool:
 @router.get("/{toy_id}", response_model=ToyOut)
 def get_toy(
     toy_id: str,
+    db: Session = Depends(get_db),
     principal: Principal | None = Depends(get_optional_principal),
 ) -> ToyOut:
     toy = get_toy_service(toy_id)
     if not toy:
         raise HTTPException(status_code=404, detail="Toy not found")
+    if principal is not None and principal.role == Role.ADMIN:
+        toy = enrich_toy_out_for_admin(db, toy)
     if not _staff_can_view_piece_lines(principal):
         return toy
     inventory = get_toy_piece_inventory_raw(toy_id)

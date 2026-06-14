@@ -36,6 +36,18 @@ def iter_library_session_dates(from_date: date, to_date: date) -> list[date]:
     return days
 
 
+def duty_booking_milestone_message(booked_count: int) -> str | None:
+    """Optional thank-you copy when a volunteer reaches a booking milestone."""
+    if booked_count != 3:
+        return None
+    return (
+        "You've booked your third volunteer shift — thank you! "
+        "Your time makes a real difference at the toy library. "
+        "You're very welcome to book more sessions whenever you'd like; "
+        "any extra help is always appreciated."
+    )
+
+
 def ensure_roster_sessions(
     session: Session,
     *,
@@ -110,3 +122,16 @@ def confirm_duty_session_for_admin(
     confirmed = confirm_duty_session(session, row, admin_id)
     grant_volunteer_duty_credit(session, confirmed, recorded_by=admin_id)
     return confirmed
+
+
+def split_volunteer_duty_sessions(
+    rows: list[DutySession],
+    *,
+    today: date | None = None,
+) -> tuple[list[DutySession], list[DutySession]]:
+    """Upcoming (asc) and completed (newest first) booked shifts."""
+    today = today or library_now().date()
+    upcoming = [row for row in rows if row.session_date >= today]
+    completed = [row for row in rows if row.session_date < today]
+    completed.reverse()
+    return upcoming, completed

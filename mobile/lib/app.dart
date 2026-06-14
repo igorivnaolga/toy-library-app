@@ -11,6 +11,7 @@ import "core/app_theme.dart";
 import "core/auth_store.dart";
 import "core/reminder_sync.dart";
 import "core/library_app_bar_title.dart";
+import "core/main_tab_navigation.dart";
 import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
 import "features/admin/admin_loans_screen.dart";
@@ -71,6 +72,7 @@ class ToyLibraryApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LoansController(client)),
         ChangeNotifierProvider(create: (_) => DutyController(client)),
         ChangeNotifierProvider(create: (_) => AdminController(client)),
+        ChangeNotifierProvider(create: (_) => MainTabNavigation()),
         ChangeNotifierProxyProvider2<BackendClient, AuthStore, ProfileController>(
           create: (context) => ProfileController(
             context.read<BackendClient>(),
@@ -129,6 +131,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   String _lastReminderSignature = "";
   bool _memberRemindersBootstrapped = false;
   String? _lastAuthUserId;
+  MainTabNavigation? _tabNav;
 
   @override
   void initState() {
@@ -137,11 +140,49 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncAdminNotifications();
       _bootstrapMemberReminders();
+      _attachTabNavigation();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _attachTabNavigation();
+  }
+
+  void _attachTabNavigation() {
+    final nav = context.read<MainTabNavigation>();
+    if (identical(_tabNav, nav)) return;
+    _tabNav?.removeListener(_onMainTabNavigation);
+    _tabNav = nav;
+    _tabNav!.addListener(_onMainTabNavigation);
+  }
+
+  void _onMainTabNavigation() {
+    if (!mounted) return;
+    final nav = _tabNav;
+    final tabIndex = nav?.pendingTabIndex;
+    if (nav == null || tabIndex == null) return;
+
+    final tabController = DefaultTabController.maybeOf(context);
+    if (tabController == null) return;
+
+    nav.pendingTabIndex = null;
+    final requestGeneration = nav.generation;
+
+    tabController.animateTo(tabIndex);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        if (!mounted) return;
+        if (nav.generation != requestGeneration) return;
+        nav.completeContactPaymentsScroll();
+      });
     });
   }
 
   @override
   void dispose() {
+    _tabNav?.removeListener(_onMainTabNavigation);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -155,6 +196,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     if (_lastAuthUserId == userId) return;
     _lastAuthUserId = userId;
     unawaited(context.read<CatalogController>().clearAllFilters());
+    context.read<MainTabNavigation>().reset();
   }
 
   @override
@@ -255,6 +297,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     final tabs = _tabsForRole(auth.role);
 
     return DefaultTabController(
+      key: ValueKey(auth.role),
       length: tabs.length,
       child: Builder(
         builder: (context) {
@@ -370,7 +413,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
           CatalogScreen(),
           AdminBookingsScreen(),
           AdminMembersScreen(),
-          AdminLoansScreen(),
+          AdminLoansScreen(refreshOnMainTabIndex: 3),
           AdminStatisticsScreen(),
         ];
       case AppRole.volunteer:

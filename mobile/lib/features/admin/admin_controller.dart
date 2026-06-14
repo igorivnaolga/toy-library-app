@@ -3,6 +3,7 @@ import "package:flutter/foundation.dart";
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../bookings/booking_models.dart";
+import "../duty/duty_session_models.dart";
 import "../payments/payment_models.dart";
 import "../loans/loan_models.dart";
 import "admin_models.dart";
@@ -354,6 +355,14 @@ class AdminController extends ChangeNotifier {
     return parseLoanList(json);
   }
 
+  Future<VolunteerDutySessionGroups> loadMemberDutySessions(
+    String userId,
+  ) async {
+    final json =
+        await _client.getJson("/api/v1/admin/users/$userId/duty-sessions");
+    return VolunteerDutySessionGroups.fromJson(json);
+  }
+
   Future<List<PaymentItem>> markMembershipPaid(
     String userId, {
     required String method,
@@ -374,6 +383,21 @@ class AdminController extends ChangeNotifier {
       {"method": method},
     );
     return PaymentItem.fromJson(json);
+  }
+
+  Future<List<PaymentItem>> markPaymentsPaid(
+    String userId, {
+    required List<String> paymentIds,
+    required String method,
+  }) async {
+    final json = await _client.postJson(
+      "/api/v1/payments/users/$userId/mark-payments-paid",
+      {
+        "method": method,
+        "payment_ids": paymentIds,
+      },
+    );
+    return parsePaymentList(json);
   }
 
   Future<PaymentItem> recordMemberTopUp(

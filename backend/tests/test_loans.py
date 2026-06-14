@@ -104,6 +104,142 @@ def test_check_out_from_booking_raises_when_not_pending() -> None:
     assert exc.value.code == "booking_not_checkoutable"
 
 
+def test_check_out_from_booking_rejects_early_pickup_without_admin_flag() -> None:
+    session = MagicMock()
+    booking_id = uuid.uuid4()
+    future = date(2099, 1, 1)
+    booking = SimpleNamespace(
+        id=booking_id,
+        status="pending",
+        pickup_date=future,
+        toy_id="T1",
+        user_id=uuid.uuid4(),
+        toy=None,
+    )
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_booking_by_id",
+            lambda _s, _id: booking,
+        )
+        with pytest.raises(LoanError) as exc:
+            check_out_from_booking(session, booking_id)
+    assert exc.value.code == "pickup_not_due"
+
+
+def test_check_out_from_booking_allows_early_pickup_when_flag_set() -> None:
+    from app.models.booking import BOOKING_STATUS_PENDING
+
+    session = MagicMock()
+    booking_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    future = date(2099, 1, 1)
+    toy = SimpleNamespace(toy_id="T1", status="In library", category_id=None)
+    booking = SimpleNamespace(
+        id=booking_id,
+        status=BOOKING_STATUS_PENDING,
+        pickup_date=future,
+        toy_id="T1",
+        user_id=user_id,
+        toy=toy,
+    )
+    created_loan = SimpleNamespace(id=uuid.uuid4())
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_booking_by_id",
+            lambda _s, _id: booking,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_active_loan_for_toy",
+            lambda _s, _toy: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.create_loan",
+            lambda _s, **kwargs: created_loan,
+        )
+        mp.setattr(
+            "app.services.loan_service.mark_booking_completed",
+            lambda _s, _b: booking,
+        )
+        mp.setattr(
+            "app.services.loan_service.create_rental_payment_for_loan",
+            lambda _s, _loan, _toy: SimpleNamespace(),
+        )
+        mp.setattr(
+            "app.services.loan_service._apply_checkout_payment",
+            lambda *_args, **_kwargs: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_loan_by_id",
+            lambda _s, _id: created_loan,
+        )
+        loan = check_out_from_booking(
+            session,
+            booking_id,
+            allow_early_pickup=True,
+        )
+    assert loan is created_loan
+    assert toy.status == "On loan"
+
+
+def test_check_out_from_booking_allows_reserved_toy_status() -> None:
+    from app.models.booking import BOOKING_STATUS_PENDING
+
+    session = MagicMock()
+    booking_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    toy = SimpleNamespace(toy_id="T1", status="Reserved", category_id=None)
+    booking = SimpleNamespace(
+        id=booking_id,
+        status=BOOKING_STATUS_PENDING,
+        pickup_date=date(2026, 5, 19),
+        toy_id="T1",
+        user_id=user_id,
+        toy=toy,
+    )
+    created_loan = SimpleNamespace(id=uuid.uuid4())
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_booking_by_id",
+            lambda _s, _id: booking,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_active_loan_for_toy",
+            lambda _s, _toy: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.library_now",
+            lambda: __import__("datetime").datetime(
+                2026, 5, 19, 10, 0, tzinfo=__import__("zoneinfo").ZoneInfo(
+                    "Pacific/Auckland"
+                )
+            ),
+        )
+        mp.setattr(
+            "app.services.loan_service.create_loan",
+            lambda _s, **kwargs: created_loan,
+        )
+        mp.setattr(
+            "app.services.loan_service.mark_booking_completed",
+            lambda _s, _b: booking,
+        )
+        mp.setattr(
+            "app.services.loan_service.create_rental_payment_for_loan",
+            lambda _s, _loan, _toy: SimpleNamespace(),
+        )
+        mp.setattr(
+            "app.services.loan_service._apply_checkout_payment",
+            lambda *_args, **_kwargs: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_loan_by_id",
+            lambda _s, _id: created_loan,
+        )
+        loan = check_out_from_booking(session, booking_id)
+    assert loan is created_loan
+
+
 def test_renew_loan_raises_when_renewals_exhausted() -> None:
     session = MagicMock()
     user_id = uuid.uuid4()

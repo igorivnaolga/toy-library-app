@@ -1,15 +1,84 @@
 import "package:flutter/material.dart";
+import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
+import "../../core/main_tab_navigation.dart";
 import "contact_links.dart";
 import "../payments/payment_instructions_card.dart";
 import "library_info_copy.dart";
 import "library_location_map.dart";
 
 /// Library welcome, map, hours, and contact details.
-class ContactScreen extends StatelessWidget {
-  const ContactScreen({super.key});
+class ContactScreen extends StatefulWidget {
+  const ContactScreen({
+    super.key,
+    this.scrollToPaymentsOnMount = false,
+  });
+
+  final bool scrollToPaymentsOnMount;
+
+  @override
+  State<ContactScreen> createState() => _ContactScreenState();
+}
+
+class _ContactScreenState extends State<ContactScreen> {
+  final _paymentsSectionKey = GlobalKey();
+  MainTabNavigation? _tabNav;
+  int _lastScrollToken = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.scrollToPaymentsOnMount) {
+        _scrollToPayments();
+        return;
+      }
+      final token = context.read<MainTabNavigation>().scrollPaymentsToken;
+      if (token > 0 && token > _lastScrollToken) {
+        _lastScrollToken = token;
+        _scrollToPayments();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<MainTabNavigation>();
+    if (!identical(_tabNav, nav)) {
+      _tabNav?.removeListener(_onMainTabNavigation);
+      _tabNav = nav;
+      _tabNav!.addListener(_onMainTabNavigation);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabNav?.removeListener(_onMainTabNavigation);
+    super.dispose();
+  }
+
+  void _onMainTabNavigation() {
+    if (!mounted || widget.scrollToPaymentsOnMount) return;
+    final token = _tabNav?.scrollPaymentsToken ?? 0;
+    if (token <= 0 || token == _lastScrollToken) return;
+    _lastScrollToken = token;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToPayments());
+  }
+
+  void _scrollToPayments() {
+    final target = _paymentsSectionKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.05,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,19 +154,22 @@ class ContactScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _ContactInfoCard(
-          icon: Icons.payments_outlined,
-          title: LibraryInfoCopy.paymentsTitle,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                LibraryInfoCopy.paymentsBody,
-                style: context.bodyText,
-              ),
-              const SizedBox(height: 12),
-              PaymentInstructionsCard(compact: true),
-            ],
+        KeyedSubtree(
+          key: _paymentsSectionKey,
+          child: _ContactInfoCard(
+            icon: Icons.payments_outlined,
+            title: LibraryInfoCopy.paymentsTitle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  LibraryInfoCopy.paymentsBody,
+                  style: context.bodyText,
+                ),
+                const SizedBox(height: 12),
+                PaymentInstructionsCard(compact: true),
+              ],
+            ),
           ),
         ),
       ],

@@ -202,6 +202,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
         final t = snapshot.data!;
         final theme = Theme.of(context);
         final colors = theme.colorScheme;
+        final photoCacheSize =
+            (200 * MediaQuery.of(context).devicePixelRatio).round();
         final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
         final myBooking = bookings.pendingBookingForToy(t.toyId);
         final myActiveLoan = t.availability == "on_loan"
@@ -303,6 +305,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                               toyPhotoUrl(t.toyId, photoFile: t.photoFile)!,
                               fit: BoxFit.contain,
                               filterQuality: FilterQuality.medium,
+                              cacheWidth: photoCacheSize,
+                              cacheHeight: photoCacheSize,
                               errorBuilder: (_, __, ___) => ToyPhotoPlaceholder(
                                 expand: true,
                                 borderRadius: 12,
@@ -405,6 +409,61 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   missingPieces: t.missingPieces,
                   canEdit: canEditPieces,
                   onSaved: _retry,
+                ),
+              ],
+              if (auth.isAdmin && t.hasAdminHolderInfo) ...[
+                const SizedBox(height: 12),
+                ToyDetailSectionCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const ToyDetailSectionTitle(title: "Member"),
+                      const SizedBox(height: 8),
+                      if (t.onLoanToName != null &&
+                          t.onLoanToName!.isNotEmpty) ...[
+                        ToyDetailMetaRow(
+                          label: "On loan to",
+                          value: t.onLoanToName!,
+                        ),
+                        if (t.onLoanToEmail != null &&
+                            t.onLoanToEmail!.isNotEmpty &&
+                            t.onLoanToEmail != t.onLoanToName)
+                          ToyDetailMetaRow(
+                            label: "Email",
+                            value: t.onLoanToEmail!,
+                          ),
+                        if (t.loanDueLabel != null &&
+                            t.loanDueLabel!.isNotEmpty)
+                          ToyDetailMetaRow(
+                            label: "Due back",
+                            value: t.loanDueLabel!,
+                          ),
+                      ],
+                      if (t.reservedByName != null &&
+                          t.reservedByName!.isNotEmpty) ...[
+                        if (t.onLoanToName != null &&
+                            t.onLoanToName!.isNotEmpty)
+                          const SizedBox(height: 12),
+                        ToyDetailMetaRow(
+                          label: "Reserved by",
+                          value: t.reservedByName!,
+                        ),
+                        if (t.reservedByEmail != null &&
+                            t.reservedByEmail!.isNotEmpty &&
+                            t.reservedByEmail != t.reservedByName)
+                          ToyDetailMetaRow(
+                            label: "Email",
+                            value: t.reservedByEmail!,
+                          ),
+                        if (t.reservationPickupLabel != null &&
+                            t.reservationPickupLabel!.isNotEmpty)
+                          ToyDetailMetaRow(
+                            label: "Pickup",
+                            value: t.reservationPickupLabel!,
+                          ),
+                      ],
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(height: 12),

@@ -36,6 +36,7 @@ from app.repositories.booking_repo import (
     get_pending_booking_for_toy,
     list_bookings_for_admin,
     list_bookings_for_user,
+    list_pending_bookings_for_user,
     list_pending_bookings_ready_for_checkout,
     list_pending_bookings_with_pickup,
     mark_booking_cancelled,
@@ -386,6 +387,15 @@ def list_pending_bookings_for_checkout_service(session: Session) -> list[Booking
     _run_booking_maintenance(session)
     today = library_now().date()
     return list_pending_bookings_ready_for_checkout(session, on_or_before=today)
+
+
+def list_pending_bookings_for_user_service(
+    session: Session,
+    user_id: uuid.UUID,
+) -> list[Booking]:
+    """Volunteer desk: all pending reservations for one member."""
+    _run_booking_maintenance(session)
+    return list_pending_bookings_for_user(session, user_id)
 
 
 def list_bookings_for_admin_service(

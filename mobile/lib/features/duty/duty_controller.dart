@@ -16,10 +16,14 @@ class DutyController extends ChangeNotifier {
   OnDutyStatus onDutyStatus = const OnDutyStatus(onDuty: false);
 
   bool loading = false;
+  bool loadingMore = false;
   String? error;
 
-  static const _pastHorizonDays = 28;
-  static const _futureHorizonDays = 28;
+  static const _initialPastDays = 28;
+  static const _initialFutureDays = 42;
+  static const _loadMoreChunkDays = 56;
+  static const _maxPastHorizonDays = 365;
+  static const _maxFutureHorizonDays = 365 * 2;
 
   DateTime? _loadedFrom;
   DateTime? _loadedTo;
@@ -27,42 +31,146 @@ class DutyController extends ChangeNotifier {
   /// Set after [jumpToDate]; consumed by [DutyScreen] to scroll the roster.
   String? scrollToSessionId;
 
-  Future<void> loadRoster() async {
-    final today = calendarDay(DateTime.now());
-    final from = today.subtract(const Duration(days: _pastHorizonDays));
-    final to = today.add(const Duration(days: _futureHorizonDays));
-    await _loadRange(from, to);
+  bool get canLoadMoreFuture {
+    if (_loadedTo == null) return false;
+    final cap = calendarDay(DateTime.now())
+        .add(const Duration(days: _maxFutureHorizonDays));
+    return _loadedTo!.isBefore(cap);
   }
 
-  Future<void> _loadRange(DateTime from, DateTime to) async {
+  bool get canLoadMorePast {
+    if (_loadedFrom == null) return false;
+    final cap = calendarDay(DateTime.now())
+        .subtract(const Duration(days: _maxPastHorizonDays));
+    return _loadedFrom!.isAfter(cap);
+  }
+
+  Future<void> loadRoster() async {
+    final today = calendarDay(DateTime.now());
+    final from = today.subtract(const Duration(days: _initialPastDays));
+    final to = today.add(const Duration(days: _initialFutureDays));
+    await _loadRange(from, to, replace: true);
+  }
+
+  Future<void> loadMoreFuture() async {
+    if (loading || loadingMore || !canLoadMoreFuture || _loadedTo == null) {
+      return;
+    }
+    final today = calendarDay(DateTime.now());
+    final cap = today.add(const Duration(days: _maxFutureHorizonDays));
+    var newTo = _loadedTo!.add(const Duration(days: _loadMoreChunkDays));
+    if (newTo.isAfter(cap)) {
+      newTo = cap;
+    }
+    if (!newTo.isAfter(_loadedTo!)) {
+      return;
+    }
+
+    loadingMore = true;
+    notifyListeners();
+    try {
+      final from = _loadedTo!.add(const Duration(days: 1));
+      await _fetchSessions(from, newTo, replace: false);
+      _loadedTo = newTo;
+    } on ApiException catch (e) {
+      error = _friendlyLoadMessage(e);
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      loadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMorePast() async {
+    if (loading || loadingMore || !canLoadMorePast || _loadedFrom == null) {
+      return;
+    }
+    final today = calendarDay(DateTime.now());
+    final cap = today.subtract(const Duration(days: _maxPastHorizonDays));
+    var newFrom = _loadedFrom!.subtract(const Duration(days: _loadMoreChunkDays));
+    if (newFrom.isBefore(cap)) {
+      newFrom = cap;
+    }
+    if (!newFrom.isBefore(_loadedFrom!)) {
+      return;
+    }
+
+    loadingMore = true;
+    notifyListeners();
+    try {
+      final to = _loadedFrom!.subtract(const Duration(days: 1));
+      await _fetchSessions(newFrom, to, replace: false);
+      _loadedFrom = newFrom;
+    } on ApiException catch (e) {
+      error = _friendlyLoadMessage(e);
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      loadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadRange(
+    DateTime from,
+    DateTime to, {
+    required bool replace,
+  }) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final sessionsJson = await _client.getJson(
-        "/api/v1/duty/sessions",
-        {
-          "from": formatApiDate(from),
-          "to": formatApiDate(to),
-        },
-      );
+      await _fetchSessions(from, to, replace: replace);
       final onDutyJson = await _client.getJson("/api/v1/duty/me/on-duty");
-      sessions = parseDutySessionList(sessionsJson);
       onDutyStatus = OnDutyStatus.fromJson(onDutyJson);
       _loadedFrom = calendarDay(from);
       _loadedTo = calendarDay(to);
       error = null;
     } on ApiException catch (e) {
       error = _friendlyLoadMessage(e);
-      sessions = [];
-      onDutyStatus = const OnDutyStatus(onDuty: false);
+      if (replace) {
+        sessions = [];
+        onDutyStatus = const OnDutyStatus(onDuty: false);
+        _loadedFrom = null;
+        _loadedTo = null;
+      }
     } catch (e) {
       error = e.toString();
-      sessions = [];
-      onDutyStatus = const OnDutyStatus(onDuty: false);
+      if (replace) {
+        sessions = [];
+        onDutyStatus = const OnDutyStatus(onDuty: false);
+        _loadedFrom = null;
+        _loadedTo = null;
+      }
     } finally {
       loading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _fetchSessions(
+    DateTime from,
+    DateTime to, {
+    required bool replace,
+  }) async {
+    final sessionsJson = await _client.getJson(
+      "/api/v1/duty/sessions",
+      {
+        "from": formatApiDate(from),
+        "to": formatApiDate(to),
+      },
+    );
+    final incoming = parseDutySessionList(sessionsJson);
+    if (replace) {
+      sessions = incoming;
+    } else {
+      final existingIds = sessions.map((s) => s.sessionId).toSet();
+      sessions = [
+        ...sessions,
+        ...incoming.where((s) => !existingIds.contains(s.sessionId)),
+      ];
+      sortDutySessions(sessions);
     }
   }
 
@@ -74,9 +182,21 @@ class DutyController extends ChangeNotifier {
         !day.isAfter(_loadedTo!)) {
       return;
     }
-    final from = day.subtract(const Duration(days: _pastHorizonDays));
-    final to = day.add(const Duration(days: _futureHorizonDays));
-    await _loadRange(from, to);
+    final from = day.subtract(const Duration(days: _initialPastDays));
+    final to = day.add(const Duration(days: _initialFutureDays));
+    loadingMore = true;
+    notifyListeners();
+    try {
+      await _fetchSessions(from, to, replace: false);
+      final fromDay = calendarDay(from);
+      final toDay = calendarDay(to);
+      _loadedFrom =
+          _loadedFrom == null || fromDay.isBefore(_loadedFrom!) ? fromDay : _loadedFrom;
+      _loadedTo = _loadedTo == null || toDay.isAfter(_loadedTo!) ? toDay : _loadedTo;
+    } finally {
+      loadingMore = false;
+      notifyListeners();
+    }
   }
 
   /// Loads roster if needed and requests scroll to the first slot on [date].
@@ -147,14 +267,15 @@ class DutyController extends ChangeNotifier {
     return updated;
   }
 
-  Future<DutySessionItem> bookSession(String sessionId) async {
+  Future<DutyBookResult> bookSession(String sessionId) async {
     final json =
         await _client.postJson("/api/v1/duty/sessions/$sessionId/book");
-    final updated = DutySessionItem.fromJson(json);
+    final result = DutyBookResult.fromJson(json);
+    final updated = result.session;
     _replaceSession(updated);
     onDutyStatus = await _fetchOnDutyStatus();
     notifyListeners();
-    return updated;
+    return result;
   }
 
   Future<DutySessionItem> cancelBooking(String sessionId) async {

@@ -13,6 +13,7 @@ from app.repositories.profile_repo import get_profile_by_id
 from app.schemas.payment import (
     MarkMembershipPaidIn,
     MarkPaymentPaidIn,
+    MarkPaymentsPaidIn,
     MemberBalanceSummaryOut,
     PaymentOut,
     PaymentsListResponse,
@@ -26,6 +27,7 @@ from app.services.payment_service import (
     list_user_payments_service,
     mark_all_membership_payments_paid,
     mark_payment_paid,
+    mark_payments_paid,
     record_top_up,
 )
 
@@ -38,7 +40,7 @@ def _http_error(exc: PaymentError) -> HTTPException:
     status = 400
     if exc.code == "payment_not_found":
         status = 404
-    elif exc.code in {"payment_not_pending", "no_pending_membership"}:
+    elif exc.code in {"payment_not_pending", "no_pending_membership", "no_payments_selected"}:
         status = 409
     return HTTPException(status_code=status, detail=exc.message)
 
@@ -104,6 +106,34 @@ def mark_payment_paid_endpoint(
     db.commit()
     db.refresh(payment)
     return payment_out_from_model(payment)
+
+
+@router.post("/users/{user_id}/mark-payments-paid", response_model=PaymentsListResponse)
+def mark_payments_paid_endpoint(
+    user_id: uuid.UUID,
+    body: MarkPaymentsPaidIn,
+    principal: Principal = Depends(_require_on_duty),
+    db: Session = Depends(get_db),
+) -> PaymentsListResponse:
+    profile = get_profile_by_id(db, user_id)
+    if profile is None or profile.role not in ("member", "volunteer"):
+        raise HTTPException(status_code=404, detail="Member not found")
+    try:
+        payments = mark_payments_paid(
+            db,
+            user_id,
+            body.payment_ids,
+            method=body.method,
+            recorded_by=principal.id,
+        )
+    except PaymentError as exc:
+        raise _http_error(exc) from exc
+    db.commit()
+    for payment in payments:
+        db.refresh(payment)
+    return PaymentsListResponse(
+        data=[payment_out_from_model(row) for row in payments],
+    )
 
 
 @router.post("/users/{user_id}/mark-membership-paid", response_model=PaymentsListResponse)
