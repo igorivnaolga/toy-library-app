@@ -24,6 +24,9 @@ class StatsOverviewOut(BaseModel):
     checkouts: int = Field(ge=0)
     returns: int = Field(ge=0)
     revenue_cents: int = Field(ge=0)
+    revenue_cash_cents: int = Field(ge=0)
+    revenue_eftpos_cents: int = Field(ge=0)
+    revenue_bank_cents: int = Field(ge=0)
     pending_revenue_cents: int = Field(ge=0)
     catalog_toys: int = Field(
         ge=0,

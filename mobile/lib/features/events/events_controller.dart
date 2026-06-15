@@ -33,6 +33,7 @@ class EventsController extends ChangeNotifier {
   bool _loadedAdmin = false;
   Future<void>? _loadInFlight;
   _LoadRequest? _loadInFlightRequest;
+  int _loadGeneration = 0;
 
   static const _initialPastDays = 14;
   static const _initialFutureDays = 90;
@@ -113,6 +114,7 @@ class EventsController extends ChangeNotifier {
     required bool admin,
     required bool replace,
   }) async {
+    final generation = _loadGeneration;
     loading = true;
     if (replace || events.isEmpty) {
       error = null;
@@ -127,6 +129,8 @@ class EventsController extends ChangeNotifier {
           "to": formatApiDate(to),
         },
       );
+      if (generation != _loadGeneration) return;
+
       final incoming = parseEventList(json);
       if (replace) {
         events = incoming;
@@ -142,19 +146,56 @@ class EventsController extends ChangeNotifier {
       _loadedAdmin = admin;
       error = null;
     } on ApiException catch (e) {
+      if (generation != _loadGeneration) return;
       error = e.message;
       if (replace && events.isEmpty) {
         events = [];
       }
     } catch (e) {
+      if (generation != _loadGeneration) return;
       error = eventLoadErrorMessage(e);
       if (replace && events.isEmpty) {
         events = [];
       }
     } finally {
-      loading = false;
-      notifyListeners();
+      if (generation == _loadGeneration) {
+        loading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  void _invalidateInFlightLoads() {
+    _loadGeneration++;
+    _loadInFlight = null;
+    _loadInFlightRequest = null;
+    loading = false;
+  }
+
+  void _ensureEventInLoadedRange(LibraryEventItem event) {
+    final start = calendarDay(event.eventDate);
+    final end = calendarDay(event.endDate);
+    if (_loadedFrom == null || _loadedTo == null) {
+      _loadedFrom = start.subtract(const Duration(days: _initialPastDays));
+      _loadedTo = end.add(const Duration(days: _initialFutureDays));
+      return;
+    }
+    if (start.isBefore(_loadedFrom!)) {
+      _loadedFrom = start.subtract(const Duration(days: _initialPastDays));
+    }
+    if (end.isAfter(_loadedTo!)) {
+      _loadedTo = end.add(const Duration(days: _initialFutureDays));
+    }
+  }
+
+  void _refreshScheduleDatesInBackground() {
+    final now = calendarDay(DateTime.now());
+    unawaited(
+      loadScheduleDates(
+        now.subtract(const Duration(days: 45)),
+        now.add(const Duration(days: 120)),
+      ),
+    );
   }
 
   Future<bool> jumpToDate(DateTime date, {bool? admin}) async {
@@ -256,13 +297,14 @@ class EventsController extends ChangeNotifier {
   Future<LibraryEventItem> createEvent(Map<String, dynamic> body) async {
     final json = await _client.postJson("/api/v1/admin/events", body);
     final event = LibraryEventItem.fromJson(json);
+    _invalidateInFlightLoads();
     final existing = events.where((e) => e.eventId != event.eventId).toList();
     events = [...existing, event]..sort(_sortEvents);
-    await loadScheduleDates(
-      calendarDay(DateTime.now()).subtract(const Duration(days: 45)),
-      calendarDay(DateTime.now()).add(const Duration(days: 120)),
-    );
+    _ensureEventInLoadedRange(event);
+    _loadedAdmin = true;
+    scrollToEventId = event.eventId;
     notifyListeners();
+    _refreshScheduleDatesInBackground();
     return event;
   }
 
@@ -272,21 +314,27 @@ class EventsController extends ChangeNotifier {
   ) async {
     final json = await _client.patchJson("/api/v1/admin/events/$eventId", body);
     final event = LibraryEventItem.fromJson(json);
+    _invalidateInFlightLoads();
+    _ensureEventInLoadedRange(event);
+    scrollToEventId = event.eventId;
     _replaceEvent(event);
+    _refreshScheduleDatesInBackground();
     return event;
   }
 
   Future<void> deleteEvent(String eventId) async {
     await _client.deleteJson("/api/v1/admin/events/$eventId");
+    _invalidateInFlightLoads();
     events = events.where((e) => e.eventId != eventId).toList();
     notifyListeners();
+    _refreshScheduleDatesInBackground();
   }
 
   void _replaceEvent(LibraryEventItem updated) {
     events = [
       for (final item in events)
         if (item.eventId == updated.eventId) updated else item,
-    ];
+    ]..sort(_sortEvents);
     notifyListeners();
   }
 

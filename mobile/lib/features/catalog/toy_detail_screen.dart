@@ -13,6 +13,7 @@ import "../bookings/booking_models.dart";
 import "../bookings/bookings_controller.dart";
 import "../bookings/pickup_date_flow.dart";
 import "../duty/duty_controller.dart";
+import "../loans/loan_models.dart";
 import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
@@ -159,11 +160,6 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
-    final bookings = context.watch<BookingsController>();
-    final loans = context.watch<LoansController>();
-    final duty = context.watch<DutyController>();
-    final canEditPieces =
-        auth.isAdmin || (auth.isVolunteer && duty.onDutyStatus.onDuty);
 
     return FutureBuilder<ToyItem>(
       future: _future,
@@ -206,10 +202,6 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
         final photoCacheSize =
             (200 * MediaQuery.of(context).devicePixelRatio).round();
         final hasPhotoName = t.photoFile != null && t.photoFile!.isNotEmpty;
-        final myBooking = bookings.pendingBookingForToy(t.toyId);
-        final myActiveLoan = t.availability == "on_loan"
-            ? loans.activeLoanForToy(t.toyId)
-            : null;
         final description = t.description?.trim().isNotEmpty == true
             ? t.description!.trim()
             : null;
@@ -273,24 +265,16 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
           ),
           bottomNavigationBar: auth.isAdmin
               ? null
-              : ToyDetailActionBar(
-            toy: t,
-            isLoggedIn: auth.isLoggedIn,
-            canBookToys: auth.canBookToys,
-            myBooking: myBooking,
-            myActiveLoan: myActiveLoan,
-            bookingInProgress: _bookingInProgress,
-            cancellingInProgress: _cancellingInProgress,
-            reschedulingInProgress: _reschedulingInProgress,
-            onSignIn: _signInToBook,
-            onBook: () => _startBookFlow(t),
-            onChangePickupDate: myBooking == null
-                ? () {}
-                : () => _changePickupDate(myBooking, t),
-            onCancelBooking: myBooking == null
-                ? () {}
-                : () => _cancelBooking(myBooking, t),
-          ),
+              : _ToyDetailMemberBar(
+                  toy: t,
+                  bookingInProgress: _bookingInProgress,
+                  cancellingInProgress: _cancellingInProgress,
+                  reschedulingInProgress: _reschedulingInProgress,
+                  onSignIn: _signInToBook,
+                  onBook: () => _startBookFlow(t),
+                  onChangePickupDate: (booking) => _changePickupDate(booking, t),
+                  onCancelBooking: (booking) => _cancelBooking(booking, t),
+                ),
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -345,9 +329,15 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ToyIdBadge(toyId: t.toyId, compact: false),
-                        ToyAvailabilityBadge(
-                          availability: t.availability,
-                          isMyLoan: myActiveLoan != null,
+                        Selector<LoansController, bool>(
+                          selector: (_, controller) =>
+                              t.availability == "on_loan" &&
+                              controller.activeLoanForToy(t.toyId) != null,
+                          builder: (context, isMyLoan, _) =>
+                              ToyAvailabilityBadge(
+                            availability: t.availability,
+                            isMyLoan: isMyLoan,
+                          ),
                         ),
                       ],
                     ),
@@ -404,13 +394,20 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
               ),
               if (showPieceBreakdown) ...[
                 const SizedBox(height: 12),
-                ToyDetailPiecesSection(
-                  toyId: t.toyId,
-                  pieceLines: t.pieceLines,
-                  totalPieces: t.totalPieces,
-                  missingPieces: t.missingPieces,
-                  canEdit: canEditPieces,
-                  onSaved: _retry,
+                Selector<DutyController, bool>(
+                  selector: (_, controller) => controller.onDutyStatus.onDuty,
+                  builder: (context, onDuty, _) {
+                    final canEdit =
+                        auth.isAdmin || (auth.isVolunteer && onDuty);
+                    return ToyDetailPiecesSection(
+                      toyId: t.toyId,
+                      pieceLines: t.pieceLines,
+                      totalPieces: t.totalPieces,
+                      missingPieces: t.missingPieces,
+                      canEdit: canEdit,
+                      onSaved: _retry,
+                    );
+                  },
                 ),
               ],
               if (auth.isAdmin && t.hasAdminHolderInfo) ...[
@@ -488,6 +485,60 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ToyDetailMemberBar extends StatelessWidget {
+  const _ToyDetailMemberBar({
+    required this.toy,
+    required this.bookingInProgress,
+    required this.cancellingInProgress,
+    required this.reschedulingInProgress,
+    required this.onSignIn,
+    required this.onBook,
+    required this.onChangePickupDate,
+    required this.onCancelBooking,
+  });
+
+  final ToyItem toy;
+  final bool bookingInProgress;
+  final bool cancellingInProgress;
+  final bool reschedulingInProgress;
+  final VoidCallback onSignIn;
+  final VoidCallback onBook;
+  final ValueChanged<BookingItem> onChangePickupDate;
+  final ValueChanged<BookingItem> onCancelBooking;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthStore>();
+    final myBooking = context.select<BookingsController, BookingItem?>(
+      (controller) => controller.pendingBookingForToy(toy.toyId),
+    );
+    final myActiveLoan = toy.availability == "on_loan"
+        ? context.select<LoansController, LoanItem?>(
+            (controller) => controller.activeLoanForToy(toy.toyId),
+          )
+        : null;
+
+    return ToyDetailActionBar(
+      toy: toy,
+      isLoggedIn: auth.isLoggedIn,
+      canBookToys: auth.canBookToys,
+      myBooking: myBooking,
+      myActiveLoan: myActiveLoan,
+      bookingInProgress: bookingInProgress,
+      cancellingInProgress: cancellingInProgress,
+      reschedulingInProgress: reschedulingInProgress,
+      onSignIn: onSignIn,
+      onBook: onBook,
+      onChangePickupDate: myBooking == null
+          ? () {}
+          : () => onChangePickupDate(myBooking),
+      onCancelBooking: myBooking == null
+          ? () {}
+          : () => onCancelBooking(myBooking),
     );
   }
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, or_, select
@@ -149,6 +150,79 @@ def list_pending_payments(
         .order_by(Payment.created_at.asc())
     )
     return list(session.scalars(stmt).all())
+
+
+def list_pending_payments_for_users(
+    session: Session,
+    user_ids: Iterable[uuid.UUID],
+) -> dict[uuid.UUID, list[Payment]]:
+    ids = list(user_ids)
+    if not ids:
+        return {}
+    stmt = (
+        select(Payment)
+        .where(
+            Payment.user_id.in_(ids),
+            Payment.status == PAYMENT_STATUS_PENDING,
+        )
+        .order_by(Payment.created_at.asc())
+    )
+    grouped: dict[uuid.UUID, list[Payment]] = {uid: [] for uid in ids}
+    for payment in session.scalars(stmt).all():
+        grouped[payment.user_id].append(payment)
+    return grouped
+
+
+def _credit_grant_filter():
+    return or_(
+        and_(
+            Payment.payment_type == PAYMENT_TYPE_TOP_UP,
+            Payment.status.in_(TOP_UP_PAID_STATUSES),
+        ),
+        and_(
+            Payment.payment_type == PAYMENT_TYPE_VOLUNTEER_CREDIT,
+            Payment.status == PAYMENT_STATUS_GRANTED,
+        ),
+    )
+
+
+def sum_credit_grants_by_user(
+    session: Session,
+    user_ids: Iterable[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    ids = list(user_ids)
+    if not ids:
+        return {}
+    stmt = (
+        select(
+            Payment.user_id,
+            func.coalesce(func.sum(Payment.amount_cents), 0),
+        )
+        .where(Payment.user_id.in_(ids), _credit_grant_filter())
+        .group_by(Payment.user_id)
+    )
+    return {row[0]: int(row[1]) for row in session.execute(stmt).all()}
+
+
+def sum_credit_applied_by_user(
+    session: Session,
+    user_ids: Iterable[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    ids = list(user_ids)
+    if not ids:
+        return {}
+    stmt = (
+        select(
+            Payment.user_id,
+            func.coalesce(func.sum(Payment.amount_cents), 0),
+        )
+        .where(
+            Payment.user_id.in_(ids),
+            Payment.status == PAYMENT_STATUS_PAID_CREDIT,
+        )
+        .group_by(Payment.user_id)
+    )
+    return {row[0]: int(row[1]) for row in session.execute(stmt).all()}
 
 
 def list_pending_membership_payments(

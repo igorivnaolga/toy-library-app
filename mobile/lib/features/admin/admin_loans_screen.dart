@@ -628,64 +628,90 @@ class _CheckOutTabState extends State<_CheckOutTab> {
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
-          child: ListView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
-              DeskWalkInPanel(
-                loading: c.deskLoading,
-                allowEarlyReservationCheckout: true,
-                onDraftChanged: (active) {
-                  if (_walkInDraft != active) {
-                    setState(() => _walkInDraft = active);
-                  }
-                },
-                onCheckedOut: () {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Walk-in toy checked out")),
-                  );
-                },
-                onCheckOutReservations: widget.onCheckOutReservations,
-                onOpenToy: widget.onOpenToy,
-              ),
-              const SizedBox(height: 16),
-              if (today.isEmpty && earlier.isEmpty && !_walkInDraft) ...[
-                const Center(
-                  child: Text(
-                    "No reservations ready for checkout.",
-                    textAlign: TextAlign.center,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                sliver: SliverToBoxAdapter(
+                  child: DeskWalkInPanel(
+                    loading: c.deskLoading,
+                    allowEarlyReservationCheckout: true,
+                    onDraftChanged: (active) {
+                      if (_walkInDraft != active) {
+                        setState(() => _walkInDraft = active);
+                      }
+                    },
+                    onCheckedOut: () {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Walk-in toy checked out")),
+                      );
+                    },
+                    onCheckOutReservations: widget.onCheckOutReservations,
+                    onOpenToy: widget.onOpenToy,
                   ),
                 ),
-                const SizedBox(height: 16),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              if (today.isEmpty && earlier.isEmpty && !_walkInDraft) ...[
+                const SliverToBoxAdapter(
+                  child: Center(
+                    child: Text(
+                      "No reservations ready for checkout.",
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
               ],
               if (today.isNotEmpty) ...[
-                const SectionHeader("Today's reservations"),
-                for (var i = 0; i < today.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _CheckoutTile(
-                    booking: today[i],
-                    loading: c.deskLoading,
-                    onOpen: () => widget.onOpenToy(today[i].toyId),
-                    onCheckOut: () =>
-                        widget.onCheckOutReservations([today[i]]),
+                const SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverToBoxAdapter(
+                    child: SectionHeader("Today's reservations"),
                   ),
-                ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  sliver: SliverList.separated(
+                    itemCount: today.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _CheckoutTile(
+                      key: ValueKey(today[i].bookingId),
+                      booking: today[i],
+                      loading: c.deskLoading,
+                      onOpen: () => widget.onOpenToy(today[i].toyId),
+                      onCheckOut: () =>
+                          widget.onCheckOutReservations([today[i]]),
+                    ),
+                  ),
+                ),
               ],
               if (today.isNotEmpty && earlier.isNotEmpty)
-                const SizedBox(height: 20),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
               if (earlier.isNotEmpty) ...[
-                const SectionHeader("Ready for checkout"),
-                for (var i = 0; i < earlier.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _CheckoutTile(
-                    booking: earlier[i],
-                    loading: c.deskLoading,
-                    onOpen: () => widget.onOpenToy(earlier[i].toyId),
-                    onCheckOut: () =>
-                        widget.onCheckOutReservations([earlier[i]]),
+                const SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverToBoxAdapter(
+                    child: SectionHeader("Ready for checkout"),
                   ),
-                ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  sliver: SliverList.separated(
+                    itemCount: earlier.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _CheckoutTile(
+                      key: ValueKey(earlier[i].bookingId),
+                      booking: earlier[i],
+                      loading: c.deskLoading,
+                      onOpen: () => widget.onOpenToy(earlier[i].toyId),
+                      onCheckOut: () =>
+                          widget.onCheckOutReservations([earlier[i]]),
+                    ),
+                  ),
+                ),
               ],
             ],
           ),
@@ -752,69 +778,92 @@ class _CheckInTabState extends State<_CheckInTab> {
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
-          child: ListView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
+            slivers: [
               if (kDeskToyIdScanEnabled && widget.enableToyIdScan) ...[
-                AdminCvScanPanel(onToyIdScanned: widget.onToyIdScanned),
-                const SizedBox(height: 16),
-              ],
-              if (all.isNotEmpty && !hasDeskFilters) ...[
-                TextField(
-                  controller: _searchController,
-                  style: fieldTextStyle(context),
-                  cursorColor: fieldCursorColor(context),
-                  textInputAction: TextInputAction.search,
-                  decoration: searchInputDecoration(
-                    context,
-                    hintText: "Search by member, toy or ID",
-                    suffixIcon: searchClearSuffix(
-                      context,
-                      visible: _query.isNotEmpty,
-                      onClear: () {
-                        _searchController.clear();
-                        setState(() => _query = "");
-                      },
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: AdminCvScanPanel(
+                      onToyIdScanned: widget.onToyIdScanned,
                     ),
                   ),
-                  onChanged: (value) => setState(() => _query = value),
                 ),
-                const SizedBox(height: 12),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
               ],
+              if (all.isNotEmpty && !hasDeskFilters)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: TextField(
+                      controller: _searchController,
+                      style: fieldTextStyle(context),
+                      cursorColor: fieldCursorColor(context),
+                      textInputAction: TextInputAction.search,
+                      decoration: searchInputDecoration(
+                        context,
+                        hintText: "Search by member, toy or ID",
+                        suffixIcon: searchClearSuffix(
+                          context,
+                          visible: _query.isNotEmpty,
+                          onClear: () {
+                            _searchController.clear();
+                            setState(() => _query = "");
+                          },
+                        ),
+                      ),
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
+                  ),
+                ),
+              if (all.isNotEmpty && !hasDeskFilters)
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
               if (all.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      c.deskError ??
-                          (c.deskLoading
-                              ? "Loading loans…"
-                              : "No toys currently on loan."),
-                      textAlign: TextAlign.center,
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        c.deskError ??
+                            (c.deskLoading
+                                ? "Loading loans…"
+                                : "No toys currently on loan."),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
                 )
               else if (filtered.isEmpty)
-                Center(
-                  child: Text(
-                    hasDeskFilters
-                        ? "No toys on loan for this member on this due date."
-                        : 'No toys match "${_query.trim()}".',
-                    textAlign: TextAlign.center,
+                SliverToBoxAdapter(
+                  child: Center(
+                    child: Text(
+                      hasDeskFilters
+                          ? "No toys on loan for this member on this due date."
+                          : 'No toys match "${_query.trim()}".',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 )
               else ...[
-                const SectionHeader("On loan"),
-                for (var i = 0; i < filtered.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _CheckInTile(
-                    loan: filtered[i],
-                    loading: c.deskLoading,
-                    onOpen: () => widget.onOpenToy(filtered[i].toyId),
-                    onCheckIn: () => widget.onCheckIn(filtered[i]),
+                const SliverPadding(
+                  padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  sliver: SliverToBoxAdapter(child: SectionHeader("On loan")),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  sliver: SliverList.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _CheckInTile(
+                      key: ValueKey(filtered[i].loanId),
+                      loan: filtered[i],
+                      loading: c.deskLoading,
+                      onOpen: () => widget.onOpenToy(filtered[i].toyId),
+                      onCheckIn: () => widget.onCheckIn(filtered[i]),
+                    ),
                   ),
-                ],
+                ),
               ],
             ],
           ),
@@ -826,6 +875,7 @@ class _CheckInTabState extends State<_CheckInTab> {
 
 class _CheckoutTile extends StatelessWidget {
   const _CheckoutTile({
+    super.key,
     required this.booking,
     required this.loading,
     required this.onOpen,
@@ -919,6 +969,7 @@ class _CheckoutTile extends StatelessWidget {
 
 class _CheckInTile extends StatelessWidget {
   const _CheckInTile({
+    super.key,
     required this.loan,
     required this.loading,
     required this.onOpen,

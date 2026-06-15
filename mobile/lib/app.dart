@@ -150,19 +150,37 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   String _lastReminderSignature = "";
   bool _memberRemindersBootstrapped = false;
   String? _lastAuthUserId;
+  BookingsController? _bookingsController;
+  LoansController? _loansController;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachReminderListeners();
       _syncAdminNotifications();
       _bootstrapMemberReminders();
     });
   }
 
+  void _attachReminderListeners() {
+    if (!mounted) return;
+    _bookingsController = context.read<BookingsController>();
+    _loansController = context.read<LoansController>();
+    _bookingsController!.addListener(_onReminderDataChanged);
+    _loansController!.addListener(_onReminderDataChanged);
+  }
+
+  void _onReminderDataChanged() {
+    if (!mounted) return;
+    _syncMemberRemindersIfChanged(context.read<AuthStore>());
+  }
+
   @override
   void dispose() {
+    _bookingsController?.removeListener(_onReminderDataChanged);
+    _loansController?.removeListener(_onReminderDataChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -275,8 +293,6 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
-    context.watch<BookingsController>();
-    context.watch<LoansController>();
     _syncMemberRemindersIfChanged(auth);
     _syncCatalogForAuthChange(auth);
     final tabs = _tabsForRole(auth.role);

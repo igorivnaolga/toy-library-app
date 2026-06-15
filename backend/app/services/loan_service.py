@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.availability import AVAILABLE, RESERVED, normalize_availability
@@ -22,6 +23,7 @@ from app.models.toy import Toy
 from app.repositories.booking_repo import (
     get_booking_by_id,
     get_pending_booking_for_toy,
+    get_pending_bookings_for_toys,
     mark_booking_completed,
 )
 from app.repositories.loan_repo import (
@@ -123,6 +125,47 @@ def renewals_remaining_for_loan(
     if pending is not None and pending.user_id != loan.user_id:
         return 0
     return remaining
+
+
+def renewal_context_for_loans(
+    session: Session,
+    loans: list[Loan],
+) -> dict[uuid.UUID, tuple[int | None, int | None]]:
+    """Batch max_renewals and renewals_remaining keyed by loan id."""
+    if not loans:
+        return {}
+    pending_by_toy = get_pending_bookings_for_toys(
+        session,
+        [loan.toy_id for loan in loans],
+    )
+    category_ids = {
+        loan.toy.category_id
+        for loan in loans
+        if loan.toy is not None and loan.toy.category_id is not None
+    }
+    max_by_category: dict[uuid.UUID, int | None] = {}
+    if category_ids:
+        for category in session.scalars(
+            select(Category).where(Category.id.in_(category_ids))
+        ).all():
+            max_by_category[category.id] = category.max_renewals
+
+    context: dict[uuid.UUID, tuple[int | None, int | None]] = {}
+    for loan in loans:
+        max_renewals: int | None = None
+        toy = loan.toy
+        if toy is not None and toy.category_id is not None:
+            max_renewals = max_by_category.get(toy.category_id)
+
+        renewals_remaining: int | None = None
+        if max_renewals is not None:
+            renewals_remaining = max(0, max_renewals - loan.renewal_count)
+            pending = pending_by_toy.get(loan.toy_id)
+            if pending is not None and pending.user_id != loan.user_id:
+                renewals_remaining = 0
+
+        context[loan.id] = (max_renewals, renewals_remaining)
+    return context
 
 
 def _max_renewals_for_toy(session: Session, toy: Toy) -> int:

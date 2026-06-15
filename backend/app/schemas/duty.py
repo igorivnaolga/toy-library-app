@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.models.duty_session import DutySession
-from app.utils.text import visible_member_name
 
 
 class DutySessionCreate(BaseModel):
@@ -91,18 +91,53 @@ class DeskMembersResponse(BaseModel):
     data: list[DeskMemberOut]
 
 
-def duty_session_out_from_model(row: DutySession, db: Session | None = None) -> DutySessionOut:
+def _volunteer_ids(rows: list[DutySession]) -> set[uuid.UUID]:
+    return {row.volunteer_id for row in rows if row.volunteer_id is not None}
+
+
+def duty_sessions_out_from_models(
+    rows: list[DutySession],
+    db: Session | None = None,
+) -> list[DutySessionOut]:
+    """Build duty session responses with batched profile name/email lookup."""
+    display_map: dict[uuid.UUID, tuple[str, str]] = {}
+    if db is not None:
+        from app.repositories.profile_repo import get_user_display_map
+
+        display_map = get_user_display_map(db, _volunteer_ids(rows))
+    return [
+        duty_session_out_from_model(row, db, display_map=display_map)
+        for row in rows
+    ]
+
+
+def duty_session_out_from_model(
+    row: DutySession,
+    db: Session | None = None,
+    *,
+    display_map: dict[uuid.UUID, tuple[str, str]] | None = None,
+) -> DutySessionOut:
     volunteer_name = None
     volunteer_email = None
     if row.volunteer_id is not None:
-        profile_name = None
-        if row.volunteer is not None and row.volunteer.full_name:
-            profile_name = row.volunteer.full_name.strip() or None
-        if db is not None:
-            from app.repositories.profile_repo import get_user_email
+        full_name = ""
+        email = ""
+        if display_map is not None:
+            full_name, email = display_map.get(row.volunteer_id, ("", ""))
+        elif db is not None:
+            from app.repositories.profile_repo import get_user_display_map
 
-            volunteer_email = get_user_email(db, row.volunteer_id)
-        volunteer_name = visible_member_name(profile_name, volunteer_email)
+            full_name, email = get_user_display_map(db, {row.volunteer_id}).get(
+                row.volunteer_id,
+                ("", ""),
+            )
+        elif row.volunteer is not None and row.volunteer.full_name:
+            full_name = row.volunteer.full_name
+
+        cleaned_name = (full_name or "").strip()
+        volunteer_name = cleaned_name or None
+        cleaned_email = (email or "").strip()
+        volunteer_email = cleaned_email or None
     return DutySessionOut(
         session_id=str(row.id),
         session_date=row.session_date,

@@ -28,6 +28,7 @@ from app.services.loan_service import (
     check_out_walk_in as check_out_walk_in_service,
     list_active_loans_service,
     list_my_loans_service,
+    renewal_context_for_loans,
     renew_loan_for_user,
     renewals_remaining_for_loan,
 )
@@ -85,7 +86,17 @@ def list_my_loans(
     active_only: bool = Query(False, description="Return only active loans."),
 ) -> LoansListResponse:
     rows = list_my_loans_service(db, principal.id, active_only=active_only)
-    return LoansListResponse(data=[_loan_out(db, row) for row in rows])
+    renewal = renewal_context_for_loans(db, rows)
+    return LoansListResponse(
+        data=[
+            loan_out_from_model(
+                row,
+                max_renewals=renewal[row.id][0],
+                renewals_remaining=renewal[row.id][1],
+            )
+            for row in rows
+        ]
+    )
 
 
 @router.get("/active", response_model=LoansListResponse)

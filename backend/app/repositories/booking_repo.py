@@ -14,6 +14,7 @@ from app.models.booking import (
     BOOKING_STATUS_PENDING,
     Booking,
 )
+from app.repositories.profile_repo import get_user_display_map
 from app.models.profile import Profile
 from app.models.toy import Toy
 
@@ -173,6 +174,23 @@ def get_pending_booking_for_toy(session: Session, toy_id: str) -> Booking | None
     )
 
 
+def get_pending_bookings_for_toys(
+    session: Session,
+    toy_ids: list[str],
+) -> dict[str, Booking]:
+    """Batch load pending bookings keyed by toy_id."""
+    if not toy_ids:
+        return {}
+    unique_ids = list(dict.fromkeys(toy_ids))
+    rows = session.scalars(
+        select(Booking).where(
+            Booking.toy_id.in_(unique_ids),
+            Booking.status == BOOKING_STATUS_PENDING,
+        )
+    ).all()
+    return {row.toy_id: row for row in rows}
+
+
 def mark_booking_cancelled(session: Session, booking: Booking) -> Booking:
     booking.status = BOOKING_STATUS_CANCELLED
     booking.cancelled_at = datetime.now(timezone.utc)
@@ -245,12 +263,10 @@ def list_bookings_for_admin(
         )
     stmt = stmt.limit(limit)
     rows = session.scalars(stmt).unique().all()
+    display_map = get_user_display_map(session, {booking.user_id for booking in rows})
     out: list[tuple[Booking, str | None]] = []
     for booking in rows:
-        email_row = session.execute(
-            text("select email::text from auth.users where id = :id"),
-            {"id": booking.user_id},
-        ).scalar_one_or_none()
-        email = str(email_row).strip() if email_row else None
+        info = display_map.get(booking.user_id)
+        email = info[1].strip() if info and info[1] else None
         out.append((booking, email or None))
     return out

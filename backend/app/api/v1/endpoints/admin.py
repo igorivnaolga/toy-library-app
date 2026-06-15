@@ -60,6 +60,7 @@ from app.schemas.duty import (
     DutySessionOut,
     VolunteerDutyProfileOut,
     duty_session_out_from_model,
+    duty_sessions_out_from_models,
 )
 from app.schemas.notification import MemberPushRemindersResult
 from app.models.category import Category
@@ -159,7 +160,7 @@ def todays_duty_shifts(
     """Booked duty shifts today that still need admin confirmation."""
     rows = list_todays_unconfirmed_duty_sessions(db)
     return TodaysDutyShiftsOut(
-        data=[duty_session_out_from_model(row, db) for row in rows],
+        data=duty_sessions_out_from_models(rows, db),
     )
 
 
@@ -329,8 +330,8 @@ def _admin_volunteer_duty_profile_out(
     rows = list_volunteer_booked_duty_sessions(db, volunteer_id)
     upcoming, completed = split_volunteer_duty_sessions(rows)
     return VolunteerDutyProfileOut(
-        upcoming=[duty_session_out_from_model(row, db) for row in upcoming],
-        completed=[duty_session_out_from_model(row, db) for row in completed],
+        upcoming=duty_sessions_out_from_models(upcoming, db),
+        completed=duty_sessions_out_from_models(completed, db),
     )
 
 

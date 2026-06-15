@@ -24,7 +24,9 @@ class ToyCatalogListTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final category = toy.category?.trim();
     final isMyLoan = toy.availability == "on_loan" &&
-        context.watch<LoansController>().activeLoanForToy(toy.toyId) != null;
+        context.select<LoansController, bool>(
+          (controller) => controller.activeLoanForToy(toy.toyId) != null,
+        );
 
     return Material(
       color: colors.surfaceContainerLowest,

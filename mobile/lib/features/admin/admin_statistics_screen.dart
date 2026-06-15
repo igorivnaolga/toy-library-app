@@ -690,6 +690,70 @@ class _OverviewGrid extends StatelessWidget {
     );
   }
 
+  void _openRevenueBreakdown(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final rows = revenueBreakdownRows(overview);
+        return AlertDialog(
+          title: const Text("Revenue breakdown"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                periodLabel,
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        rows[i].label,
+                        style: context.bodyText,
+                      ),
+                    ),
+                    Text(
+                      formatRevenueCents(rows[i].cents),
+                      style: context.bodyText.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const Divider(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Total",
+                      style: context.cardTitle.copyWith(fontSize: 15),
+                    ),
+                  ),
+                  Text(
+                    formatRevenueCents(overview.revenueCents),
+                    style: context.cardTitle.copyWith(fontSize: 15),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: brandFilledButtonStyle(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final boundedPeriod = overview.period != "all";
@@ -705,6 +769,8 @@ class _OverviewGrid extends StatelessWidget {
       _StatCard(
         label: "Revenue",
         value: formatRevenueCents(overview.revenueCents),
+        onTap: () => _openRevenueBreakdown(context),
+        hint: "View breakdown",
       ),
       _StatCard(
         label: boundedPeriod ? "Toys loaned" : "Catalog toys",

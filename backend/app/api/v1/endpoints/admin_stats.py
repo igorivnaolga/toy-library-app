@@ -69,6 +69,9 @@ def admin_stats_overview(
         checkouts=overview.checkouts,
         returns=overview.returns,
         revenue_cents=overview.revenue_cents,
+        revenue_cash_cents=overview.revenue_cash_cents,
+        revenue_eftpos_cents=overview.revenue_eftpos_cents,
+        revenue_bank_cents=overview.revenue_bank_cents,
         pending_revenue_cents=overview.pending_revenue_cents,
         catalog_toys=overview.catalog_toys,
     )

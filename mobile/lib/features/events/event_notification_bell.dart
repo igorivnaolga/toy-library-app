@@ -7,6 +7,7 @@ import "../../core/auth_store.dart";
 import "../../core/notification_bell_ack.dart";
 import "events_controller.dart";
 import "events_section.dart";
+import "event_models.dart";
 
 /// Member/volunteer bell badge until first open; includes pending volunteer approval.
 int memberNotificationBadgeCount({
@@ -65,7 +66,9 @@ class _EventNotificationBellState extends State<EventNotificationBell> {
   Widget build(BuildContext context) {
     final ack = context.watch<NotificationBellAckStore>();
     final auth = context.watch<AuthStore>();
-    final availability = context.watch<EventsController>().availability;
+    final availability = context.select<EventsController, EventAvailability>(
+      (controller) => controller.availability,
+    );
     final count = memberNotificationBadgeCount(
       ack: ack,
       availableEventSlots: availability.availableSlots,

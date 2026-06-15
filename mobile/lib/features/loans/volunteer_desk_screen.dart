@@ -181,72 +181,106 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
 
         return RefreshIndicator(
           onRefresh: c.loadVolunteerDesk,
-          child: ListView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
-              DeskWalkInPanel(
-                loading: c.deskLoading,
-                onDraftChanged: (active) {
-                  if (_walkInDraft != active) {
-                    setState(() => _walkInDraft = active);
-                  }
-                },
-                onCheckedOut: _walkInCheckedOut,
-                onCheckOutReservations: _checkOutReservations,
-                onOpenToy: _openToy,
-              ),
-              const SizedBox(height: 16),
-              if (empty) ...[
-                const Center(
-                  child: Text(
-                    "No reservations or loans on the desk right now.",
-                    textAlign: TextAlign.center,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                sliver: SliverToBoxAdapter(
+                  child: DeskWalkInPanel(
+                    loading: c.deskLoading,
+                    onDraftChanged: (active) {
+                      if (_walkInDraft != active) {
+                        setState(() => _walkInDraft = active);
+                      }
+                    },
+                    onCheckedOut: _walkInCheckedOut,
+                    onCheckOutReservations: _checkOutReservations,
+                    onOpenToy: _openToy,
                   ),
                 ),
-                const SizedBox(height: 16),
-              ],
-              if (today.isNotEmpty) ...[
-                const SectionHeader("Today's reservations"),
-                for (var i = 0; i < today.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _PendingCheckoutTile(
-                    booking: today[i],
-                    loading: c.deskLoading,
-                    onOpen: () => _openToy(today[i].toyId),
-                    onCheckOut: () => _checkOut(today[i]),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              if (empty)
+                const SliverToBoxAdapter(
+                  child: Center(
+                    child: Text(
+                      "No reservations or loans on the desk right now.",
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                ],
+                ),
+              if (empty) const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              if (today.isNotEmpty) ...[
+                const SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverToBoxAdapter(
+                    child: SectionHeader("Today's reservations"),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                  sliver: SliverList.separated(
+                    itemCount: today.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _PendingCheckoutTile(
+                      key: ValueKey(today[i].bookingId),
+                      booking: today[i],
+                      loading: c.deskLoading,
+                      onOpen: () => _openToy(today[i].toyId),
+                      onCheckOut: () => _checkOut(today[i]),
+                    ),
+                  ),
+                ),
               ],
               if (today.isNotEmpty && earlier.isNotEmpty)
-                const SizedBox(height: 20),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
               if (earlier.isNotEmpty) ...[
-                const SectionHeader("Ready for checkout"),
-                for (var i = 0; i < earlier.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _PendingCheckoutTile(
-                    booking: earlier[i],
-                    loading: c.deskLoading,
-                    onOpen: () => _openToy(earlier[i].toyId),
-                    onCheckOut: () => _checkOut(earlier[i]),
+                const SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverToBoxAdapter(
+                    child: SectionHeader("Ready for checkout"),
                   ),
-                ],
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                  sliver: SliverList.separated(
+                    itemCount: earlier.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _PendingCheckoutTile(
+                      key: ValueKey(earlier[i].bookingId),
+                      booking: earlier[i],
+                      loading: c.deskLoading,
+                      onOpen: () => _openToy(earlier[i].toyId),
+                      onCheckOut: () => _checkOut(earlier[i]),
+                    ),
+                  ),
+                ),
               ],
               if ((today.isNotEmpty || earlier.isNotEmpty) &&
                   c.activeLoans.isNotEmpty)
-                const SizedBox(height: 20),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
               if (c.activeLoans.isNotEmpty) ...[
-                const SectionHeader("On loan"),
-                for (var i = 0; i < c.activeLoans.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _ActiveLoanDeskTile(
-                    loan: c.activeLoans[i],
-                    loading: c.deskLoading,
-                    onOpen: () => _openToy(c.activeLoans[i].toyId),
-                    onCheckIn: () => _checkIn(c.activeLoans[i]),
+                const SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  sliver: SliverToBoxAdapter(child: SectionHeader("On loan")),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  sliver: SliverList.separated(
+                    itemCount: c.activeLoans.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) => _ActiveLoanDeskTile(
+                      key: ValueKey(c.activeLoans[i].loanId),
+                      loan: c.activeLoans[i],
+                      loading: c.deskLoading,
+                      onOpen: () => _openToy(c.activeLoans[i].toyId),
+                      onCheckIn: () => _checkIn(c.activeLoans[i]),
+                    ),
                   ),
-                ],
-              ],
+                ),
+              ] else
+                const SliverPadding(padding: EdgeInsets.only(bottom: 12)),
             ],
           ),
         );
@@ -257,6 +291,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
 
 class _PendingCheckoutTile extends StatelessWidget {
   const _PendingCheckoutTile({
+    super.key,
     required this.booking,
     required this.loading,
     required this.onOpen,
@@ -346,6 +381,7 @@ class _PendingCheckoutTile extends StatelessWidget {
 
 class _ActiveLoanDeskTile extends StatelessWidget {
   const _ActiveLoanDeskTile({
+    super.key,
     required this.loan,
     required this.loading,
     required this.onOpen,

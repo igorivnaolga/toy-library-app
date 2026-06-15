@@ -164,16 +164,7 @@ class _AdminStatsPendingMembersScreenState
                         style: context.listSubtitle,
                       ),
                       const SizedBox(height: 12),
-                      if (result.data.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24),
-                          child: Text(
-                            "Try another period or check back after new charges are added.",
-                            style: context.listSubtitle,
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      else
+                      if (result.data.isNotEmpty)
                         ...result.data.map(
                           (row) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),

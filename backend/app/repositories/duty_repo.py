@@ -121,6 +121,7 @@ def list_volunteer_booked_duty_sessions(
     return list(
         session.scalars(
             select(DutySession)
+            .options(joinedload(DutySession.volunteer))
             .where(DutySession.volunteer_id == volunteer_id)
             .order_by(DutySession.session_date, DutySession.start_time)
         ).all()

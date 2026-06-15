@@ -5,6 +5,7 @@ import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_controller.dart";
+import "event_models.dart";
 import "event_scroll.dart";
 import "events_controller.dart";
 import "schedule_scroll_scope.dart";
@@ -135,16 +136,16 @@ Future<void> findScheduleDate(
     );
     if (!context.mounted) return;
     if (found) {
-      await waitForScheduleTabLayout(frames: 3);
+      await waitForScheduleTabLayout(frames: 4);
       if (!context.mounted) return;
       var scrolled = false;
-      for (var retry = 0; retry < 4 && !scrolled; retry++) {
+      for (var retry = 0; retry < 6 && !scrolled; retry++) {
         if (!context.mounted) return;
         scrolled =
             await ScheduleScrollScope.maybeOf(context)?.scrollToPendingEvent() ??
                 false;
         if (!scrolled) {
-          await waitForScheduleTabLayout(frames: 3);
+          await waitForScheduleTabLayout(frames: 4);
         }
       }
     } else {
@@ -246,7 +247,9 @@ class _ScheduleCalendarDialogState extends State<_ScheduleCalendarDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheduleDates = context.watch<EventsController>().scheduleDates;
+    final scheduleDates = context.select<EventsController, ScheduleDates>(
+      (controller) => controller.scheduleDates,
+    );
     final theme = Theme.of(context);
     final firstWeekday = DateTime(_focusedMonth.year, _focusedMonth.month, 1).weekday;
     final daysInMonth =

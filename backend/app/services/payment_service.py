@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
+from collections.abc import Iterable
+
 from sqlalchemy.orm import Session
 
 from app.core.membership_fees import charges_for_tier
@@ -37,9 +39,12 @@ from app.repositories.payment_repo import (
     get_volunteer_credit_for_duty_session,
     list_pending_membership_payments,
     list_pending_payments,
+    list_pending_payments_for_users,
     list_payments_for_user,
     mark_payment_status,
+    sum_credit_applied_by_user,
     sum_credit_applied_cents,
+    sum_credit_grants_by_user,
     sum_credit_grant_cents,
 )
 
@@ -97,6 +102,39 @@ def balance_summary(session: Session, user_id: uuid.UUID) -> BalanceSummary:
         rental_due_cents=rental_due,
         credit_balance_cents=credit,
     )
+
+
+def balance_summaries_for_users(
+    session: Session,
+    user_ids: Iterable[uuid.UUID],
+) -> dict[uuid.UUID, BalanceSummary]:
+    """Batch balance lookup for desk member search."""
+    ids = list(dict.fromkeys(user_ids))
+    if not ids:
+        return {}
+    pending_by_user = list_pending_payments_for_users(session, ids)
+    grants = sum_credit_grants_by_user(session, ids)
+    applied = sum_credit_applied_by_user(session, ids)
+    result: dict[uuid.UUID, BalanceSummary] = {}
+    for uid in ids:
+        pending = pending_by_user.get(uid, [])
+        membership_due = sum(
+            p.amount_cents
+            for p in pending
+            if p.payment_type in MEMBERSHIP_PAYMENT_TYPES
+        )
+        rental_due = sum(
+            p.amount_cents for p in pending if p.payment_type == PAYMENT_TYPE_RENTAL
+        )
+        charges_due = membership_due + rental_due
+        credit = max(0, grants.get(uid, 0) - applied.get(uid, 0))
+        result[uid] = BalanceSummary(
+            balance_due_cents=max(0, charges_due - credit),
+            membership_due_cents=membership_due,
+            rental_due_cents=rental_due,
+            credit_balance_cents=credit,
+        )
+    return result
 
 
 def create_membership_payments_for_tier(

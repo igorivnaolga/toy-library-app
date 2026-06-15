@@ -52,9 +52,20 @@ class DutySessionItem {
       "${formatApiTime(startTime)} – ${formatApiTime(endTime)}";
 
   String get assigneeDisplayName => visibleMemberName(
-        fullName: volunteerName,
+        fullName: _resolvedVolunteerFullName,
         email: volunteerEmail,
       );
+
+  /// Backend used to fall back to email in [volunteerName]; ignore that shape.
+  String? get _resolvedVolunteerFullName {
+    final name = volunteerName?.trim();
+    if (name == null || name.isEmpty) return null;
+    final mail = volunteerEmail?.trim();
+    if (name.contains("@") || (mail != null && mail.isNotEmpty && name == mail)) {
+      return null;
+    }
+    return name;
+  }
 
   bool isMine(String? currentUserId) =>
       currentUserId != null &&

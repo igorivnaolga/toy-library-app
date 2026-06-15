@@ -11,6 +11,9 @@ class StatsOverview {
     required this.checkouts,
     required this.returns,
     required this.revenueCents,
+    required this.revenueCashCents,
+    required this.revenueEftposCents,
+    required this.revenueBankCents,
     required this.pendingRevenueCents,
     required this.catalogToys,
   });
@@ -23,6 +26,9 @@ class StatsOverview {
   final int checkouts;
   final int returns;
   final int revenueCents;
+  final int revenueCashCents;
+  final int revenueEftposCents;
+  final int revenueBankCents;
   final int pendingRevenueCents;
   final int catalogToys;
 
@@ -36,6 +42,9 @@ class StatsOverview {
       checkouts: _asInt(json["checkouts"]),
       returns: _asInt(json["returns"]),
       revenueCents: _asInt(json["revenue_cents"]),
+      revenueCashCents: _asInt(json["revenue_cash_cents"]),
+      revenueEftposCents: _asInt(json["revenue_eftpos_cents"]),
+      revenueBankCents: _asInt(json["revenue_bank_cents"]),
       pendingRevenueCents: _asInt(json["pending_revenue_cents"]),
       catalogToys: _asInt(json["catalog_toys"]),
     );
@@ -309,6 +318,30 @@ int niceChartYInterval(int maxY) {
 }
 
 String formatRevenueCents(int cents) => formatDueCents(cents);
+
+class RevenueBreakdownRow {
+  const RevenueBreakdownRow({required this.label, required this.cents});
+
+  final String label;
+  final int cents;
+}
+
+List<RevenueBreakdownRow> revenueBreakdownRows(StatsOverview overview) {
+  return [
+    RevenueBreakdownRow(
+      label: "Cash",
+      cents: overview.revenueCashCents,
+    ),
+    RevenueBreakdownRow(
+      label: "EFTPOS",
+      cents: overview.revenueEftposCents,
+    ),
+    RevenueBreakdownRow(
+      label: "Bank transfer",
+      cents: overview.revenueBankCents,
+    ),
+  ];
+}
 
 int _asInt(Object? value) {
   if (value is int) return value;

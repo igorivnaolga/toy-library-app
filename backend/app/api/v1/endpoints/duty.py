@@ -44,9 +44,10 @@ from app.schemas.duty import (
     OnDutyResponse,
     VolunteerDutyProfileOut,
     duty_session_out_from_model,
+    duty_sessions_out_from_models,
 )
 from app.schemas.principal import Principal
-from app.services.payment_service import balance_summary
+from app.services.payment_service import balance_summaries_for_users
 
 router = APIRouter()
 
@@ -71,8 +72,8 @@ def _volunteer_duty_profile_out(db: Session, volunteer_id: uuid.UUID) -> Volunte
     rows = list_volunteer_booked_duty_sessions(db, volunteer_id)
     upcoming, completed = split_volunteer_duty_sessions(rows)
     return VolunteerDutyProfileOut(
-        upcoming=[duty_session_out_from_model(row, db) for row in upcoming],
-        completed=[duty_session_out_from_model(row, db) for row in completed],
+        upcoming=duty_sessions_out_from_models(upcoming, db),
+        completed=duty_sessions_out_from_models(completed, db),
     )
 
 
@@ -89,7 +90,7 @@ def list_sessions(
     db.commit()
     rows = list_duty_sessions(db, from_date=from_date, to_date=to_date)
     return DutySessionsListResponse(
-        data=[duty_session_out_from_model(row, db) for row in rows],
+        data=duty_sessions_out_from_models(rows, db),
     )
 
 
@@ -130,10 +131,14 @@ def search_desk_members(
         if q.strip()
         else list_roster_members(db)
     )
+    balances = balance_summaries_for_users(
+        db,
+        [uuid.UUID(row["user_id"]) for row in rows],
+    )
     data: list[DeskMemberOut] = []
     for row in rows:
         user_id = uuid.UUID(row["user_id"])
-        account = balance_summary(db, user_id)
+        account = balances[user_id]
         data.append(
             DeskMemberOut(
                 user_id=row["user_id"],

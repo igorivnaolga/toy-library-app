@@ -20,6 +20,28 @@ class BookingsScreen extends StatefulWidget {
   State<BookingsScreen> createState() => _BookingsScreenState();
 }
 
+enum _BookingsRowType {
+  upcomingHeader,
+  groupGap,
+  pickupGroup,
+  sectionGap,
+  pastHeader,
+  pastGap,
+  pastBooking,
+}
+
+class _BookingsRow {
+  const _BookingsRow(
+    this.type, {
+    this.groupIndex,
+    this.pastIndex,
+  });
+
+  final _BookingsRowType type;
+  final int? groupIndex;
+  final int? pastIndex;
+}
+
 class _BookingsScreenState extends State<BookingsScreen> {
   bool _pastExpanded = false;
 
@@ -85,6 +107,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     BookingItem item,
   ) {
     return BookingListTile(
+      key: ValueKey(item.bookingId),
       item: item,
       loading: c.loading,
       inGroup: item.isPending,
@@ -98,6 +121,74 @@ class _BookingsScreenState extends State<BookingsScreen> {
       onChangeDate: () => _changePickupDate(item),
       onCancel: () => _cancel(item),
     );
+  }
+
+  List<_BookingsRow> _bookingsListRows(BookingSections sections) {
+    final rows = <_BookingsRow>[];
+    if (sections.upcomingByPickupDate.isNotEmpty) {
+      rows.add(const _BookingsRow(_BookingsRowType.upcomingHeader));
+      for (var g = 0; g < sections.upcomingByPickupDate.length; g++) {
+        if (g > 0) {
+          rows.add(const _BookingsRow(_BookingsRowType.groupGap));
+        }
+        rows.add(_BookingsRow(_BookingsRowType.pickupGroup, groupIndex: g));
+      }
+    }
+    if (sections.upcomingByPickupDate.isNotEmpty && sections.past.isNotEmpty) {
+      rows.add(const _BookingsRow(_BookingsRowType.sectionGap));
+    }
+    if (sections.past.isNotEmpty) {
+      rows.add(const _BookingsRow(_BookingsRowType.pastHeader));
+      if (_pastExpanded) {
+        for (var i = 0; i < sections.past.length; i++) {
+          if (i > 0) {
+            rows.add(const _BookingsRow(_BookingsRowType.pastGap));
+          }
+          rows.add(_BookingsRow(_BookingsRowType.pastBooking, pastIndex: i));
+        }
+      }
+    }
+    return rows;
+  }
+
+  Widget _buildBookingsRow(
+    BuildContext context,
+    BookingsController controller,
+    BookingSections sections,
+    _BookingsRow row,
+  ) {
+    switch (row.type) {
+      case _BookingsRowType.upcomingHeader:
+        return const SectionHeader("Upcoming");
+      case _BookingsRowType.groupGap:
+        return const SizedBox(height: 12);
+      case _BookingsRowType.pickupGroup:
+        final group = sections.upcomingByPickupDate[row.groupIndex!];
+        return BookingPickupDateSection(
+          group: group,
+          children: [
+            for (final item in group.bookings)
+              _bookingTile(context, controller, item),
+          ],
+        );
+      case _BookingsRowType.sectionGap:
+        return const SizedBox(height: 20);
+      case _BookingsRowType.pastHeader:
+        return CollapsibleSection(
+          title: "Past (${sections.past.length})",
+          expanded: _pastExpanded,
+          onToggle: () => setState(() => _pastExpanded = !_pastExpanded),
+          children: const [],
+        );
+      case _BookingsRowType.pastGap:
+        return const SizedBox(height: 8);
+      case _BookingsRowType.pastBooking:
+        return _bookingTile(
+          context,
+          controller,
+          sections.past[row.pastIndex!],
+        );
+    }
   }
 
   @override
@@ -168,46 +259,20 @@ class _BookingsScreenState extends State<BookingsScreen> {
         }
 
         final sections = groupBookingsBySection(c.bookings);
+        final rows = _bookingsListRows(sections);
 
         return RefreshIndicator(
           onRefresh: c.loadBookings,
-          child: ListView(
+          child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
-              if (sections.upcomingByPickupDate.isNotEmpty)
-                const SectionHeader("Upcoming"),
-              for (var g = 0; g < sections.upcomingByPickupDate.length; g++) ...[
-                if (g > 0) const SizedBox(height: 12),
-                BookingPickupDateSection(
-                  group: sections.upcomingByPickupDate[g],
-                  children: [
-                    for (final item in sections.upcomingByPickupDate[g].bookings)
-                      _bookingTile(context, c, item),
-                  ],
-                ),
-              ],
-              if (sections.upcomingByPickupDate.isNotEmpty &&
-                  sections.past.isNotEmpty)
-                const SizedBox(height: 20),
-              if (sections.past.isNotEmpty) ...[
-                CollapsibleSection(
-                  title: "Past (${sections.past.length})",
-                  expanded: _pastExpanded,
-                  onToggle: () => setState(() => _pastExpanded = !_pastExpanded),
-                  children: [
-                    for (var i = 0; i < sections.past.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      _bookingTile(context, c, sections.past[i]),
-                    ],
-                  ],
-                ),
-              ],
-            ],
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              return _buildBookingsRow(context, c, sections, rows[index]);
+            },
           ),
         );
       },
     );
   }
 }
-

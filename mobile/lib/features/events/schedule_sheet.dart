@@ -104,11 +104,19 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
   }
 
   Future<bool> _scrollToPendingEvent() async {
-    await waitForScrollController(_eventsScrollController);
+    await waitForScrollController(
+      _eventsScrollController,
+      expectScrollableContent: true,
+    );
     var scrolled =
         await _eventsSectionKey.currentState?.scrollToPendingEvent() ?? false;
-    for (var retry = 0; retry < 3 && !scrolled; retry++) {
-      await waitForScheduleTabLayout(frames: 3);
+    for (var retry = 0; retry < 6 && !scrolled; retry++) {
+      await waitForScheduleTabLayout(frames: 4);
+      if (!mounted) return scrolled;
+      await waitForScrollController(
+        _eventsScrollController,
+        expectScrollableContent: retry < 4,
+      );
       if (!mounted) return scrolled;
       scrolled =
           await _eventsSectionKey.currentState?.scrollToPendingEvent() ?? false;
@@ -323,14 +331,16 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
                             key: _volunteerDutyKey,
                             hidePast: true,
                           ),
-                  RefreshIndicator(
-                    onRefresh: _reloadSchedule,
-                    child: EventsSection(
-                      key: _eventsSectionKey,
-                      adminMode: auth.isAdmin,
-                      embeddedInSchedule: true,
-                      scrollController: _eventsScrollController,
-                      eventKeyFor: _keyForEvent,
+                  _KeepAliveTab(
+                    child: RefreshIndicator(
+                      onRefresh: _reloadSchedule,
+                      child: EventsSection(
+                        key: _eventsSectionKey,
+                        adminMode: auth.isAdmin,
+                        embeddedInSchedule: true,
+                        scrollController: _eventsScrollController,
+                        eventKeyFor: _keyForEvent,
+                      ),
                     ),
                   ),
                 ],
@@ -341,5 +351,26 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
         ),
       ),
     );
+  }
+}
+
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }

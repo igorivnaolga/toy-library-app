@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.auth_deps import require_admin, require_roles
+from app.core.auth_deps import require_roles
 from app.core.library_sessions import library_now
 from app.core.roles import Role
 from app.db.session import get_db

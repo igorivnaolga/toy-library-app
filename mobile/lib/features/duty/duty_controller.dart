@@ -256,20 +256,8 @@ class DutyController extends ChangeNotifier {
       {"user_id": member.userId},
     );
     var updated = DutySessionItem.fromJson(json);
-    if (updated.isOpen ||
-        ((updated.volunteerName == null || updated.volunteerName!.isEmpty) &&
-            (updated.volunteerEmail == null || updated.volunteerEmail!.isEmpty))) {
-      updated = DutySessionItem(
-        sessionId: updated.sessionId,
-        sessionDate: updated.sessionDate,
-        startTime: updated.startTime,
-        endTime: updated.endTime,
-        createdAt: updated.createdAt,
-        volunteerId: member.userId,
-        volunteerName:
-            member.fullName.isNotEmpty ? member.fullName : null,
-        volunteerEmail: member.email.isNotEmpty ? member.email : null,
-      );
+    if (!updated.isOpen) {
+      updated = _mergeAssigneeFromMember(updated, member);
     }
     _replaceSession(updated);
     onDutyStatus = await _fetchOnDutyStatus();
@@ -314,6 +302,37 @@ class DutyController extends ChangeNotifier {
         if (item.sessionId == updated.sessionId) updated else item,
     ];
     sortDutySessions(sessions);
+  }
+
+  /// Prefer roster name when the assign response only returned an email.
+  DutySessionItem _mergeAssigneeFromMember(
+    DutySessionItem updated,
+    DeskMember member,
+  ) {
+    final apiName = updated.volunteerName?.trim() ?? "";
+    final memberName = member.fullName.trim();
+    final memberEmail = member.email.trim();
+    final needsName = memberName.isNotEmpty &&
+        (apiName.isEmpty || apiName.contains("@"));
+    final needsEmail = (updated.volunteerEmail == null ||
+            updated.volunteerEmail!.trim().isEmpty) &&
+        memberEmail.isNotEmpty;
+
+    if (!needsName && !needsEmail) {
+      return updated;
+    }
+
+    return DutySessionItem(
+      sessionId: updated.sessionId,
+      sessionDate: updated.sessionDate,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      createdAt: updated.createdAt,
+      adminConfirmed: updated.adminConfirmed,
+      volunteerId: updated.volunteerId ?? member.userId,
+      volunteerName: needsName ? memberName : updated.volunteerName,
+      volunteerEmail: needsEmail ? memberEmail : updated.volunteerEmail,
+    );
   }
 
   Future<OnDutyStatus> refreshOnDutyStatus() async {

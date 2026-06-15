@@ -9,14 +9,14 @@ Future<bool> scrollToKeyedWidget({
   int? listIndex,
   double estimatedItemExtent = 200,
   double listIndexHeaderExtent = 0,
-  int maxAttempts = 25,
+  int maxAttempts = 30,
 }) async {
   for (var attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt == 0) {
       await SchedulerBinding.instance.endOfFrame;
     } else {
       await Future<void>.delayed(
-        Duration(milliseconds: attempt < 6 ? 80 : 120),
+        Duration(milliseconds: attempt < 8 ? 80 : 120),
       );
     }
 
@@ -26,6 +26,7 @@ Future<bool> scrollToKeyedWidget({
         listIndex: listIndex,
         itemExtent: estimatedItemExtent,
         headerExtent: listIndexHeaderExtent,
+        attempt: attempt,
       );
     }
 
@@ -40,9 +41,7 @@ Future<bool> scrollToKeyedWidget({
       return true;
     }
   }
-  return scrollController != null &&
-      listIndex != null &&
-      scrollController.hasClients;
+  return false;
 }
 
 Future<void> _scrollListToIndex(
@@ -50,16 +49,19 @@ Future<void> _scrollListToIndex(
   required int listIndex,
   required double itemExtent,
   required double headerExtent,
+  int attempt = 0,
 }) async {
   if (!scrollController.hasClients) return;
   final maxExtent = scrollController.position.maxScrollExtent;
-  final itemOffset = listIndex <= 0
+  final baseOffset = listIndex <= 0
       ? 0.0
       : headerExtent + (listIndex - 1) * itemExtent;
-  final roughOffset = itemOffset.clamp(0.0, maxExtent);
+  final attemptBoost = attempt * itemExtent * 0.25;
+  final roughOffset = (baseOffset + attemptBoost).clamp(0.0, maxExtent);
+  if (roughOffset == scrollController.offset && attempt > 0) return;
   await scrollController.animateTo(
     roughOffset,
-    duration: const Duration(milliseconds: 320),
+    duration: Duration(milliseconds: attempt == 0 ? 320 : 220),
     curve: Curves.easeInOut,
   );
   await SchedulerBinding.instance.endOfFrame;
@@ -105,11 +107,26 @@ Future<void> waitForScheduleTabLayout({int frames = 3}) async {
   await Future<void>.delayed(const Duration(milliseconds: 120));
 }
 
-Future<bool> waitForScrollController(ScrollController controller) async {
-  for (var attempt = 0; attempt < 30; attempt++) {
+Future<bool> waitForScrollController(
+  ScrollController controller, {
+  bool expectScrollableContent = false,
+}) async {
+  for (var attempt = 0; attempt < 40; attempt++) {
     await SchedulerBinding.instance.endOfFrame;
-    if (controller.hasClients) return true;
+    if (!controller.hasClients) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      continue;
+    }
+    final position = controller.position;
+    if (position.viewportDimension <= 0) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      continue;
+    }
+    if (!expectScrollableContent || position.maxScrollExtent > 0 || attempt >= 12) {
+      return true;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
-  return controller.hasClients;
+  return controller.hasClients &&
+      controller.position.viewportDimension > 0;
 }

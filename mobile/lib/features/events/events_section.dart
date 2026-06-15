@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
@@ -42,7 +44,49 @@ class EventsSection extends StatefulWidget {
 class EventsSectionState extends State<EventsSection> {
   String? _actionSlotId;
   String? _scrollInProgressFor;
+  EventsController? _eventsController;
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.embeddedInSchedule) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _eventsController = context.read<EventsController>();
+        _eventsController!.addListener(_onEventsControllerChanged);
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final controller = context.read<EventsController>();
+        if (controller.events.isEmpty && !controller.loading) {
+          controller.loadEvents(admin: widget.adminMode);
+        }
+        controller.refreshAvailability();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _eventsController?.removeListener(_onEventsControllerChanged);
+    super.dispose();
+  }
+
+  void _onEventsControllerChanged() {
+    final eventId = _eventsController?.scrollToEventId;
+    if (eventId == null ||
+        widget.eventKeyFor == null ||
+        widget.scrollController == null) {
+      return;
+    }
+    if (eventId != _scrollInProgressFor) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(scrollToPendingEvent());
+      });
+    }
+  }
   /// Scrolls the embedded schedule list to [EventsController.scrollToEventId].
   Future<bool> scrollToPendingEvent() async {
     if (widget.eventKeyFor == null || widget.scrollController == null) {
@@ -52,6 +96,14 @@ class EventsSectionState extends State<EventsSection> {
     final eventId = controller.scrollToEventId;
     if (eventId == null || eventId == _scrollInProgressFor) {
       return false;
+    }
+    if (controller.loading) {
+      for (var attempt = 0;
+          attempt < 30 && context.read<EventsController>().loading;
+          attempt++) {
+        await waitForScheduleTabLayout(frames: 1);
+        if (!mounted) return false;
+      }
     }
     _scrollInProgressFor = eventId;
     final upcoming = controller.events.where((e) => !e.isPast).toList();
@@ -64,9 +116,15 @@ class EventsSectionState extends State<EventsSection> {
       hideHeader: widget.hideHeader,
       adminMode: widget.adminMode,
     );
-    if (widget.scrollController != null) {
-      await waitForScrollController(widget.scrollController!);
+    await waitForScrollController(
+      widget.scrollController!,
+      expectScrollableContent: listIndex != null && listIndex > 2,
+    );
+    if (!mounted) {
+      _scrollInProgressFor = null;
+      return false;
     }
+    await waitForScheduleTabLayout(frames: 2);
     final scrolled = await scrollToEventCard(
       eventId: eventId,
       keyForEvent: widget.eventKeyFor!,
@@ -80,14 +138,6 @@ class EventsSectionState extends State<EventsSection> {
       controller.clearScrollRequest();
     }
     return scrolled;
-  }
-
-  Future<void> _scrollToRequestedEvent(
-    EventsController controller,
-    List<LibraryEventItem> upcoming,
-    List<LibraryEventItem> past,
-  ) async {
-    await scrollToPendingEvent();
   }
 
   static int? eventListIndexFor({
@@ -113,20 +163,6 @@ class EventsSectionState extends State<EventsSection> {
     final pastIndex = past.indexWhere((event) => event.eventId == eventId);
     if (pastIndex >= 0) return index + pastIndex;
     return null;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.embeddedInSchedule) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final controller = context.read<EventsController>();
-      if (controller.events.isEmpty && !controller.loading) {
-        controller.loadEvents(admin: widget.adminMode);
-      }
-      controller.refreshAvailability();
-    });
   }
 
   Future<void> _openCalendar({DateTime? initialDate}) async {
@@ -252,8 +288,6 @@ class EventsSectionState extends State<EventsSection> {
     );
     if (created != true) return;
     if (!mounted) return;
-    await context.read<EventsController>().loadEvents(admin: true);
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Event added to schedule")),
     );
@@ -266,7 +300,9 @@ class EventsSectionState extends State<EventsSection> {
       ),
     );
     if (saved == true && mounted) {
-      await context.read<EventsController>().loadEvents(admin: true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Event updated")),
+      );
     }
   }
 
@@ -279,15 +315,6 @@ class EventsSectionState extends State<EventsSection> {
         final upcoming =
             controller.events.where((e) => !e.isPast).toList();
         final past = controller.events.where((e) => e.isPast).toList();
-
-        if (controller.scrollToEventId != null &&
-            widget.eventKeyFor != null &&
-            widget.scrollController != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _scrollToRequestedEvent(controller, upcoming, past);
-          });
-        }
 
         if (controller.loading && controller.events.isEmpty) {
           return const Padding(

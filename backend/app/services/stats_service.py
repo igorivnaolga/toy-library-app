@@ -8,7 +8,12 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.payment import PAID_STATUSES
+from app.models.payment import (
+    PAID_STATUSES,
+    PAYMENT_STATUS_PAID_BANK,
+    PAYMENT_STATUS_PAID_CASH,
+    PAYMENT_STATUS_PAID_EFTPOS,
+)
 from app.services.stats_period import StatsPeriod
 
 _AUCKLAND_DATE = "timezone('Pacific/Auckland', {col})::date"
@@ -36,6 +41,9 @@ class StatsOverview:
     checkouts: int
     returns: int
     revenue_cents: int
+    revenue_cash_cents: int
+    revenue_eftpos_cents: int
+    revenue_bank_cents: int
     pending_revenue_cents: int
     catalog_toys: int
 
@@ -207,6 +215,21 @@ def stats_overview(session: Session, period: StatsPeriod) -> StatsOverview:
         or 0
     )
 
+    revenue_by_status: dict[str, int] = {}
+    for status, amount in session.execute(
+        text(
+            f"""
+            select p.status, coalesce(sum(p.amount_cents), 0)::int
+            from payments p
+            where p.status in ({paid_statuses})
+            {paid_filter}
+            group by p.status
+            """
+        ),
+        paid_params,
+    ).all():
+        revenue_by_status[str(status)] = int(amount)
+
     pending_revenue_cents = int(
         session.execute(
             text(
@@ -231,6 +254,9 @@ def stats_overview(session: Session, period: StatsPeriod) -> StatsOverview:
         checkouts=checkouts,
         returns=returns,
         revenue_cents=revenue_cents,
+        revenue_cash_cents=revenue_by_status.get(PAYMENT_STATUS_PAID_CASH, 0),
+        revenue_eftpos_cents=revenue_by_status.get(PAYMENT_STATUS_PAID_EFTPOS, 0),
+        revenue_bank_cents=revenue_by_status.get(PAYMENT_STATUS_PAID_BANK, 0),
         pending_revenue_cents=pending_revenue_cents,
         catalog_toys=catalog_toys,
     )

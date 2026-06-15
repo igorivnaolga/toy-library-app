@@ -1047,7 +1047,7 @@ class _AdminMemberPaymentsBody extends StatelessWidget {
           label: recordingTopUp ? "Recording top-up…" : "Add top-up",
           onPressed: paymentActionsBusy ? null : onAddTopUp,
         ),
-        if (pendingCount > 0) ...[
+        if (pendingCount > 1) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,

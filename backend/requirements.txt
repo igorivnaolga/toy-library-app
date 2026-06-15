@@ -6,7 +6,6 @@ pydantic
 pydantic-settings
 PyJWT>=2.8.0
 cryptography>=41.0.0
-passlib[bcrypt]
 python-multipart
 pillow
 opencv-python-headless

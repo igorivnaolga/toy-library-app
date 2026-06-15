@@ -527,6 +527,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       if (index < c.toys.length) {
                         final t = c.toys[index];
                         return ToyCatalogListTile(
+                          key: ValueKey(t.toyId),
                           toy: t,
                           onTap: () {
                             Navigator.of(context).push(

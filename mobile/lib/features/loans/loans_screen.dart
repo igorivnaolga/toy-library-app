@@ -110,6 +110,81 @@ class _MyLoansView extends StatefulWidget {
 class _MyLoansViewState extends State<_MyLoansView> {
   bool _returnedExpanded = false;
 
+  Widget _loanTile(LoansController c, LoanItem loan, {bool inGroup = false}) {
+    return LoanListTile(
+      key: ValueKey(loan.loanId),
+      item: loan,
+      loading: c.myLoansLoading,
+      inGroup: inGroup,
+      onOpen: () => widget.onOpenToy(loan.toyId),
+      onRenew: loan.canRenew ? () => widget.onRenew(loan) : null,
+    );
+  }
+
+  List<_LoansRow> _loansListRows(LoanSections sections) {
+    final rows = <_LoansRow>[];
+    if (sections.activeByDueDate.isNotEmpty) {
+      rows.add(const _LoansRow(_LoansRowType.activeHeader));
+      for (var g = 0; g < sections.activeByDueDate.length; g++) {
+        if (g > 0) {
+          rows.add(const _LoansRow(_LoansRowType.groupGap));
+        }
+        rows.add(_LoansRow(_LoansRowType.dueGroup, groupIndex: g));
+      }
+    }
+    if (sections.activeByDueDate.isNotEmpty && sections.returned.isNotEmpty) {
+      rows.add(const _LoansRow(_LoansRowType.sectionGap));
+    }
+    if (sections.returned.isNotEmpty) {
+      rows.add(const _LoansRow(_LoansRowType.returnedHeader));
+      if (_returnedExpanded) {
+        for (var i = 0; i < sections.returned.length; i++) {
+          if (i > 0) {
+            rows.add(const _LoansRow(_LoansRowType.returnedGap));
+          }
+          rows.add(_LoansRow(_LoansRowType.returnedLoan, loanIndex: i));
+        }
+      }
+    }
+    return rows;
+  }
+
+  Widget _buildLoansRow(
+    LoansController controller,
+    LoanSections sections,
+    _LoansRow row,
+  ) {
+    switch (row.type) {
+      case _LoansRowType.activeHeader:
+        return const SectionHeader("Active");
+      case _LoansRowType.groupGap:
+        return const SizedBox(height: 12);
+      case _LoansRowType.dueGroup:
+        final group = sections.activeByDueDate[row.groupIndex!];
+        return LoanDueDateSection(
+          group: group,
+          children: [
+            for (final loan in group.loans)
+              _loanTile(controller, loan, inGroup: true),
+          ],
+        );
+      case _LoansRowType.sectionGap:
+        return const SizedBox(height: 20);
+      case _LoansRowType.returnedHeader:
+        return CollapsibleSection(
+          title: "Returned (${sections.returned.length})",
+          expanded: _returnedExpanded,
+          onToggle: () =>
+              setState(() => _returnedExpanded = !_returnedExpanded),
+          children: const [],
+        );
+      case _LoansRowType.returnedGap:
+        return const SizedBox(height: 8);
+      case _LoansRowType.returnedLoan:
+        return _loanTile(controller, sections.returned[row.loanIndex!]);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<LoansController>(
@@ -143,61 +218,44 @@ class _MyLoansViewState extends State<_MyLoansView> {
         }
 
         final sections = groupLoansBySection(c.myLoans);
+        final rows = _loansListRows(sections);
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
-          child: ListView(
+          child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            children: [
-              if (sections.activeByDueDate.isNotEmpty)
-                const SectionHeader("Active"),
-              for (var g = 0; g < sections.activeByDueDate.length; g++) ...[
-                if (g > 0) const SizedBox(height: 12),
-                LoanDueDateSection(
-                  group: sections.activeByDueDate[g],
-                  children: [
-                    for (final loan in sections.activeByDueDate[g].loans)
-                      LoanListTile(
-                        item: loan,
-                        loading: c.myLoansLoading,
-                        inGroup: true,
-                        onOpen: () => widget.onOpenToy(loan.toyId),
-                        onRenew: loan.canRenew
-                            ? () => widget.onRenew(loan)
-                            : null,
-                      ),
-                  ],
-                ),
-              ],
-              if (sections.activeByDueDate.isNotEmpty &&
-                  sections.returned.isNotEmpty)
-                const SizedBox(height: 20),
-              if (sections.returned.isNotEmpty) ...[
-                CollapsibleSection(
-                  title: "Returned (${sections.returned.length})",
-                  expanded: _returnedExpanded,
-                  onToggle: () =>
-                      setState(() => _returnedExpanded = !_returnedExpanded),
-                  children: [
-                    for (var i = 0; i < sections.returned.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      LoanListTile(
-                        item: sections.returned[i],
-                        loading: c.myLoansLoading,
-                        onOpen: () =>
-                            widget.onOpenToy(sections.returned[i].toyId),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ],
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              return _buildLoansRow(c, sections, rows[index]);
+            },
           ),
         );
       },
     );
   }
+}
+
+enum _LoansRowType {
+  activeHeader,
+  groupGap,
+  dueGroup,
+  sectionGap,
+  returnedHeader,
+  returnedGap,
+  returnedLoan,
+}
+
+class _LoansRow {
+  const _LoansRow(
+    this.type, {
+    this.groupIndex,
+    this.loanIndex,
+  });
+
+  final _LoansRowType type;
+  final int? groupIndex;
+  final int? loanIndex;
 }
 
 class _ErrorState extends StatelessWidget {
