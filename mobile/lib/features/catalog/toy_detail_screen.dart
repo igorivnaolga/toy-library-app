@@ -1,3 +1,5 @@
+import "dart:ui";
+
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
@@ -26,11 +28,35 @@ import "toy_detail_pieces_section.dart";
 import "toy_detail_section.dart";
 import "toy_photo_placeholder.dart";
 
+/// Lightweight catalog row for instant detail navigation before fetch completes.
+ToyItem previewToyItem({
+  required String toyId,
+  String? name,
+  String? photoFile,
+  String availability = "unknown",
+  int? totalPieces,
+  int? missingPieces,
+}) {
+  return ToyItem.preview(
+    toyId: toyId,
+    name: name,
+    photoFile: photoFile,
+    availability: availability,
+    totalPieces: totalPieces,
+    missingPieces: missingPieces,
+  );
+}
+
 /// Loads a single toy from `GET /api/v1/toys/{toy_id}`.
 class ToyDetailScreen extends StatefulWidget {
-  const ToyDetailScreen({super.key, required this.toyId});
+  const ToyDetailScreen({
+    super.key,
+    required this.toyId,
+    this.initialToy,
+  });
 
   final String toyId;
+  final ToyItem? initialToy;
 
   @override
   State<ToyDetailScreen> createState() => _ToyDetailScreenState();
@@ -38,30 +64,41 @@ class ToyDetailScreen extends StatefulWidget {
 
 class _ToyDetailScreenState extends State<ToyDetailScreen> {
   Future<ToyItem>? _future;
+  ToyItem? _previewToy;
   bool _started = false;
-  bool _bookingsRequested = false;
-  bool _loansRequested = false;
+  bool _sideEffectsStarted = false;
   bool _bookingInProgress = false;
   bool _cancellingInProgress = false;
   bool _reschedulingInProgress = false;
   bool _onDutyRequested = false;
 
+  ToyItem? _resolvePreviewToy() {
+    return widget.initialToy ??
+        context.read<CatalogController>().cachedToy(widget.toyId);
+  }
+
+  void _scheduleMemberContextLoads() {
+    if (_sideEffectsStarted) return;
+    _sideEffectsStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = context.read<AuthStore>();
+      if (auth.canBookToys) {
+        context.read<BookingsController>().loadBookings();
+        context.read<LoansController>().loadMyLoans(activeOnly: true);
+      }
+      if (!_onDutyRequested && auth.isVolunteer && !auth.isAdmin) {
+        _onDutyRequested = true;
+        context.read<DutyController>().refreshOnDutyStatus();
+      }
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final auth = context.read<AuthStore>();
-    if (!_bookingsRequested && auth.canBookToys) {
-      _bookingsRequested = true;
-      context.read<BookingsController>().loadBookings();
-    }
-    if (!_loansRequested && auth.canBookToys) {
-      _loansRequested = true;
-      context.read<LoansController>().loadMyLoans(activeOnly: true);
-    }
-    if (!_onDutyRequested && auth.isVolunteer && !auth.isAdmin) {
-      _onDutyRequested = true;
-      context.read<DutyController>().refreshOnDutyStatus();
-    }
+    _previewToy ??= _resolvePreviewToy();
+    _scheduleMemberContextLoads();
     if (_started) return;
     _started = true;
     setState(() {
@@ -71,6 +108,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
 
   void _retry() {
     setState(() {
+      _previewToy ??= _resolvePreviewToy();
       _future = context.read<CatalogController>().fetchToy(widget.toyId);
     });
   }
@@ -164,39 +202,41 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     return FutureBuilder<ToyItem>(
       future: _future,
       builder: (context, snapshot) {
-        if (_future == null ||
-            snapshot.connectionState == ConnectionState.waiting) {
+        final preview = _previewToy ?? widget.initialToy;
+        final hasFullData = snapshot.hasData;
+        final ToyItem? t = hasFullData ? snapshot.data : preview;
+        final loadingDetail =
+            snapshot.connectionState == ConnectionState.waiting && t != null;
+
+        if (t == null) {
+          if (snapshot.hasError) {
+            final err = snapshot.error;
+            final message = err is ApiException ? err.message : err.toString();
+            return Scaffold(
+              appBar: AppBar(title: const Text("Toy details")),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(message, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _retry,
+                        child: const Text("Retry"),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
           return Scaffold(
             appBar: AppBar(title: const Text("Toy details")),
             body: const Center(child: ToyLibraryLoadingIndicator()),
           );
         }
-
-        if (snapshot.hasError) {
-          final err = snapshot.error;
-          final message = err is ApiException ? err.message : err.toString();
-          return Scaffold(
-            appBar: AppBar(title: const Text("Toy details")),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(message, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _retry,
-                      child: const Text("Retry"),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        final t = snapshot.data!;
         final theme = Theme.of(context);
         final colors = theme.colorScheme;
         final photoCacheSize =
@@ -263,7 +303,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
               ],
             ],
           ),
-          bottomNavigationBar: auth.isAdmin
+          bottomNavigationBar: auth.isAdmin || loadingDetail
               ? null
               : _ToyDetailMemberBar(
                   toy: t,
@@ -275,7 +315,10 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   onChangePickupDate: (booking) => _changePickupDate(booking, t),
                   onCancelBooking: (booking) => _cancelBooking(booking, t),
                 ),
-          body: ListView(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              ListView(
             padding: const EdgeInsets.all(16),
             children: [
               ToyDetailSectionCard(
@@ -392,7 +435,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   ],
                 ),
               ),
-              if (showPieceBreakdown) ...[
+              if (showPieceBreakdown && !(loadingDetail && !hasFullData)) ...[
                 const SizedBox(height: 12),
                 Selector<DutyController, bool>(
                   selector: (_, controller) => controller.onDutyStatus.onDuty,
@@ -410,7 +453,9 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   },
                 ),
               ],
-              if (auth.isAdmin && t.hasAdminHolderInfo) ...[
+              if (auth.isAdmin &&
+                  t.hasAdminHolderInfo &&
+                  !(loadingDetail && !hasFullData)) ...[
                 const SizedBox(height: 12),
                 ToyDetailSectionCard(
                   child: Column(
@@ -465,6 +510,18 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   ),
                 ),
               ],
+              if (loadingDetail && !hasFullData) ...[
+                if (showPieceBreakdown) ...[
+                  const SizedBox(height: 12),
+                  const _ToyDetailSectionSkeleton(title: "Pieces"),
+                ],
+                if (auth.isAdmin) ...[
+                  const SizedBox(height: 12),
+                  const _ToyDetailSectionSkeleton(title: "Member"),
+                ],
+                const SizedBox(height: 12),
+                const _ToyDetailSectionSkeleton(title: "Description"),
+              ] else ...[
               const SizedBox(height: 12),
               ToyDetailSectionCard(
                 child: Column(
@@ -481,10 +538,75 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   ],
                 ),
               ),
+              ],
+            ],
+          ),
+              if (loadingDetail)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRect(
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        child: ColoredBox(
+                          color: theme.scaffoldBackgroundColor
+                              .withValues(alpha: 0.55),
+                          child: const Center(
+                            child: ToyLibraryLoadingIndicator(
+                              message: "Loading toy…",
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _ToyDetailSectionSkeleton extends StatelessWidget {
+  const _ToyDetailSectionSkeleton({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withValues(alpha: 0.08);
+
+    return ToyDetailSectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ToyDetailSectionTitle(title: title),
+          const SizedBox(height: 12),
+          Container(
+            height: 14,
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FractionallySizedBox(
+            widthFactor: 0.72,
+            alignment: Alignment.centerLeft,
+            child: Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -516,7 +638,8 @@ class _ToyDetailMemberBar extends StatelessWidget {
     final myBooking = context.select<BookingsController, BookingItem?>(
       (controller) => controller.pendingBookingForToy(toy.toyId),
     );
-    final myActiveLoan = toy.availability == "on_loan"
+    final myActiveLoan =
+        toy.availability == "on_loan" || toy.availability == "reserved"
         ? context.select<LoansController, LoanItem?>(
             (controller) => controller.activeLoanForToy(toy.toyId),
           )

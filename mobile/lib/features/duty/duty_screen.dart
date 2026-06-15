@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
@@ -11,17 +13,26 @@ import "duty_controller.dart";
 import "duty_session_models.dart";
 import "../bookings/booking_models.dart";
 import "../events/event_scroll.dart";
+import "../events/events_controller.dart";
 import "../events/schedule_date_finder.dart";
 
 /// Volunteer duty roster: Wed/Sat slots, book shifts, admin assign members.
 class DutyScreen extends StatefulWidget {
-  const DutyScreen({super.key, this.useTabs = false, this.hidePast = false});
+  const DutyScreen({
+    super.key,
+    this.useTabs = false,
+    this.hidePast = false,
+    this.hideDateFinder = false,
+  });
 
   /// When true, upcoming and past slots appear in separate tabs (admin sheet).
   final bool useTabs;
 
   /// When true, past slots are hidden (volunteer roster view).
   final bool hidePast;
+
+  /// When true, the in-tab calendar picker is hidden (schedule sheet header).
+  final bool hideDateFinder;
 
   @override
   State<DutyScreen> createState() => DutyScreenState();
@@ -167,6 +178,13 @@ class DutyScreenState extends State<DutyScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Booked ${session.dateLabel}")),
       );
+      final now = DateTime.now();
+      unawaited(
+        context.read<EventsController>().loadScheduleDates(
+          DateTime(now.year, now.month - 1, 1),
+          DateTime(now.year, now.month + 2, 0),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -235,7 +253,8 @@ class DutyScreenState extends State<DutyScreen> {
                   controller: controller,
                   sessions: splitDutySessions(controller.sessions).upcoming,
                   isPast: false,
-                  showFindDate: true,
+                  hideDateFinder: widget.hideDateFinder,
+                  showFindDate: !widget.hideDateFinder,
                   scrollController: upcomingScrollController,
                   onBook: _book,
                   onCancel: _cancel,
@@ -250,7 +269,8 @@ class DutyScreenState extends State<DutyScreen> {
                   controller: controller,
                   sessions: splitDutySessions(controller.sessions).past,
                   isPast: true,
-                  showFindDate: true,
+                  hideDateFinder: widget.hideDateFinder,
+                  showFindDate: !widget.hideDateFinder,
                   pastSectionTitle: "Past slots",
                   scrollController: pastScrollController,
                   onBook: _book,
@@ -269,6 +289,7 @@ class DutyScreenState extends State<DutyScreen> {
             auth: auth,
             controller: controller,
             hidePast: widget.hidePast,
+            hideDateFinder: widget.hideDateFinder,
             scrollController: upcomingScrollController,
             onBook: _book,
             onCancel: _cancel,
@@ -290,6 +311,7 @@ class _DutyBody extends StatelessWidget {
     this.sessions,
     this.isPast = false,
     this.hidePast = false,
+    this.hideDateFinder = false,
     this.showFindDate = false,
     this.pastSectionTitle,
     this.onAssign,
@@ -305,6 +327,7 @@ class _DutyBody extends StatelessWidget {
   final List<DutySessionItem>? sessions;
   final bool isPast;
   final bool hidePast;
+  final bool hideDateFinder;
   final bool showFindDate;
   final String? pastSectionTitle;
   final GlobalKey Function(String sessionId)? sessionKeyFor;
@@ -360,10 +383,13 @@ class _DutyBody extends StatelessWidget {
     return _dutyScrollLayout(
       context,
       loadPast: false,
-      pinnedHeader: _DutySlotsSectionHeader(
-        title: "Upcoming slots",
-        onFindDate: () => findScheduleDate(context, source: ScheduleDateSource.duty),
-      ),
+      pinnedHeader: hideDateFinder
+          ? null
+          : _DutySlotsSectionHeader(
+              title: "Upcoming slots",
+              onFindDate: () =>
+                  findScheduleDate(context, source: ScheduleDateSource.duty),
+            ),
       children: [
         if (sections.upcoming.isEmpty)
           Padding(

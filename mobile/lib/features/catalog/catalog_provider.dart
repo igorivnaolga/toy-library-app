@@ -245,6 +245,15 @@ class CatalogController extends ChangeNotifier {
     return ToyItem.fromJson(json);
   }
 
+  ToyItem? cachedToy(String toyId) {
+    for (final item in toys) {
+      if (item.toyId == toyId) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   /// Updates one cached toy after a booking change without reloading the list.
   Future<void> updateToyInCatalog(String toyId) async {
     try {

@@ -4,6 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
+import "../bookings/booking_models.dart";
 import "../duty/duty_controller.dart";
 import "../duty/duty_screen.dart";
 import "event_scroll.dart";
@@ -166,12 +167,13 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
     final auth = context.read<AuthStore>();
     final events = context.read<EventsController>();
     final now = DateTime.now();
+    final today = calendarDay(now);
     await Future.wait([
       events.loadEvents(admin: auth.isAdmin),
       events.refreshAvailability(),
       events.loadScheduleDates(
-        DateTime(now.year, now.month - 1, 1),
-        DateTime(now.year, now.month + 2, 0),
+        today.subtract(const Duration(days: 45)),
+        today.add(const Duration(days: 365)),
       ),
       if (auth.isVolunteer || auth.isAdmin)
         context.read<DutyController>().loadRoster(),
@@ -261,6 +263,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
     final showDuty = auth.isVolunteer || auth.isAdmin;
+    final showCalendar = auth.usesScheduleCalendar;
     final tabController = _tabController;
     if (tabController == null) {
       return const SizedBox.shrink();
@@ -277,12 +280,32 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Text(
-                "Schedule",
-                style: context.screenTitle,
+              padding: const EdgeInsets.fromLTRB(12, 4, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        showDuty ? "Schedule" : "Library events",
+                        style: context.screenTitle,
+                      ),
+                    ),
+                  ),
+                  if (showCalendar)
+                    IconButton(
+                      tooltip: "Calendar",
+                      onPressed: () => findScheduleDate(context),
+                      icon: const Icon(Icons.calendar_month_outlined),
+                    ),
+                ],
               ),
             ),
+            if (auth.isVolunteerApprovalPending)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _VolunteerApprovalBanner(),
+              ),
             if (showDuty)
               Material(
                 color: Theme.of(context).colorScheme.surface,
@@ -322,6 +345,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
                                   child: DutyScreen(
                                     key: _adminDutyKey,
                                     useTabs: true,
+                                    hideDateFinder: true,
                                   ),
                                 ),
                               ],
@@ -330,6 +354,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet>
                         : DutyScreen(
                             key: _volunteerDutyKey,
                             hidePast: true,
+                            hideDateFinder: true,
                           ),
                   _KeepAliveTab(
                     child: RefreshIndicator(
@@ -372,5 +397,47 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+class _VolunteerApprovalBanner extends StatelessWidget {
+  const _VolunteerApprovalBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF8E1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFF8D6E00)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.hourglass_top, color: Color(0xFF8D6E00)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Volunteer access pending approval",
+                    style: context.cardTitle.copyWith(fontSize: 14),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "An admin will confirm your volunteer membership soon. "
+                    "You can browse and book toys as a member in the meantime.",
+                    style: context.listSubtitle.copyWith(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

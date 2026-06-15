@@ -36,7 +36,8 @@ class EventsController extends ChangeNotifier {
   int _loadGeneration = 0;
 
   static const _initialPastDays = 14;
-  static const _initialFutureDays = 90;
+  /// Match `/events/availability` so events like Halloween appear in the list.
+  static const _initialFutureDays = 365;
 
   String? scrollToEventId;
 
@@ -193,7 +194,7 @@ class EventsController extends ChangeNotifier {
     unawaited(
       loadScheduleDates(
         now.subtract(const Duration(days: 45)),
-        now.add(const Duration(days: 120)),
+        now.add(const Duration(days: _initialFutureDays)),
       ),
     );
   }

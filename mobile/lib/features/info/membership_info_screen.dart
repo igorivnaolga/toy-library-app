@@ -78,7 +78,7 @@ class MembershipInfoScreen extends StatelessWidget {
                     label: membershipStatus,
                     style: membershipBadgeStyle(
                       label: membershipStatus,
-                      tierForeground: _tierForeground(currentTier),
+                      tierForeground: membershipTierForeground(currentTier),
                       colors: theme.colorScheme,
                     ),
                   ),
@@ -127,19 +127,6 @@ class MembershipInfoScreen extends StatelessWidget {
       ),
       body: body,
     );
-  }
-
-  static Color? _tierForeground(String? tier) {
-    switch (tier) {
-      case "casual":
-        return const Color(0xFF1565C0);
-      case "non_duty":
-        return const Color(0xFF6A1B9A);
-      case "duty":
-        return const Color(0xFFF57F17);
-      default:
-        return null;
-    }
   }
 
   static void _onTierTap(BuildContext context, AuthStore auth) {

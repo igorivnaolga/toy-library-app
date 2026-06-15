@@ -27,12 +27,12 @@ def test_enrich_toy_out_for_admin_includes_reservation_and_loan() -> None:
     )
     toy = ToyOut(toy_id="1001", name="Blocks")
 
-    def _email(_session, user_id):
-        if user_id == user_reserved:
-            return "alex@example.com"
-        if user_id == user_borrower:
-            return "jamie@example.com"
-        return None
+    def _display_map(_session, user_ids):
+        mapping = {
+            user_reserved: ("Alex Member", "alex@example.com"),
+            user_borrower: ("Jamie Borrower", "jamie@example.com"),
+        }
+        return {uid: mapping[uid] for uid in user_ids if uid in mapping}
 
     with __import__("pytest").MonkeyPatch.context() as mp:
         mp.setattr(
@@ -44,8 +44,8 @@ def test_enrich_toy_out_for_admin_includes_reservation_and_loan() -> None:
             lambda _s, _toy: loan,
         )
         mp.setattr(
-            "app.services.toy_admin_context.get_user_email",
-            _email,
+            "app.services.toy_admin_context.get_user_display_map",
+            _display_map,
         )
         enriched = enrich_toy_out_for_admin(session, toy)
 

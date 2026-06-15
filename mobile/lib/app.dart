@@ -29,10 +29,10 @@ import "features/loans/loans_controller.dart";
 import "features/loans/loans_screen.dart";
 import "features/catalog/catalog_screen.dart";
 import "features/duty/duty_controller.dart";
-import "features/events/schedule_sheet.dart";
 import "features/duty/volunteer_duty_tab_screen.dart";
 import "features/events/event_notification_bell.dart";
 import "features/events/events_controller.dart";
+import "features/events/schedule_sheet.dart";
 import "features/info/contact_screen.dart";
 import "features/info/membership_info_screen.dart";
 import "features/info/library_info_copy.dart";
@@ -318,20 +318,8 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                         icon: const Icon(Icons.event_available_outlined),
                         onPressed: () => _openSchedule(context),
                       ),
-                    ] else if (auth.isVolunteer) ...[
-                      const EventNotificationBell(),
-                      IconButton(
-                        tooltip: "Schedule",
-                        icon: const Icon(Icons.event_available_outlined),
-                        onPressed: () => _openSchedule(context),
-                      ),
-                    ] else if (auth.isMember) ...[
-                      const EventNotificationBell(),
-                      IconButton(
-                        tooltip: "Schedule",
-                        icon: const Icon(Icons.event_available_outlined),
-                        onPressed: () => _openSchedule(context),
-                      ),
+                    ] else if (auth.showsScheduleSheet) ...[
+                      const ScheduleAppBarButton(),
                     ],
                     if (!auth.isLoggedIn)
                       _guestAuthActions()

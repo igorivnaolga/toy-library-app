@@ -99,6 +99,13 @@ class ToyOut(BaseModel):
         default=None,
         description="Admin toy detail: loan return session label.",
     )
+    queue_opens_label: str | None = Field(
+        default=None,
+        description=(
+            "Member catalog: first session when another member may book after "
+            "someone else's reservation hold (two weeks)."
+        ),
+    )
 
     @field_validator("name", mode="before")
     @classmethod

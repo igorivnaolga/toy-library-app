@@ -47,6 +47,24 @@ def list_duty_dates_in_range(
     return [row[0] for row in rows]
 
 
+def list_my_duty_dates_in_range(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+    from_date: date,
+    to_date: date,
+) -> list[date]:
+    rows = session.execute(
+        select(DutySession.session_date)
+        .where(DutySession.volunteer_id == user_id)
+        .where(DutySession.session_date >= from_date)
+        .where(DutySession.session_date <= to_date)
+        .distinct()
+        .order_by(DutySession.session_date.asc())
+    ).all()
+    return [row[0] for row in rows]
+
+
 def get_duty_session_by_id(
     session: Session,
     session_id: uuid.UUID,

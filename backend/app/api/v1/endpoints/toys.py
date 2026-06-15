@@ -14,7 +14,11 @@ from sqlalchemy.orm import Session
 from app.core.auth_deps import get_optional_principal, require_on_duty_desk
 from app.core.roles import Role
 from app.db.session import get_db
-from app.repositories.toy_repo import get_toy_piece_inventory_raw
+from app.repositories.toy_repo import (
+    _db_toy_count,
+    get_toy_detail_from_db,
+    get_toy_piece_inventory_raw,
+)
 from app.schemas.principal import Principal
 from app.schemas.toy import (
     ToyOut,
@@ -99,21 +103,13 @@ def _staff_can_view_piece_lines(principal: Principal | None) -> bool:
     return principal is not None and principal.role in {Role.ADMIN, Role.VOLUNTEER}
 
 
-@router.get("/{toy_id}", response_model=ToyOut)
-def get_toy(
+def _attach_piece_lines(
+    toy: ToyOut,
     toy_id: str,
-    db: Session = Depends(get_db),
-    principal: Principal | None = Depends(get_optional_principal),
+    *,
+    piece_inventory: str | None,
 ) -> ToyOut:
-    toy = get_toy_service(toy_id)
-    if not toy:
-        raise HTTPException(status_code=404, detail="Toy not found")
-    if principal is not None and principal.role == Role.ADMIN:
-        toy = enrich_toy_out_for_admin(db, toy)
-    if not _staff_can_view_piece_lines(principal):
-        return toy
-    inventory = get_toy_piece_inventory_raw(toy_id)
-    lines = resolve_piece_lines_for_toy(toy_id, piece_inventory=inventory)
+    lines = resolve_piece_lines_for_toy(toy_id, piece_inventory=piece_inventory)
     if not lines:
         return toy
     return toy.model_copy(
@@ -128,6 +124,37 @@ def get_toy(
             ]
         }
     )
+
+
+@router.get("/{toy_id}", response_model=ToyOut)
+def get_toy(
+    toy_id: str,
+    db: Session = Depends(get_db),
+    principal: Principal | None = Depends(get_optional_principal),
+) -> ToyOut:
+    toy: ToyOut | None = None
+    piece_inventory: str | None = None
+
+    if _db_toy_count() > 0:
+        detail = get_toy_detail_from_db(db, toy_id)
+        if detail is not None:
+            toy, piece_inventory = detail
+
+    if toy is None:
+        toy = get_toy_service(toy_id)
+        if toy is not None and _staff_can_view_piece_lines(principal):
+            piece_inventory = get_toy_piece_inventory_raw(toy_id)
+
+    if toy is None:
+        raise HTTPException(status_code=404, detail="Toy not found")
+
+    if principal is not None and principal.role == Role.ADMIN:
+        toy = enrich_toy_out_for_admin(db, toy)
+
+    if not _staff_can_view_piece_lines(principal):
+        return toy
+
+    return _attach_piece_lines(toy, toy_id, piece_inventory=piece_inventory)
 
 
 _require_on_duty_for_pieces = require_on_duty_desk()
@@ -155,18 +182,4 @@ def update_toy_pieces(
             detail="Toy not found or catalog is not loaded in the database yet.",
         )
     inventory = get_toy_piece_inventory_raw(toy_id)
-    lines = resolve_piece_lines_for_toy(toy_id, piece_inventory=inventory)
-    if not lines:
-        return updated
-    return updated.model_copy(
-        update={
-            "piece_lines": [
-                ToyPieceLineOut(
-                    name=line.name,
-                    quantity=line.quantity,
-                    missing=line.missing,
-                )
-                for line in lines
-            ]
-        }
-    )
+    return _attach_piece_lines(updated, toy_id, piece_inventory=inventory)

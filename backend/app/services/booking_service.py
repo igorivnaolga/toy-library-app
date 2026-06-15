@@ -9,7 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.availability import AVAILABLE, ON_LOAN, RESERVED, normalize_availability
+from app.core.availability import (
+    AVAILABLE,
+    ON_LOAN,
+    RESERVED,
+    member_availability,
+    normalize_availability,
+)
+from app.core.reservation_hold import reservation_hold_opens_on
 from app.core.library_sessions import (
     LIBRARY_TIMEZONE,
     allowed_pickup_dates,
@@ -42,7 +49,7 @@ from app.repositories.booking_repo import (
     mark_booking_cancelled,
     purge_expired_cancelled_bookings,
 )
-from app.repositories.toy_repo import _db_toy_count, get_toy_by_id
+from app.repositories.toy_repo import _db_toy_count, get_toy_by_id, resolve_toy_orm
 
 # Match seed CSV labels; ``normalize_availability`` maps these to available/reserved.
 _TOY_STATUS_IN_LIBRARY = "In library"
@@ -60,10 +67,7 @@ class BookingError(Exception):
 
 
 def _get_toy_row(session: Session, toy_id: str) -> Toy | None:
-    toy_id_norm = toy_id.strip()
-    if not toy_id_norm:
-        return None
-    return session.scalar(select(Toy).where(Toy.toy_id == toy_id_norm))
+    return resolve_toy_orm(session, toy_id)
 
 
 def _release_toy_if_reserved(session: Session, toy_id: str) -> None:
@@ -107,9 +111,17 @@ def _earliest_pickup_after_reservation(session: Session, toy: Toy) -> date | Non
     )
 
 
-def _earliest_pickup_for_toy(session: Session, toy: Toy) -> date | None:
+def _earliest_pickup_for_toy(
+    session: Session,
+    toy: Toy,
+    *,
+    superseded_hold_end: date | None = None,
+) -> date | None:
     """Earliest allowed pickup from loan-end and/or reservation-hold rules."""
     candidates: list[date] = []
+
+    if superseded_hold_end is not None:
+        candidates.append(superseded_hold_end)
 
     availability = normalize_availability(toy.status)
     if availability in {ON_LOAN, RESERVED}:
@@ -134,9 +146,15 @@ def _validate_pickup_for_toy(
     session: Session,
     toy: Toy,
     pickup_date: date,
+    *,
+    superseded_hold_end: date | None = None,
 ) -> None:
     """Enforce loan-end and reservation-hold pickup constraints."""
-    earliest = _earliest_pickup_for_toy(session, toy)
+    earliest = _earliest_pickup_for_toy(
+        session,
+        toy,
+        superseded_hold_end=superseded_hold_end,
+    )
     if earliest is not None and pickup_date < earliest:
         raise BookingError(
             "pickup_before_loan_due",
@@ -157,6 +175,7 @@ def _pickup_window_for_toy(
     toy: Toy | None,
     *,
     now: datetime | None = None,
+    superseded_hold_end: date | None = None,
 ) -> tuple[date, date]:
     """Bookable pickup range; extends 6 months from loan end or reserved pickup when needed."""
     now = now or library_now()
@@ -165,7 +184,11 @@ def _pickup_window_for_toy(
     if toy is None:
         return start, end
 
-    earliest = _earliest_pickup_for_toy(session, toy)
+    earliest = _earliest_pickup_for_toy(
+        session,
+        toy,
+        superseded_hold_end=superseded_hold_end,
+    )
     if earliest is not None:
         start = max(start, earliest)
         end = max(end, bookable_horizon_end(earliest))
@@ -182,8 +205,14 @@ def _pickup_dates_for_toy(
     toy: Toy | None,
     *,
     now: datetime | None = None,
+    superseded_hold_end: date | None = None,
 ) -> list[date]:
-    start, end = _pickup_window_for_toy(session, toy, now=now)
+    start, end = _pickup_window_for_toy(
+        session,
+        toy,
+        now=now,
+        superseded_hold_end=superseded_hold_end,
+    )
     return session_pickup_dates_between(start, end)
 
 
@@ -237,6 +266,7 @@ def _validate_pickup_date(
     *,
     session: Session | None = None,
     toy: Toy | None = None,
+    superseded_hold_end: date | None = None,
 ) -> None:
     if not is_library_session_day(pickup_date):
         raise BookingError(
@@ -244,9 +274,18 @@ def _validate_pickup_date(
             "Pickup day must be a library session (Wednesday or Saturday).",
         )
     if session is not None and toy is not None:
-        _validate_pickup_for_toy(session, toy, pickup_date)
+        _validate_pickup_for_toy(
+            session,
+            toy,
+            pickup_date,
+            superseded_hold_end=superseded_hold_end,
+        )
     allowed = (
-        _pickup_dates_for_toy(session, toy)
+        _pickup_dates_for_toy(
+            session,
+            toy,
+            superseded_hold_end=superseded_hold_end,
+        )
         if session is not None
         else allowed_pickup_dates()
     )
@@ -276,21 +315,39 @@ def create_booking_for_user(
             )
         raise BookingError("toy_not_found", "Toy not found.")
 
-    availability = normalize_availability(toy.status)
+    loan = get_active_loan_for_toy(session, toy.toy_id)
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    superseded_hold_end: date | None = None
+
+    if pending is not None:
+        if pending.user_id == user_id:
+            raise BookingError(
+                "toy_already_reserved",
+                "You already have a pending booking for this toy.",
+            )
+        hold_end = reservation_hold_opens_on(pending)
+        if hold_end is not None and pickup_date < hold_end:
+            raise BookingError(
+                "pickup_before_loan_due",
+                f"Pickup day must be on or after {format_pickup_label(hold_end)}.",
+            )
+        superseded_hold_end = hold_end
+        mark_booking_cancelled(session, pending)
+        _release_toy_if_reserved(session, toy.toy_id)
+        pending = None
+
+    availability = member_availability(
+        toy.status,
+        has_active_loan=loan is not None,
+        has_pending_booking=False,
+    )
     if availability not in {AVAILABLE, ON_LOAN}:
         raise BookingError(
             "toy_not_available",
             "This toy is not available for booking right now.",
         )
 
-    if get_pending_booking_for_toy(session, toy.toy_id) is not None:
-        raise BookingError(
-            "toy_already_reserved",
-            "This toy already has a pending booking.",
-        )
-
     if availability == ON_LOAN:
-        loan = get_active_loan_for_toy(session, toy.toy_id)
         if loan is None:
             raise BookingError(
                 "toy_not_available",
@@ -302,7 +359,12 @@ def create_booking_for_user(
                 "Return this toy before booking it again.",
             )
 
-    _validate_pickup_date(pickup_date, session=session, toy=toy)
+    _validate_pickup_date(
+        pickup_date,
+        session=session,
+        toy=toy,
+        superseded_hold_end=superseded_hold_end,
+    )
 
     try:
         booking = create_booking(

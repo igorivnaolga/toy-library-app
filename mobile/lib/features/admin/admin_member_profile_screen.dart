@@ -1,3 +1,5 @@
+import "dart:ui";
+
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
@@ -96,8 +98,12 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     });
     try {
       final admin = context.read<AdminController>();
-      final member = await admin.loadMemberDetail(widget.userId);
-      final payments = await admin.loadMemberPayments(widget.userId);
+      final results = await Future.wait<Object>([
+        admin.loadMemberDetail(widget.userId),
+        admin.loadMemberPayments(widget.userId),
+      ]);
+      final member = results[0] as AdminMemberDetail;
+      final payments = results[1] as List<PaymentItem>;
       List<LoanItem> loans = member.loans;
       String? loansError;
       if (loans.isEmpty) {
@@ -601,14 +607,16 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     );
     final heading = headingLabel.isNotEmpty ? headingLabel : displayName;
     final email = member?.email ?? widget.initialMember?.email ?? "";
+    final showSkeleton = _loading && member == null;
 
     return Scaffold(
       appBar: AppBar(
         title: const SizedBox.shrink(),
       ),
-      body: _loading && member == null
-          ? const Center(child: ToyLibraryLoadingIndicator())
-          : ListView(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
                 if (_error != null) ...[
@@ -650,6 +658,9 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 28),
+                if (showSkeleton)
+                  const _ProfileSectionsSkeleton()
+                else ...[
                 _AdminProfileSection(
                   title: "Payments",
                   children: [
@@ -916,8 +927,101 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                     ),
                   ],
                 ),
+                ],
               ],
             ),
+          if (_loading)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: ColoredBox(
+                      color: theme.scaffoldBackgroundColor.withValues(alpha: 0.55),
+                      child: const Center(
+                        child: ToyLibraryLoadingIndicator(
+                          message: "Loading profile…",
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileSectionsSkeleton extends StatelessWidget {
+  const _ProfileSectionsSkeleton();
+
+  static const _titles = [
+    "Payments",
+    "Loans",
+    "Membership",
+    "Contact & membership form",
+    "Children",
+    "Admin notes",
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < _titles.length; i++) ...[
+          if (i > 0) SizedBox(height: i == 3 || i == 4 ? 24 : 20),
+          _ProfileSectionSkeleton(title: _titles[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProfileSectionSkeleton extends StatelessWidget {
+  const _ProfileSectionSkeleton({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withValues(alpha: 0.08);
+
+    return _AdminProfileSection(
+      title: title,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 14,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FractionallySizedBox(
+                widthFactor: 0.62,
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

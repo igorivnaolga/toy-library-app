@@ -114,7 +114,15 @@ class _BookingsScreenState extends State<BookingsScreen> {
       onOpen: () {
         Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => ToyDetailScreen(toyId: item.toyId),
+            builder: (_) => ToyDetailScreen(
+              toyId: item.toyId,
+              initialToy: previewToyItem(
+                toyId: item.toyId,
+                name: item.toyName,
+                photoFile: item.photoFile,
+                availability: "reserved",
+              ),
+            ),
           ),
         );
       },

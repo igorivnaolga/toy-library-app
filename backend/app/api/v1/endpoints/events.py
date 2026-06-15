@@ -92,13 +92,17 @@ def event_availability(
 def schedule_dates(
     from_date: date = Query(..., alias="from"),
     to_date: date = Query(..., alias="to"),
-    _: Principal = Depends(_require_member),
+    principal: Principal = Depends(_require_member),
     db: Session = Depends(get_db),
 ) -> EventDatesResponse:
     if to_date < from_date:
         raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
     duty_dates, event_dates = schedule_dates_in_range(
-        db, from_date=from_date, to_date=to_date
+        db,
+        from_date=from_date,
+        to_date=to_date,
+        role=principal.role,
+        user_id=principal.id,
     )
     return EventDatesResponse(duty_dates=duty_dates, event_dates=event_dates)
 

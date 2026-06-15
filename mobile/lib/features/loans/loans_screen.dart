@@ -48,10 +48,20 @@ class _LoansScreenState extends State<LoansScreen> {
     }
   }
 
-  void _openToy(String toyId) {
+  void _openToy(LoanItem loan) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ToyDetailScreen(toyId: toyId),
+        builder: (_) => ToyDetailScreen(
+          toyId: loan.toyId,
+          initialToy: previewToyItem(
+            toyId: loan.toyId,
+            name: loan.toyName,
+            photoFile: loan.photoFile,
+            availability: "on_loan",
+            totalPieces: loan.toyTotalPieces,
+            missingPieces: loan.toyMissingPieces,
+          ),
+        ),
       ),
     );
   }
@@ -100,7 +110,7 @@ class _MyLoansView extends StatefulWidget {
   });
 
   final Future<void> Function(LoanItem item) onRenew;
-  final ValueChanged<String> onOpenToy;
+  final ValueChanged<LoanItem> onOpenToy;
   final Future<void> Function() onRefresh;
 
   @override
@@ -116,7 +126,7 @@ class _MyLoansViewState extends State<_MyLoansView> {
       item: loan,
       loading: c.myLoansLoading,
       inGroup: inGroup,
-      onOpen: () => widget.onOpenToy(loan.toyId),
+      onOpen: () => widget.onOpenToy(loan),
       onRenew: loan.canRenew ? () => widget.onRenew(loan) : null,
     );
   }

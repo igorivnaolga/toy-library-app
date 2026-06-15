@@ -153,8 +153,8 @@ class BookingsController extends ChangeNotifier {
 
 String bookingActionErrorMessage(Object error) {
   if (error is ApiException) {
-    if (error.statusCode == 409) {
-      return "This toy is not available to book right now.";
+    if (error.statusCode == 409 && error.message.isNotEmpty) {
+      return error.message;
     }
     if (error.statusCode == 404) {
       return "Toy not found.";

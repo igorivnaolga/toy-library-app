@@ -88,6 +88,13 @@ class AuthStore extends ChangeNotifier {
   bool get hasPendingMembershipFees =>
       (isMember || isVolunteer) && !membershipFeesPaid;
 
+  /// Duty calendar picker in the schedule sheet (not casual / non-duty).
+  bool get usesScheduleCalendar =>
+      isAdmin || isVolunteer || membershipTier == "duty";
+
+  /// Schedule sheet with library events (all borrowing members).
+  bool get showsScheduleSheet => canBookToys;
+
   void markPostRegistrationWelcome() {
     showPostRegistrationWelcome = true;
     notifyListeners();

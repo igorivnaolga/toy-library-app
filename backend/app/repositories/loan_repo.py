@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.loan import LOAN_STATUS_ACTIVE, LOAN_STATUS_RETURNED, Loan
@@ -47,6 +47,9 @@ def get_loan_by_id(session: Session, loan_id: uuid.UUID) -> Loan | None:
 
 
 def get_active_loan_for_toy(session: Session, toy_id: str) -> Loan | None:
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
     return session.scalar(
         select(Loan)
         .options(
@@ -54,7 +57,7 @@ def get_active_loan_for_toy(session: Session, toy_id: str) -> Loan | None:
             joinedload(Loan.profile),
         )
         .where(
-            Loan.toy_id == toy_id,
+            func.lower(Loan.toy_id) == toy_id_norm.lower(),
             Loan.status == LOAN_STATUS_ACTIVE,
         )
     )

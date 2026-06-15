@@ -56,6 +56,7 @@ class ToyItem {
     this.onLoanToName,
     this.onLoanToEmail,
     this.loanDueLabel,
+    this.queueOpensLabel,
   });
 
   final String toyId;
@@ -78,6 +79,7 @@ class ToyItem {
   final String? onLoanToName;
   final String? onLoanToEmail;
   final String? loanDueLabel;
+  final String? queueOpensLabel;
 
   bool get hasAdminHolderInfo =>
       (reservedByName != null && reservedByName!.isNotEmpty) ||
@@ -116,6 +118,27 @@ class ToyItem {
       onLoanToName: json["on_loan_to_name"]?.toString(),
       onLoanToEmail: json["on_loan_to_email"]?.toString(),
       loanDueLabel: json["loan_due_label"]?.toString(),
+      queueOpensLabel: json["queue_opens_label"]?.toString(),
+    );
+  }
+
+  /// Lightweight row for instant detail navigation before the full fetch completes.
+  factory ToyItem.preview({
+    required String toyId,
+    String? name,
+    String? photoFile,
+    String availability = "unknown",
+    int? totalPieces,
+    int? missingPieces,
+  }) {
+    final cleanedName = name?.trim();
+    return ToyItem(
+      toyId: toyId,
+      name: cleanedName != null && cleanedName.isNotEmpty ? cleanedName : toyId,
+      photoFile: photoFile,
+      availability: availability,
+      totalPieces: totalPieces,
+      missingPieces: missingPieces,
     );
   }
 }

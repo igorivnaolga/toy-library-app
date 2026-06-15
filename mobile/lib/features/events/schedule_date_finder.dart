@@ -38,10 +38,10 @@ Future<ScheduleDatePick?> pickScheduleDate(
 }) async {
   final now = DateTime.now();
   final eventsController = context.read<EventsController>();
-  final anchor = initialDate ?? now;
+  final today = calendarDay(now);
   await eventsController.loadScheduleDates(
-    DateTime(anchor.year, anchor.month - 1, 1),
-    DateTime(anchor.year, anchor.month + 2, 0),
+    today.subtract(const Duration(days: 45)),
+    today.add(const Duration(days: 365)),
   );
 
   if (!context.mounted) return null;
@@ -231,10 +231,9 @@ class _ScheduleCalendarDialogState extends State<_ScheduleCalendarDialog> {
   }
 
   Future<void> _loadDatesForFocusedMonth() async {
-    await context.read<EventsController>().loadScheduleDates(
-      DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1),
-      DateTime(_focusedMonth.year, _focusedMonth.month + 2, 0),
-    );
+    final from = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
+    final to = DateTime(_focusedMonth.year, _focusedMonth.month + 2, 0);
+    await context.read<EventsController>().loadScheduleDates(from, to);
     if (mounted) setState(() {});
   }
 

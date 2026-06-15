@@ -55,3 +55,27 @@ def normalize_availability(raw_status: str | None) -> str:
         return ON_LOAN
 
     return UNKNOWN
+
+
+def member_availability(
+    raw_status: str | None,
+    *,
+    has_active_loan: bool,
+    has_pending_booking: bool = False,
+) -> str:
+    """
+    Availability shown to members and used for booking rules.
+
+    An active loan always wins over a stored ``Reserved`` label so members can
+    queue the next pickup once the current loan ends. While another member's
+    two-week reservation hold is active, others see the toy as reserved.
+    """
+    if has_pending_booking:
+        return RESERVED
+    if has_active_loan:
+        return ON_LOAN
+    normalized = normalize_availability(raw_status)
+    if normalized in {ON_LOAN, RESERVED}:
+        # Stale inventory label or expired queue — treat as bookable in catalog.
+        return AVAILABLE
+    return normalized

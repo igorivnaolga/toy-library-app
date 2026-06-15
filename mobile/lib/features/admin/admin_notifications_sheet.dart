@@ -5,29 +5,29 @@ import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../../core/notification_bell_ack.dart";
 import "../../core/toy_loading_indicator.dart";
-import "../../core/app_theme.dart";
 import "../profile/profile_labels.dart";
 import "admin_controller.dart";
 import "admin_member_profile_screen.dart";
 import "admin_models.dart";
 
-/// Admin bell badge: pending volunteer approvals always; new members until first open.
+/// Admin bell badge: only counts above what the admin last viewed.
 int adminNotificationBadgeCount(
   AdminNotifications? summary,
   NotificationBellAckStore ack,
 ) {
-  if (summary == null) return 0;
-  final pending = summary.pendingVolunteerApprovals;
-  if (!ack.adminBellOpened) {
-    return pending + summary.newMembersCount;
-  }
-  return pending;
+  if (summary == null || !ack.adminAckLoaded) return 0;
+  return ack.adminUnreadCount(summary);
 }
 
 /// Opens admin notifications (full screen).
 Future<void> showAdminNotificationsSheet(BuildContext context) async {
   if (!context.mounted) return;
-  context.read<NotificationBellAckStore>().markAdminBellOpened();
+  final admin = context.read<AdminController>();
+  final ack = context.read<NotificationBellAckStore>();
+  final summary = admin.notifications;
+  if (summary != null) {
+    await ack.markAdminNotificationsSeen(summary);
+  }
   await Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => const AdminNotificationsScreen(),
@@ -35,18 +35,39 @@ Future<void> showAdminNotificationsSheet(BuildContext context) async {
   );
   if (context.mounted) {
     await context.read<AdminController>().loadNotifications(silent: true);
+    final updated = context.read<AdminController>().notifications;
+    if (updated != null && context.mounted) {
+      await ack.markAdminNotificationsSeen(updated);
+    }
   }
 }
 
-class AdminNotificationBell extends StatelessWidget {
+class AdminNotificationBell extends StatefulWidget {
   const AdminNotificationBell({super.key});
+
+  @override
+  State<AdminNotificationBell> createState() => _AdminNotificationBellState();
+}
+
+class _AdminNotificationBellState extends State<AdminNotificationBell> {
+  AdminNotifications? _lastReconciled;
 
   @override
   Widget build(BuildContext context) {
     final ack = context.watch<NotificationBellAckStore>();
     return Consumer<AdminController>(
       builder: (context, admin, _) {
-        final count = adminNotificationBadgeCount(admin.notifications, ack);
+        final summary = admin.notifications;
+        if (summary != null && !identical(summary, _lastReconciled)) {
+          _lastReconciled = summary;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!mounted) return;
+            await context
+                .read<NotificationBellAckStore>()
+                .reconcileAdminSummary(summary);
+          });
+        }
+        final count = adminNotificationBadgeCount(summary, ack);
         return IconButton(
           tooltip: "Admin notifications",
           onPressed: () => showAdminNotificationsSheet(context),
@@ -145,6 +166,14 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         SnackBar(content: Text("Approved ${volunteer.displayName}")),
       );
       await _load();
+      if (!mounted) return;
+      await context.read<AdminController>().loadNotifications(silent: true);
+      final summary = context.read<AdminController>().notifications;
+      if (summary != null) {
+        await context
+            .read<NotificationBellAckStore>()
+            .markAdminNotificationsSeen(summary);
+      }
     } catch (e) {
       if (!mounted) return;
       final message =
@@ -301,23 +330,21 @@ class _PendingVolunteerCard extends StatelessWidget {
             Text(
               volunteer.displayName,
               style: const TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              volunteer.email.isEmpty ? "Duty tier member" : volunteer.email,
-              style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
-            ),
+            if (volunteer.email.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                volunteer.email,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+              ),
+            ],
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton(
-                onPressed: onApprove,
-                child: const Text("Approve"),
-              ),
+            FilledButton(
+              onPressed: onApprove,
+              child: const Text("Approve volunteer"),
             ),
           ],
         ),
@@ -337,64 +364,34 @@ class _RecentMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tier = membershipTierLabel(member.membershipTier);
-    final role = member.role == "volunteer" ? "Volunteer" : "Member";
-
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      color: kGroupHeaderBackground,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: kGroupHeaderBorder.withValues(alpha: 0.75),
-        ),
-      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      member.displayName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A1A),
-                      ),
-                    ),
-                    if (member.email.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        member.email,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF5C5C5C),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    Text(
-                      "$role · $tier · Joined ${formatAdminDate(member.membershipStartedAt)}",
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF5C5C5C),
-                      ),
-                    ),
-                  ],
+              Text(
+                member.displayName,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              if (member.email.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  member.email,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Text(
+                membershipTierLabel(member.membershipTier),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
               ),
             ],
           ),

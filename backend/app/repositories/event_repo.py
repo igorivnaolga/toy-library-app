@@ -56,6 +56,34 @@ def list_event_dates_in_range(
         .where(LibraryEvent.end_date >= from_date)
         .where(LibraryEvent.is_published.is_(True))
     ).all()
+    return _expand_event_date_ranges(rows, from_date=from_date, to_date=to_date)
+
+
+def list_event_dates_in_range_for_audiences(
+    session: Session,
+    *,
+    from_date: date,
+    to_date: date,
+    audiences: list[str],
+) -> list[date]:
+    rows = session.execute(
+        select(LibraryEvent.event_date, LibraryEvent.end_date)
+        .join(EventTimeSlot, EventTimeSlot.event_id == LibraryEvent.id)
+        .where(LibraryEvent.event_date <= to_date)
+        .where(LibraryEvent.end_date >= from_date)
+        .where(LibraryEvent.is_published.is_(True))
+        .where(EventTimeSlot.audience.in_(audiences))
+        .distinct()
+    ).all()
+    return _expand_event_date_ranges(rows, from_date=from_date, to_date=to_date)
+
+
+def _expand_event_date_ranges(
+    rows,
+    *,
+    from_date: date,
+    to_date: date,
+) -> list[date]:
     marked: set[date] = set()
     for start, end in rows:
         day = start
@@ -202,7 +230,7 @@ def availability_counts_for_user(
     session: Session,
     *,
     user_id: uuid.UUID,
-    audience: str,
+    audiences: list[str],
     from_date: date,
     to_date: date,
     today: date,
@@ -229,7 +257,7 @@ def availability_counts_for_user(
             LibraryEvent.is_published.is_(True),
             LibraryEvent.end_date >= effective_from,
             LibraryEvent.event_date <= to_date,
-            EventTimeSlot.audience == audience,
+            EventTimeSlot.audience.in_(audiences),
             booked_count < EventTimeSlot.capacity,
             ~user_already_booked,
         )

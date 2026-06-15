@@ -116,7 +116,8 @@ def send_member_push_reminders(
     """
     Send due booking/loan push reminders (admin or cron).
 
-    Schedule this endpoint around 6:00 and 9:00 Pacific/Auckland.
+    Schedule this endpoint around 5:00 (duty + library events), 6:00, and 9:00
+    Pacific/Auckland.
     """
     _ = principal
     result = send_due_member_push_reminders(db)

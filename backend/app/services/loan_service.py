@@ -35,7 +35,7 @@ from app.repositories.loan_repo import (
     list_loans_for_user,
     mark_loan_returned,
 )
-from app.repositories.toy_repo import get_toy_by_id
+from app.repositories.toy_repo import get_toy_by_id, resolve_toy_orm
 from app.models.payment import PAYMENT_STATUS_PENDING
 from app.services.payment_service import (
     PaymentError,
@@ -57,12 +57,7 @@ class LoanError(Exception):
 
 
 def _get_toy_row(session: Session, toy_id: str) -> Toy | None:
-    toy_id_norm = toy_id.strip()
-    if not toy_id_norm:
-        return None
-    from sqlalchemy import select
-
-    return session.scalar(select(Toy).where(Toy.toy_id == toy_id_norm))
+    return resolve_toy_orm(session, toy_id)
 
 
 def _due_date_from_checkout(checkout_day: date) -> date:

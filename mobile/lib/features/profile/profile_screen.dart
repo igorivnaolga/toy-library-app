@@ -1,3 +1,5 @@
+import "dart:ui";
+
 import "package:flutter/material.dart";
 import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
@@ -33,29 +35,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _contactExpanded = false;
   bool _dutyExpanded = false;
   List<PaymentItem> _payments = const [];
-  bool _paymentsLoading = false;
+  bool _loading = true;
+  int _loadToken = 0;
 
   @override
   void initState() {
     super.initState();
     context.read<ProfileController>().syncFromAuth();
     _kidController = TextEditingController();
-    _loadPayments();
+    _load();
   }
 
-  Future<void> _loadPayments() async {
-    final client = context.read<BackendClient>();
-    setState(() => _paymentsLoading = true);
+  Future<void> _load() async {
+    final token = ++_loadToken;
+    setState(() => _loading = true);
     try {
-      final json = await client.getJson("/api/v1/payments/me");
-      if (!mounted) return;
+      final auth = context.read<AuthStore>();
+      final profile = context.read<ProfileController>();
+      final client = context.read<BackendClient>();
+      Map<String, dynamic>? paymentsJson;
+      await Future.wait<void>([
+        auth.refreshProfile(silent: true),
+        client.getJson("/api/v1/payments/me").then((json) {
+          paymentsJson = json;
+        }).catchError((_) {}),
+      ]);
+      if (!mounted || token != _loadToken) return;
+      profile.syncFromAuth();
       setState(() {
-        _payments = parsePaymentList(json);
-        _paymentsLoading = false;
+        if (paymentsJson != null) {
+          _payments = parsePaymentList(paymentsJson!);
+        }
+        _loading = false;
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _paymentsLoading = false);
+      if (!mounted || token != _loadToken) return;
+      context.read<ProfileController>().syncFromAuth();
+      setState(() => _loading = false);
     }
   }
 
@@ -183,221 +199,253 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actionsPadding: const EdgeInsets.only(right: 20),
         actions: [
           _ProfileSignOutAction(
-            onPressed: profile.saving ? null : _signOut,
+            onPressed: profile.saving || _loading ? null : _signOut,
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          _ProfileHeader(
-            fullName: profile.fullName.trim().isEmpty
-                ? "Your name"
-                : profile.fullName.trim(),
-            parentBName: profile.contact.parentBName,
-            email: auth.email,
-            avatarPath: profile.avatarPath,
-            uploadingAvatar: profile.uploadingAvatar,
-            onChangePhoto: () => _pickAvatar(profile),
-          ),
-          const SizedBox(height: 28),
-          if (_paymentsLoading)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 20),
-              child: Center(child: ToyLibraryLoadingIndicator()),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: MemberBalanceCard(
-                balanceDueCents: auth.balanceDueCents,
-                creditBalanceCents: auth.creditBalanceCents,
-                payments: _payments,
-                onHowToPay: () => openContactPaymentDetails(context),
-              ),
-            ),
-          _ProfileSection(
-            title: "Membership",
+          ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Row(
+              _ProfileHeader(
+                fullName: profile.fullName.trim().isEmpty
+                    ? "Your name"
+                    : profile.fullName.trim(),
+                parentBName: profile.contact.parentBName,
+                email: auth.email,
+                avatarPath: profile.avatarPath,
+                uploadingAvatar: profile.uploadingAvatar,
+                onChangePhoto: _loading ? () {} : () => _pickAvatar(profile),
+              ),
+              const SizedBox(height: 28),
+              if (_loading)
+                _MemberProfileSectionsSkeleton(showDutyShifts: showDutyShifts)
+              else ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: MemberBalanceCard(
+                    balanceDueCents: auth.balanceDueCents,
+                    creditBalanceCents: auth.creditBalanceCents,
+                    payments: _payments,
+                    onHowToPay: () => openContactPaymentDetails(context),
+                  ),
+                ),
+                _ProfileSection(
+                  title: "Membership",
                   children: [
-                    Icon(
-                      Icons.card_membership_outlined,
-                      color: theme.colorScheme.onSurface
-                          .withValues(alpha: 0.55),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: auth.membershipTier == "duty" && auth.isMember
-                          ? Text(
-                              "Volunteer access pending approval",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.secondary,
-                                fontStyle: FontStyle.italic,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.card_membership_outlined,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.55),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: auth.membershipTier == "duty" && auth.isMember
+                                ? Text(
+                                    "Volunteer access pending approval",
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.secondary,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  )
+                                : Text(
+                                    "Your current membership",
+                                    style: context.profileSecondary,
+                                  ),
+                          ),
+                          _MembershipBadge(
+                            label: membershipStatus,
+                            style: membershipBadgeStyle(
+                              label: membershipStatus,
+                              tierForeground: membershipTierForeground(
+                                auth.membershipTier,
                               ),
-                            )
-                          : Text(
-                              "Your current membership",
-                              style: context.profileSecondary,
+                              colors: theme.colorScheme,
                             ),
-                    ),
-                    _MembershipBadge(
-                      label: membershipStatus,
-                      style: membershipBadgeStyle(
-                        label: membershipStatus,
-                        colors: theme.colorScheme,
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          if (showDutyShifts) ...[
-            const SizedBox(height: 24),
-            _CollapsibleProfileSection(
-              title: "Duty shifts",
-              expanded: _dutyExpanded,
-              onToggle: () => setState(() => _dutyExpanded = !_dutyExpanded),
-              children: [
-                VolunteerDutyShiftsBody(
-                  active: _dutyExpanded,
-                  loadSessions: () async {
-                    final client = context.read<BackendClient>();
-                    final json =
-                        await client.getJson("/api/v1/duty/me/sessions");
-                    return VolunteerDutySessionGroups.fromJson(json);
-                  },
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 24),
-          _CollapsibleProfileSection(
-            title: "Contact & membership form",
-            expanded: _contactExpanded,
-            onToggle: () =>
-                setState(() => _contactExpanded = !_contactExpanded),
-            children: [
-              ContactDetailsBody(contact: profile.contact),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _ProfileSection(
-            title: "Children",
-            trailing: IconButton(
-              tooltip: _editingChildren ? "Done editing" : "Edit children",
-              onPressed: profile.saving ? null : _toggleChildrenEdit,
-              icon: Icon(
-                _editingChildren ? Icons.close : Icons.edit_outlined,
-              ),
-            ),
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: profile.kids.isEmpty
-                    ? Text(
-                        _editingChildren
-                            ? "Add a child below."
-                            : "Add children who borrow toys from the library.",
-                        style: context.profileSecondary,
-                      )
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: profile.kids.asMap().entries.map(
-                          (entry) {
-                            if (_editingChildren) {
-                              return InputChip(
-                                label: Text(entry.value.displayLabel),
-                                deleteIcon:
-                                    const Icon(Icons.close, size: 18),
-                                onDeleted: profile.saving
-                                    ? null
-                                    : () => _removeKid(profile, entry.key),
-                              );
-                            }
-                            return Chip(label: Text(entry.value.displayLabel));
-                          },
-                        ).toList(),
+                if (showDutyShifts) ...[
+                  const SizedBox(height: 24),
+                  _CollapsibleProfileSection(
+                    title: "Duty shifts",
+                    expanded: _dutyExpanded,
+                    onToggle: () =>
+                        setState(() => _dutyExpanded = !_dutyExpanded),
+                    children: [
+                      VolunteerDutyShiftsBody(
+                        active: _dutyExpanded,
+                        loadSessions: () async {
+                          final client = context.read<BackendClient>();
+                          final json =
+                              await client.getJson("/api/v1/duty/me/sessions");
+                          return VolunteerDutySessionGroups.fromJson(json);
+                        },
                       ),
-              ),
-              if (_editingChildren) ...[
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: TextField(
-                    controller: _kidController,
-                    style: fieldTextStyle(context),
-                    cursorColor: fieldCursorColor(context),
-                    decoration: labeledInputDecoration(
-                      context,
-                      labelText: "Child name",
-                      fillColor: theme.colorScheme.surface,
-                    ),
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted:
-                        profile.saving ? null : (_) => _addKid(profile),
+                    ],
                   ),
+                ],
+                const SizedBox(height: 24),
+                _CollapsibleProfileSection(
+                  title: "Contact & membership form",
+                  expanded: _contactExpanded,
+                  onToggle: () =>
+                      setState(() => _contactExpanded = !_contactExpanded),
+                  children: [
+                    ContactDetailsBody(contact: profile.contact),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: InkWell(
-                    onTap: profile.saving ? null : _pickKidBirthDate,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InputDecorator(
-                      decoration: labeledInputDecoration(
-                        context,
-                        labelText: "Date of birth",
-                        fillColor: theme.colorScheme.surface,
-                        suffixIcon: _kidBirthDate == null
-                            ? Icon(
-                                Icons.calendar_today_outlined,
-                                size: 20,
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.55),
-                              )
-                            : IconButton(
-                                tooltip: "Clear date",
-                                icon: const Icon(Icons.clear, size: 20),
-                                onPressed: profile.saving
-                                    ? null
-                                    : () =>
-                                        setState(() => _kidBirthDate = null),
-                              ),
-                      ),
-                      child: Text(
-                        _kidBirthDate == null
-                            ? "Select date"
-                            : _formatBirthDate(_kidBirthDate!),
-                        style: _kidBirthDate == null
-                            ? fieldPlaceholderStyle(context)
-                            : fieldTextStyle(context),
-                      ),
+                const SizedBox(height: 24),
+                _ProfileSection(
+                  title: "Children",
+                  trailing: IconButton(
+                    tooltip: _editingChildren ? "Done editing" : "Edit children",
+                    onPressed: profile.saving ? null : _toggleChildrenEdit,
+                    icon: Icon(
+                      _editingChildren ? Icons.close : Icons.edit_outlined,
                     ),
                   ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: profile.kids.isEmpty
+                          ? Text(
+                              _editingChildren
+                                  ? "Add a child below."
+                                  : "Add children who borrow toys from the library.",
+                              style: context.profileSecondary,
+                            )
+                          : Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: profile.kids.asMap().entries.map(
+                                (entry) {
+                                  if (_editingChildren) {
+                                    return InputChip(
+                                      label: Text(entry.value.displayLabel),
+                                      deleteIcon:
+                                          const Icon(Icons.close, size: 18),
+                                      onDeleted: profile.saving
+                                          ? null
+                                          : () => _removeKid(profile, entry.key),
+                                    );
+                                  }
+                                  return Chip(
+                                    label: Text(entry.value.displayLabel),
+                                  );
+                                },
+                              ).toList(),
+                            ),
+                    ),
+                    if (_editingChildren) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: TextField(
+                          controller: _kidController,
+                          style: fieldTextStyle(context),
+                          cursorColor: fieldCursorColor(context),
+                          decoration: labeledInputDecoration(
+                            context,
+                            labelText: "Child name",
+                            fillColor: theme.colorScheme.surface,
+                          ),
+                          textCapitalization: TextCapitalization.words,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: profile.saving
+                              ? null
+                              : (_) => _addKid(profile),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: InkWell(
+                          onTap: profile.saving ? null : _pickKidBirthDate,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InputDecorator(
+                            decoration: labeledInputDecoration(
+                              context,
+                              labelText: "Date of birth",
+                              fillColor: theme.colorScheme.surface,
+                              suffixIcon: _kidBirthDate == null
+                                  ? Icon(
+                                      Icons.calendar_today_outlined,
+                                      size: 20,
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.55),
+                                    )
+                                  : IconButton(
+                                      tooltip: "Clear date",
+                                      icon: const Icon(Icons.clear, size: 20),
+                                      onPressed: profile.saving
+                                          ? null
+                                          : () => setState(
+                                                () => _kidBirthDate = null,
+                                              ),
+                                    ),
+                            ),
+                            child: Text(
+                              _kidBirthDate == null
+                                  ? "Select date"
+                                  : _formatBirthDate(_kidBirthDate!),
+                              style: _kidBirthDate == null
+                                  ? fieldPlaceholderStyle(context)
+                                  : fieldTextStyle(context),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: BrandChipButton(
+                          label: profile.saving ? "Saving…" : "Add child",
+                          large: true,
+                          onPressed:
+                              profile.saving ? null : () => _addKid(profile),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  child: BrandChipButton(
-                    label: profile.saving ? "Saving…" : "Add child",
-                    large: true,
-                    onPressed: profile.saving ? null : () => _addKid(profile),
+                if (profile.error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    profile.error!,
+                    style: TextStyle(color: theme.colorScheme.error),
                   ),
-                ),
+                ],
               ],
             ],
           ),
-          if (profile.error != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              profile.error!,
-              style: TextStyle(color: theme.colorScheme.error),
+          if (_loading)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: ColoredBox(
+                      color: theme.scaffoldBackgroundColor.withValues(
+                        alpha: 0.55,
+                      ),
+                      child: const Center(
+                        child: ToyLibraryLoadingIndicator(
+                          message: "Loading profile…",
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -603,6 +651,78 @@ class _ProfileSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: children,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberProfileSectionsSkeleton extends StatelessWidget {
+  const _MemberProfileSectionsSkeleton({required this.showDutyShifts});
+
+  final bool showDutyShifts;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _ProfileSectionSkeleton(title: "Balance"),
+        const SizedBox(height: 20),
+        const _ProfileSectionSkeleton(title: "Membership"),
+        if (showDutyShifts) ...[
+          const SizedBox(height: 24),
+          const _ProfileSectionSkeleton(title: "Duty shifts"),
+        ],
+        const SizedBox(height: 24),
+        const _ProfileSectionSkeleton(title: "Contact & membership form"),
+        const SizedBox(height: 24),
+        const _ProfileSectionSkeleton(title: "Children"),
+      ],
+    );
+  }
+}
+
+class _ProfileSectionSkeleton extends StatelessWidget {
+  const _ProfileSectionSkeleton({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withValues(alpha: 0.08);
+
+    return _ProfileSection(
+      title: title,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 14,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FractionallySizedBox(
+                widthFactor: 0.62,
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

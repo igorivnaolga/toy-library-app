@@ -164,11 +164,14 @@ def list_pending_bookings_for_user(
 
 
 def get_pending_booking_for_toy(session: Session, toy_id: str) -> Booking | None:
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
     return session.scalar(
         select(Booking)
         .options(joinedload(Booking.profile))
         .where(
-            Booking.toy_id == toy_id,
+            func.lower(Booking.toy_id) == toy_id_norm.lower(),
             Booking.status == BOOKING_STATUS_PENDING,
         )
     )
@@ -182,13 +185,19 @@ def get_pending_bookings_for_toys(
     if not toy_ids:
         return {}
     unique_ids = list(dict.fromkeys(toy_ids))
+    canonical_by_lower = {tid.lower(): tid for tid in unique_ids}
     rows = session.scalars(
         select(Booking).where(
-            Booking.toy_id.in_(unique_ids),
+            func.lower(Booking.toy_id).in_(list(canonical_by_lower)),
             Booking.status == BOOKING_STATUS_PENDING,
         )
     ).all()
-    return {row.toy_id: row for row in rows}
+    out: dict[str, Booking] = {}
+    for row in rows:
+        canonical = canonical_by_lower.get(row.toy_id.lower())
+        if canonical is not None:
+            out[canonical] = row
+    return out
 
 
 def mark_booking_cancelled(session: Session, booking: Booking) -> Booking:

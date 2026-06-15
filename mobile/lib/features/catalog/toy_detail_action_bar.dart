@@ -39,8 +39,10 @@ class ToyDetailActionBar extends StatelessWidget {
   final LoanItem? myActiveLoan;
 
   bool get _canBook =>
-      toy.availability == "available" ||
-      (toy.availability == "on_loan" && myActiveLoan == null);
+      myActiveLoan == null &&
+      (toy.availability == "available" ||
+          toy.availability == "on_loan" ||
+          toy.availability == "reserved");
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +109,21 @@ class ToyDetailActionBar extends StatelessWidget {
                           "This toy is on loan — choose a pickup day from the next open session after it is due back.",
                     ),
                     const SizedBox(height: 12),
+                  ] else if (toy.availability == "reserved") ...[
+                    ToyBookingHintBanner(
+                      message: toy.queueOpensLabel != null &&
+                              toy.queueOpensLabel!.isNotEmpty
+                          ? "This toy is reserved — choose a pickup day from ${toy.queueOpensLabel} onward."
+                          : "This toy is reserved — choose a pickup day from the first open session after the two-week hold.",
+                    ),
+                    const SizedBox(height: 12),
+                  ] else if (toy.queueOpensLabel != null &&
+                      toy.queueOpensLabel!.isNotEmpty) ...[
+                    ToyBookingHintBanner(
+                      message:
+                          "Choose a pickup day from ${toy.queueOpensLabel} — the first open session after the two-week reservation hold.",
+                    ),
+                    const SizedBox(height: 12),
                   ],
                   BrandChipButton(
                     label: "Book this toy",
@@ -115,8 +132,11 @@ class ToyDetailActionBar extends StatelessWidget {
                   ),
                 ] else
                   ToyUnavailableBanner(
-                    availability: toy.availability,
+                    availability: myActiveLoan != null
+                        ? "on_loan"
+                        : toy.availability,
                     myActiveLoan: myActiveLoan,
+                    queueOpensLabel: toy.queueOpensLabel,
                   ),
               ],
             ],

@@ -15,13 +15,20 @@ from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
-from app.core.availability import normalize_availability
+from app.core.availability import member_availability, normalize_availability
+from app.core.reservation_hold import (
+    format_queue_opens_label,
+    pending_queue_blocks_new_booking,
+)
 from app.db.session import get_engine, session_scope
+from app.models.loan import LOAN_STATUS_ACTIVE, Loan
 from app.models.toy import Toy as ToyORM
 from app.models.toy_image import ToyImage as ToyImageORM
 from app.schemas.toy import ToyOut
+from app.repositories.loan_repo import get_active_loan_for_toy
+from app.repositories.booking_repo import get_pending_booking_for_toy, get_pending_bookings_for_toys
 from app.services.pieces_from_setls import (
     ToyPieceLine,
     load_pieces_summary,
@@ -92,6 +99,11 @@ def load_all_toys() -> tuple[ToyOut, ...]:
 
 def _db_toy_count() -> int:
     # If DATABASE_URL isn't configured, treat DB as "not available" (count=0).
+    return _cached_db_toy_count()
+
+
+@lru_cache(maxsize=1)
+def _cached_db_toy_count() -> int:
     engine = get_engine()
     if engine is None:
         return 0
@@ -101,6 +113,10 @@ def _db_toy_count() -> int:
         return int(session.scalar(select(func.count()).select_from(ToyORM)) or 0)
     finally:
         session.close()
+
+
+def invalidate_db_toy_count_cache() -> None:
+    _cached_db_toy_count.cache_clear()
 
 
 def _toy_row_to_out(toy: ToyORM) -> ToyOut:
@@ -123,6 +139,76 @@ def _toy_row_to_out(toy: ToyORM) -> ToyOut:
         missing_pieces_detail=toy.missing_pieces_detail,
         rental_price_cents=toy.rental_price_cents,
     )
+
+
+def _with_member_availability(
+    toy: ToyOut,
+    *,
+    has_active_loan: bool,
+    pending=None,
+) -> ToyOut:
+    queue_blocked = pending_queue_blocks_new_booking(pending)
+    availability = member_availability(
+        toy.status,
+        has_active_loan=has_active_loan,
+        has_pending_booking=queue_blocked,
+    )
+    updates: dict[str, object] = {}
+    if availability != toy.availability:
+        updates["availability"] = availability
+    queue_opens_label = (
+        format_queue_opens_label(pending) if pending is not None else None
+    )
+    if queue_opens_label != toy.queue_opens_label:
+        updates["queue_opens_label"] = queue_opens_label
+    if not updates:
+        return toy
+    return toy.model_copy(update=updates)
+
+
+def _active_loan_toy_ids(session: Session, toy_ids: list[str]) -> set[str]:
+    if not toy_ids:
+        return set()
+    canonical_by_lower = {tid.lower(): tid for tid in toy_ids}
+    rows = session.scalars(
+        select(Loan.toy_id).where(
+            func.lower(Loan.toy_id).in_(list(canonical_by_lower)),
+            Loan.status == LOAN_STATUS_ACTIVE,
+        )
+    ).all()
+    return {
+        canonical_by_lower[row.lower()]
+        for row in rows
+        if row.lower() in canonical_by_lower
+    }
+
+
+def _toy_row_to_member_out(session: Session, toy: ToyORM) -> ToyOut:
+    out = _toy_row_to_out(toy)
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    has_loan = get_active_loan_for_toy(session, toy.toy_id) is not None
+    return _with_member_availability(
+        out,
+        has_active_loan=has_loan,
+        pending=pending,
+    )
+
+
+def _apply_member_availability_batch(
+    session: Session,
+    items: list[ToyOut],
+) -> list[ToyOut]:
+    toy_ids = [item.toy_id for item in items]
+    on_loan_ids = _active_loan_toy_ids(session, toy_ids)
+    pending_by_toy = get_pending_bookings_for_toys(session, toy_ids)
+    return [
+        _with_member_availability(
+            item,
+            has_active_loan=item.toy_id in on_loan_ids,
+            pending=pending_by_toy.get(item.toy_id),
+        )
+        for item in items
+    ]
 
 
 def _list_toys_db(
@@ -179,11 +265,11 @@ def _list_toys_db(
             # Availability is currently derived from `status`, not stored as its own
             # DB column. Filter after mapping rows so DB and CSV behavior stay aligned.
             rows = session.scalars(stmt).unique().all()
-            items = [
-                item
-                for item in (_toy_row_to_out(t) for t in rows)
-                if item.availability == availability
-            ]
+            items = _apply_member_availability_batch(
+                session,
+                [_toy_row_to_out(t) for t in rows],
+            )
+            items = [item for item in items if item.availability == availability]
             total = len(items)
             start = (page - 1) * limit
             end = start + limit
@@ -197,7 +283,10 @@ def _list_toys_db(
         # `.unique()` is recommended when using joined eager loads that can duplicate
         # parent rows in the result set (defensive; cheap for one-to-one image).
         rows = session.scalars(stmt.offset(start).limit(limit)).unique().all()
-        return [_toy_row_to_out(t) for t in rows], total
+        return _apply_member_availability_batch(
+            session,
+            [_toy_row_to_out(t) for t in rows],
+        ), total
     finally:
         session.close()
 
@@ -314,6 +403,7 @@ def create_toy_in_db(
         session.add(toy)
         session.commit()
         session.refresh(toy)
+        invalidate_db_toy_count_cache()
         return _toy_row_to_out(toy)
     finally:
         session.close()
@@ -427,6 +517,7 @@ def delete_toy_in_db(toy_id: str) -> bool | None:
 
         session.delete(toy)
         session.commit()
+        invalidate_db_toy_count_cache()
     finally:
         session.close()
 
@@ -628,6 +719,26 @@ def resolve_toy_orm(session, toy_id: str) -> ToyORM | None:
     )
 
 
+def get_toy_detail_from_db(
+    session: Session,
+    toy_id: str,
+) -> tuple[ToyOut, str | None] | None:
+    """Load one toy and its raw piece inventory in a single query."""
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return None
+    toy = session.scalar(
+        select(ToyORM)
+        .options(joinedload(ToyORM.image))
+        .where(ToyORM.toy_id == toy_id_norm)
+    )
+    if toy is None:
+        toy = resolve_toy_orm(session, toy_id_norm)
+    if toy is None:
+        return None
+    return _toy_row_to_member_out(session, toy), toy.piece_inventory
+
+
 def get_toy_by_id(toy_id: str) -> ToyOut | None:
     toy_id_norm = toy_id.strip()
     if not toy_id_norm:
@@ -644,7 +755,7 @@ def get_toy_by_id(toy_id: str) -> ToyOut | None:
             )
             if toy is None:
                 toy = resolve_toy_orm(session, toy_id_norm)
-            return _toy_row_to_out(toy) if toy else None
+            return _toy_row_to_member_out(session, toy) if toy else None
         finally:
             session.close()
 

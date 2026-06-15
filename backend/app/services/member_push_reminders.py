@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.library_sessions import format_pickup_label, is_library_session_day, library_now, loan_return_session_date
 from app.models.booking import BOOKING_STATUS_PENDING, Booking
 from app.models.duty_session import DutySession
+from app.models.library_event import EventBooking, EventTimeSlot, LibraryEvent
 from app.models.loan import LOAN_STATUS_ACTIVE, Loan
 from app.models.profile import Profile
 from app.models.push_notification_log import PushNotificationLog
@@ -69,6 +70,7 @@ def collect_due_push_reminders(
 
     if slot == "duty_eve":
         reminders.extend(_duty_eve_reminders(session, session_date=tomorrow))
+        reminders.extend(_event_eve_reminders(session, event_date=tomorrow))
     elif slot == "eve":
         reminders.extend(
             _booking_reminders(
@@ -197,6 +199,54 @@ def _duty_eve_reminders(
                 body=(
                     f"You're on duty tomorrow ({date_label}), "
                     f"{start}–{end}. Thank you for volunteering!"
+                ),
+            )
+        )
+    return out
+
+
+def _event_eve_reminders(
+    session: Session,
+    *,
+    event_date: date,
+) -> list[PushReminder]:
+    """5 pm the day before a booked library event."""
+    rows = session.scalars(
+        select(EventBooking)
+        .join(EventTimeSlot, EventBooking.slot_id == EventTimeSlot.id)
+        .join(LibraryEvent, EventTimeSlot.event_id == LibraryEvent.id)
+        .options(
+            joinedload(EventBooking.user),
+            joinedload(EventBooking.slot).joinedload(EventTimeSlot.event),
+        )
+        .where(
+            LibraryEvent.is_published.is_(True),
+            LibraryEvent.event_date == event_date,
+        )
+        .order_by(LibraryEvent.name, EventTimeSlot.start_time)
+    ).unique().all()
+
+    date_label = format_pickup_label(event_date)
+    out: list[PushReminder] = []
+    for booking in rows:
+        if not _user_wants_reminders(booking.user):
+            continue
+        slot = booking.slot
+        event = slot.event if slot is not None else None
+        if event is None:
+            continue
+        start = _format_duty_time(slot.start_time)
+        end = _format_duty_time(slot.end_time)
+        out.append(
+            PushReminder(
+                user_id=booking.user_id,
+                dedupe_key=(
+                    f"event_booking:{booking.id}:eve:{event_date.isoformat()}"
+                ),
+                title="Library event tomorrow",
+                body=(
+                    f"{event.name} is tomorrow ({date_label}), "
+                    f"{start}–{end}."
                 ),
             )
         )

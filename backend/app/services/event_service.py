@@ -9,7 +9,10 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.core.library_sessions import library_now
-from app.repositories.duty_repo import list_duty_dates_in_range
+from app.repositories.duty_repo import (
+    list_duty_dates_in_range,
+    list_my_duty_dates_in_range,
+)
 from app.core.roles import Role, parse_role
 from app.repositories.event_repo import (
     availability_counts_for_user,
@@ -22,6 +25,7 @@ from app.repositories.event_repo import (
     get_event_by_id,
     get_slot_by_id,
     list_event_dates_in_range,
+    list_event_dates_in_range_for_audiences,
     list_events_in_range,
     update_event,
 )
@@ -148,12 +152,21 @@ def event_out_from_model(
     )
 
 
-def audience_for_role(role: Role) -> str | None:
+def audiences_for_role(role: Role) -> list[str] | None:
+    """Slot audiences visible and bookable for self-service by role."""
     if role == Role.VOLUNTEER:
-        return "volunteer"
+        return ["volunteer", "member"]
     if role == Role.MEMBER:
-        return "member"
+        return ["member"]
     return None
+
+
+def can_self_book_slot(role: Role, slot_audience: str) -> bool:
+    if role == Role.VOLUNTEER:
+        return slot_audience in ("volunteer", "member")
+    if role == Role.MEMBER:
+        return slot_audience == "member"
+    return False
 
 
 def list_events_for_user(
@@ -172,7 +185,7 @@ def list_events_for_user(
         to_date=to_date,
         published_only=published_only,
     )
-    audience = audience_for_role(role)
+    audiences = audiences_for_role(role)
     result = []
     for event in rows:
         out = event_out_from_model(
@@ -181,8 +194,9 @@ def list_events_for_user(
             current_user_id=current_user_id,
             include_bookings=include_bookings,
         )
-        if audience is not None:
-            out.slots = [s for s in out.slots if s.audience == audience]
+        if audiences is not None:
+            allowed = set(audiences)
+            out.slots = [s for s in out.slots if s.audience in allowed]
         if published_only and not out.slots:
             continue
         result.append(out)
@@ -197,14 +211,14 @@ def availability_for_user(
     from_date: date,
     to_date: date,
 ) -> tuple[int, int]:
-    audience = audience_for_role(role)
-    if audience is None:
+    audiences = audiences_for_role(role)
+    if not audiences:
         return 0, 0
     today = library_now().date()
     return availability_counts_for_user(
         session,
         user_id=current_user_id,
-        audience=audience,
+        audiences=audiences,
         from_date=from_date,
         to_date=to_date,
         today=today,
@@ -295,10 +309,7 @@ def book_slot_service(
     if event.end_date < library_now().date():
         raise EventError("past_event", "This event has already passed.")
 
-    audience = audience_for_role(role)
-    if audience is None:
-        raise EventError("not_allowed", "Your account cannot book event slots.")
-    if slot.audience != audience:
+    if not can_self_book_slot(role, slot.audience):
         raise EventError(
             "wrong_audience",
             "This slot is not available for your account type.",
@@ -408,11 +419,34 @@ def schedule_dates_in_range(
     *,
     from_date: date,
     to_date: date,
+    role: Role,
+    user_id: uuid.UUID | None = None,
 ) -> tuple[list[date], list[date]]:
-    duty_dates = list_duty_dates_in_range(
-        session, from_date=from_date, to_date=to_date
-    )
-    event_dates = list_event_dates_in_range(
-        session, from_date=from_date, to_date=to_date
-    )
+    audiences = audiences_for_role(role)
+    if role in {Role.VOLUNTEER, Role.ADMIN}:
+        duty_dates = list_duty_dates_in_range(
+            session, from_date=from_date, to_date=to_date
+        )
+        if role == Role.VOLUNTEER and user_id is not None:
+            my_dates = list_my_duty_dates_in_range(
+                session,
+                user_id=user_id,
+                from_date=from_date,
+                to_date=to_date,
+            )
+            duty_dates = sorted(set(duty_dates) | set(my_dates))
+    else:
+        duty_dates = []
+
+    if audiences is None:
+        event_dates = list_event_dates_in_range(
+            session, from_date=from_date, to_date=to_date
+        )
+    else:
+        event_dates = list_event_dates_in_range_for_audiences(
+            session,
+            from_date=from_date,
+            to_date=to_date,
+            audiences=audiences,
+        )
     return duty_dates, event_dates

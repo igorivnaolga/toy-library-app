@@ -289,7 +289,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => ToyDetailScreen(toyId: created.toyId),
+                  builder: (_) => ToyDetailScreen(
+                    toyId: created.toyId,
+                    initialToy: created,
+                  ),
                 ),
               );
             },
@@ -532,7 +535,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => ToyDetailScreen(toyId: t.toyId),
+                                builder: (_) => ToyDetailScreen(
+                                  toyId: t.toyId,
+                                  initialToy: t,
+                                ),
                               ),
                             );
                           },

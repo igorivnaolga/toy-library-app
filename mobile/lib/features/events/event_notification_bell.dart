@@ -1,35 +1,24 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
-import "../../core/app_text_styles.dart";
-import "../../core/app_theme.dart";
 import "../../core/auth_store.dart";
 import "../../core/notification_bell_ack.dart";
-import "events_controller.dart";
-import "events_section.dart";
 import "event_models.dart";
+import "events_controller.dart";
+import "schedule_sheet.dart";
 
-/// Member/volunteer bell badge until first open; includes pending volunteer approval.
-int memberNotificationBadgeCount({
-  required NotificationBellAckStore ack,
-  required int availableEventSlots,
-  required bool volunteerApprovalPending,
-}) {
-  if (ack.memberBellOpened) return 0;
-  var count = availableEventSlots;
-  if (volunteerApprovalPending) count += 1;
-  return count;
-}
-
-/// Bell for library events and member notification messages.
-class EventNotificationBell extends StatefulWidget {
-  const EventNotificationBell({super.key});
+/// Single schedule entry for members/volunteers — red dot when something new.
+class ScheduleAppBarButton extends StatefulWidget {
+  const ScheduleAppBarButton({super.key});
 
   @override
-  State<EventNotificationBell> createState() => _EventNotificationBellState();
+  State<ScheduleAppBarButton> createState() => _ScheduleAppBarButtonState();
 }
 
-class _EventNotificationBellState extends State<EventNotificationBell> {
+class _ScheduleAppBarButtonState extends State<ScheduleAppBarButton> {
+  EventsController? _eventsController;
+  AuthStore? _authStore;
+
   @override
   void initState() {
     super.initState();
@@ -39,27 +28,57 @@ class _EventNotificationBellState extends State<EventNotificationBell> {
     });
   }
 
-  Future<void> _openNotifications() async {
-    context.read<NotificationBellAckStore>().markMemberBellOpened();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: kModalSurface,
-      barrierColor: Colors.black54,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        final height = MediaQuery.sizeOf(sheetContext).height * 0.85;
-        return SizedBox(
-          height: height,
-          child: const _MemberNotificationsSheet(),
-        );
-      },
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _eventsController?.removeListener(_reconcileAck);
+    _authStore?.removeListener(_reconcileAck);
+    _eventsController = context.read<EventsController>();
+    _authStore = context.read<AuthStore>();
+    _eventsController!.addListener(_reconcileAck);
+    _authStore!.addListener(_reconcileAck);
+  }
+
+  @override
+  void dispose() {
+    _eventsController?.removeListener(_reconcileAck);
+    _authStore?.removeListener(_reconcileAck);
+    super.dispose();
+  }
+
+  void _reconcileAck() {
+    if (!mounted) return;
+    final ack = context.read<NotificationBellAckStore>();
+    final auth = _authStore!;
+    final availability = _eventsController!.availability;
+    ack.reconcileMemberSchedule(
+      availableSlots: availability.availableSlots,
+      volunteerApprovalPending: auth.isVolunteerApprovalPending,
+    );
+  }
+
+  Future<void> _openSchedule() async {
+    final ack = context.read<NotificationBellAckStore>();
+    final auth = context.read<AuthStore>();
+    final availability = context.read<EventsController>().availability;
+
+    await ack.markMemberScheduleSeen(
+      availableSlots: availability.availableSlots,
+      volunteerApprovalPending: auth.isVolunteerApprovalPending,
     );
     if (!mounted) return;
+
+    await showScheduleSheet(context);
+
+    if (!mounted) return;
     await context.read<EventsController>().refreshAvailability();
+    if (!mounted) return;
+
+    final updated = context.read<EventsController>().availability;
+    await ack.markMemberScheduleSeen(
+      availableSlots: updated.availableSlots,
+      volunteerApprovalPending: auth.isVolunteerApprovalPending,
+    );
   }
 
   @override
@@ -69,97 +88,40 @@ class _EventNotificationBellState extends State<EventNotificationBell> {
     final availability = context.select<EventsController, EventAvailability>(
       (controller) => controller.availability,
     );
-    final count = memberNotificationBadgeCount(
-      ack: ack,
-      availableEventSlots: availability.availableSlots,
+
+    final hasUnread = ack.memberScheduleHasUnread(
+      availableSlots: availability.availableSlots,
       volunteerApprovalPending: auth.isVolunteerApprovalPending,
     );
 
+    final scheduleLabel =
+        auth.usesScheduleCalendar ? "Schedule" : "Library events";
+
     return IconButton(
-      tooltip: count > 0 ? "Notifications" : "Notifications",
-      onPressed: _openNotifications,
-      icon: Badge(
-        isLabelVisible: count > 0,
-        label: Text(count > 9 ? "9+" : "$count"),
-        child: const Icon(Icons.notifications_outlined),
-      ),
-    );
-  }
-}
-
-class _MemberNotificationsSheet extends StatelessWidget {
-  const _MemberNotificationsSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthStore>();
-    final pendingVolunteer = auth.isVolunteerApprovalPending;
-
-    return ColoredBox(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      tooltip: hasUnread ? "$scheduleLabel — new updates" : scheduleLabel,
+      onPressed: _openSchedule,
+      icon: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Text(
-              "Notifications",
-              style: context.screenTitle,
-            ),
+          Icon(
+            auth.usesScheduleCalendar
+                ? Icons.event_available_outlined
+                : Icons.event_note_outlined,
           ),
-          if (pendingVolunteer)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Material(
-                color: const Color(0xFFFFF8E1),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: Color(0xFF8D6E00)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.hourglass_top, color: Color(0xFF8D6E00)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Volunteer access pending approval",
-                              style: context.cardTitle.copyWith(fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "An admin will confirm your volunteer membership "
-                              "soon. You can browse and book toys as a member "
-                              "in the meantime.",
-                              style: context.listSubtitle.copyWith(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+          if (hasUnread)
+            Positioned(
+              right: -1,
+              top: -1,
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
                 ),
               ),
             ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Text(
-              "Library events",
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-          ),
-          Expanded(
-            child: EventsSection(
-              hideHeader: true,
-              scrollable: true,
-              scheduleHostContext: context,
-            ),
-          ),
         ],
       ),
     );

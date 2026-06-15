@@ -1,7 +1,10 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../admin/admin_member_profile_screen.dart";
+import "../admin/admin_models.dart";
 import "../loans/desk_member.dart";
+import "../profile/profile_avatar.dart";
 import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
@@ -159,6 +162,29 @@ class _DutyAssignScreenState extends State<DutyAssignScreen> {
     }
   }
 
+  Future<void> _openAssigneeProfile(DutySessionItem session) async {
+    final userId = session.volunteerId?.trim();
+    if (userId == null || userId.isEmpty) return;
+
+    final displayName = session.assigneeDisplayName;
+    final email = session.volunteerEmail?.trim() ?? "";
+    final fullName = session.volunteerName?.trim() ?? "";
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminMemberProfileScreen(
+          userId: userId,
+          initialMember: AdminMember(
+            userId: userId,
+            email: email.isNotEmpty ? email : displayName,
+            fullName: fullName.isNotEmpty ? fullName : displayName,
+            role: "member",
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _clear() async {
     setState(() {
       _assigning = true;
@@ -291,10 +317,10 @@ class _DutyAssignScreenState extends State<DutyAssignScreen> {
                 const SizedBox(height: 4),
                 Text(session.timeRangeLabel, style: context.listSubtitle),
                 if (assigned) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Assigned to ${session.assigneeDisplayName}",
-                    style: context.listSecondaryEmphasis,
+                  const SizedBox(height: 16),
+                  _AssignedVolunteerCard(
+                    session: session,
+                    onTap: () => _openAssigneeProfile(session),
                   ),
                   const SizedBox(height: 20),
                   BrandChipButton(
@@ -325,6 +351,82 @@ class _DutyAssignScreenState extends State<DutyAssignScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AssignedVolunteerCard extends StatelessWidget {
+  const _AssignedVolunteerCard({
+    required this.session,
+    required this.onTap,
+  });
+
+  final DutySessionItem session;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final displayName = session.assigneeDisplayName;
+    final email = session.volunteerEmail?.trim() ?? "";
+    final showEmail = email.isNotEmpty && email != displayName;
+    final canOpen = session.volunteerId?.trim().isNotEmpty == true;
+
+    return Material(
+      color: colors.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: canOpen ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              ProfileAvatar(
+                fullName: session.volunteerName ?? displayName,
+                radius: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Assigned volunteer",
+                      style: context.listSubtitle.copyWith(
+                        fontSize: 12,
+                        color: colors.onSurface.withValues(alpha: kTextMutedAlpha),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      displayName,
+                      style: context.cardTitle.copyWith(fontSize: 16),
+                    ),
+                    if (showEmail) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        email,
+                        style: context.listSubtitle.copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (canOpen) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right,
+                  color: colors.onSurfaceVariant,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

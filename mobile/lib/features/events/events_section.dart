@@ -382,11 +382,12 @@ class EventsSectionState extends State<EventsSection> {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: "Find date on calendar",
-                onPressed: () => _openCalendar(),
-                icon: const Icon(Icons.calendar_month_outlined),
-              ),
+              if (!widget.embeddedInSchedule)
+                IconButton(
+                  tooltip: "Find date on calendar",
+                  onPressed: () => _openCalendar(),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                ),
               if (widget.adminMode)
                 IconButton(
                   tooltip: "Create event",
@@ -471,7 +472,7 @@ class EventsSectionState extends State<EventsSection> {
   }
 }
 
-class _EventCard extends StatelessWidget {
+class _EventCard extends StatefulWidget {
   const _EventCard({
     super.key,
     required this.event,
@@ -505,9 +506,28 @@ class _EventCard extends StatelessWidget {
   final bool isPast;
 
   @override
+  State<_EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends State<_EventCard> {
+  bool _expanded = false;
+
+  LibraryEventItem get event => widget.event;
+
+  String get _slotSummary {
+    final count = event.slots.length;
+    if (count == 0) return "No slots";
+    final booked = event.slots.fold<int>(0, (sum, slot) => sum + slot.bookedCount);
+    return count == 1
+        ? "1 slot · $booked booked"
+        : "$count slots · $booked booked";
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final eventColor = const Color(0xFF5C6BC0);
+    final showDetails = !widget.adminMode || _expanded;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -516,7 +536,7 @@ class _EventCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: eventColor.withValues(alpha: isPast ? 0.25 : 0.45),
+            color: eventColor.withValues(alpha: widget.isPast ? 0.25 : 0.45),
             width: 1.5,
           ),
         ),
@@ -526,106 +546,142 @@ class _EventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.celebration_outlined, color: eventColor, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(event.name, style: context.cardTitle.copyWith(fontSize: 15)),
-                        InkWell(
-                          onTap: onDateTap,
-                          borderRadius: BorderRadius.circular(4),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    event.dateLabel,
-                                    style: context.listSubtitle.copyWith(
-                                      fontSize: 12,
-                                      color: colors.onSurface.withValues(alpha: 0.78),
-                                      fontWeight: FontWeight.w600,
-                                      decoration: onDateTap != null
-                                          ? TextDecoration.underline
-                                          : null,
+              InkWell(
+                onTap: widget.adminMode
+                    ? () => setState(() => _expanded = !_expanded)
+                    : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.adminMode)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(
+                          _expanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          color: eventColor,
+                          size: 22,
+                        ),
+                      )
+                    else
+                      Icon(Icons.celebration_outlined, color: eventColor, size: 20),
+                    SizedBox(width: widget.adminMode ? 4 : 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.name,
+                            style: context.cardTitle.copyWith(fontSize: 15),
+                          ),
+                          InkWell(
+                            onTap: widget.onDateTap,
+                            borderRadius: BorderRadius.circular(4),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      event.dateLabel,
+                                      style: context.listSubtitle.copyWith(
+                                        fontSize: 12,
+                                        color: colors.onSurface.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                        fontWeight: FontWeight.w600,
+                                        decoration: widget.onDateTap != null
+                                            ? TextDecoration.underline
+                                            : null,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                if (onDateTap != null) ...[
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.calendar_month_outlined,
-                                    size: 14,
-                                    color: colors.onSurface.withValues(alpha: 0.55),
-                                  ),
+                                  if (widget.onDateTap != null) ...[
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      Icons.calendar_month_outlined,
+                                      size: 14,
+                                      color: colors.onSurface.withValues(
+                                        alpha: 0.55,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (!event.isPublished)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF8E1),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: const Color(0xFF8D6E00),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                "Draft — not visible to members",
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colors.onSurface.withValues(alpha: 0.88),
-                                  fontWeight: FontWeight.w700,
-                                ),
                               ),
                             ),
                           ),
-                      ],
+                          if (!event.isPublished)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF8E1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(0xFF8D6E00),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  "Draft — not visible to members",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: colors.onSurface.withValues(
+                                      alpha: 0.88,
+                                    ),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (widget.adminMode && !showDetails) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _slotSummary,
+                              style: context.listSubtitle.copyWith(fontSize: 11),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                  if (onEdit != null)
-                    IconButton(
-                      tooltip: "Edit event",
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                    ),
-                ],
-              ),
-              if (event.description != null &&
-                  event.description!.trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(event.description!.trim(), style: context.listSubtitle),
-              ],
-              const SizedBox(height: 10),
-              for (final slot in event.slots) ...[
-                _EventSlotRow(
-                  slot: slot,
-                  event: event,
-                  auth: auth,
-                  adminMode: adminMode,
-                  isPast: isPast,
-                  actionInProgress: actionSlotId == slot.slotId,
-                  onBook: () => onBook(slot, event),
-                  onCancel: () => onCancel(slot, event),
-                  onAdminBook: onAdminBook,
-                  onAdminRemoveBooking: onAdminRemoveBooking,
+                    if (widget.onEdit != null)
+                      IconButton(
+                        tooltip: "Edit event",
+                        onPressed: widget.onEdit,
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+              ),
+              if (showDetails) ...[
+                if (event.description != null &&
+                    event.description!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(event.description!.trim(), style: context.listSubtitle),
+                ],
+                const SizedBox(height: 10),
+                for (final slot in event.slots) ...[
+                  _EventSlotRow(
+                    slot: slot,
+                    event: event,
+                    auth: widget.auth,
+                    adminMode: widget.adminMode,
+                    isPast: widget.isPast,
+                    actionInProgress: widget.actionSlotId == slot.slotId,
+                    onBook: () => widget.onBook(slot, event),
+                    onCancel: () => widget.onCancel(slot, event),
+                    onAdminBook: widget.onAdminBook,
+                    onAdminRemoveBooking: widget.onAdminRemoveBooking,
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ],
             ],
           ),
@@ -674,7 +730,8 @@ class _EventSlotRow extends StatelessWidget {
         !isPast &&
         !auth.isAdmin &&
         ((slot.audience == "volunteer" && auth.isVolunteer) ||
-            (slot.audience == "member" && auth.isMember));
+            (slot.audience == "member" &&
+                (auth.isMember || auth.isVolunteer)));
 
     return Container(
       padding: const EdgeInsets.all(10),

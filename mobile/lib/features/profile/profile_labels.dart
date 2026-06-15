@@ -15,16 +15,42 @@ class MembershipBadgeStyle {
   final BoxBorder? border;
 }
 
+bool isDutyMembershipLabel(String label) {
+  return label == "Volunteer" ||
+      label == "Duty volunteer" ||
+      label.startsWith("Duty volunteer ");
+}
+
+MembershipBadgeStyle dutyMembershipBadgeStyle() {
+  return MembershipBadgeStyle(
+    background: kDutyCompleteBg,
+    foreground: kDutyCompleteFg,
+    border: Border.all(
+      color: kDutyCompleteBorder.withValues(alpha: 0.55),
+    ),
+  );
+}
+
+Color? membershipTierForeground(String? tier) {
+  switch ((tier ?? "").trim()) {
+    case "casual":
+      return const Color(0xFF1565C0);
+    case "non_duty":
+      return const Color(0xFF6A1B9A);
+    case "duty":
+      return kDutyCompleteFg;
+    default:
+      return null;
+  }
+}
+
 MembershipBadgeStyle membershipBadgeStyle({
   required String label,
   Color? tierForeground,
   required ColorScheme colors,
 }) {
-  if (label == "Volunteer") {
-    return const MembershipBadgeStyle(
-      background: kBrandYellow,
-      foreground: kBrandOnYellow,
-    );
+  if (isDutyMembershipLabel(label)) {
+    return dutyMembershipBadgeStyle();
   }
   if (tierForeground != null) {
     return MembershipBadgeStyle(

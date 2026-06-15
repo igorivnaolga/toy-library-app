@@ -10,10 +10,12 @@ class ToyUnavailableBanner extends StatelessWidget {
     super.key,
     required this.availability,
     this.myActiveLoan,
+    this.queueOpensLabel,
   });
 
   final String availability;
   final LoanItem? myActiveLoan;
+  final String? queueOpensLabel;
 
   ({IconData icon, Color background, Color foreground, String message})
       get _content {
@@ -40,11 +42,15 @@ class ToyUnavailableBanner extends StatelessWidget {
           message: "This toy is on loan and can't be booked right now.",
         );
       case "reserved":
+        final opens = queueOpensLabel?.trim();
+        final message = opens != null && opens.isNotEmpty
+            ? "This toy is reserved — you can book from $opens."
+            : "This toy is reserved. Another member may book two weeks after their reservation date.";
         return (
           icon: Icons.event_busy_outlined,
           background: kBrandYellow.withValues(alpha: 0.18),
           foreground: kBrandOnYellow,
-          message: "This toy is reserved and can't be booked right now.",
+          message: message,
         );
       case "unavailable":
         return (
