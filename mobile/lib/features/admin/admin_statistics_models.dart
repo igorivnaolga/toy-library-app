@@ -151,6 +151,86 @@ class ToyPopularity {
   }
 }
 
+class StatsHeardAbout {
+  const StatsHeardAbout({
+    required this.periodLabel,
+    required this.totalResponses,
+    required this.data,
+  });
+
+  final String periodLabel;
+  final int totalResponses;
+  final List<StatsCountRow> data;
+
+  factory StatsHeardAbout.fromJson(Map<String, dynamic> json) {
+    final raw = json["data"];
+    return StatsHeardAbout(
+      periodLabel: json["period_label"]?.toString() ?? "",
+      totalResponses: _asInt(json["total_responses"]),
+      data: raw is List<dynamic>
+          ? raw
+              .whereType<Map<String, dynamic>>()
+              .map(StatsCountRow.fromJson)
+              .toList()
+          : const [],
+    );
+  }
+}
+
+class StatsPendingMember {
+  const StatsPendingMember({
+    required this.userId,
+    required this.email,
+    required this.fullName,
+    required this.pendingCents,
+  });
+
+  final String userId;
+  final String email;
+  final String fullName;
+  final int pendingCents;
+
+  String get displayName =>
+      fullName.trim().isNotEmpty
+          ? fullName.trim()
+          : (email.trim().isNotEmpty ? email.trim() : userId);
+
+  factory StatsPendingMember.fromJson(Map<String, dynamic> json) {
+    return StatsPendingMember(
+      userId: json["user_id"]?.toString() ?? "",
+      email: json["email"]?.toString() ?? "",
+      fullName: json["full_name"]?.toString() ?? "",
+      pendingCents: _asInt(json["pending_cents"]),
+    );
+  }
+}
+
+class StatsPendingMembers {
+  const StatsPendingMembers({
+    required this.periodLabel,
+    required this.totalPendingCents,
+    required this.data,
+  });
+
+  final String periodLabel;
+  final int totalPendingCents;
+  final List<StatsPendingMember> data;
+
+  factory StatsPendingMembers.fromJson(Map<String, dynamic> json) {
+    final raw = json["data"];
+    return StatsPendingMembers(
+      periodLabel: json["period_label"]?.toString() ?? "",
+      totalPendingCents: _asInt(json["total_pending_cents"]),
+      data: raw is List<dynamic>
+          ? raw
+              .whereType<Map<String, dynamic>>()
+              .map(StatsPendingMember.fromJson)
+              .toList()
+          : const [],
+    );
+  }
+}
+
 String shortCategoryLabel(String label, {int maxLen = 14}) {
   final trimmed = label.trim();
   if (trimmed.length <= maxLen) return trimmed;

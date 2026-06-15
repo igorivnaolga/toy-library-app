@@ -1,12 +1,14 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/loan_due_status.dart";
 import "../../core/section_header.dart";
 import "../../core/brand_chip_button.dart";
+import "../bookings/booking_checkout_sync.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_session_models.dart";
 import "../catalog/catalog_provider.dart";
@@ -410,33 +412,42 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
     context.read<LoansController>().loadVolunteerDesk();
   }
 
-  Future<void> _checkOut(BookingItem booking) async {
+  Future<void> _checkOutReservations(List<BookingItem> bookings) async {
+    if (bookings.isEmpty) return;
+
+    final member = bookings.first;
     final result = await showDeskCheckoutDialog(
       context,
-      memberLabel: booking.memberLabel,
-      memberUserId: booking.userId,
+      memberLabel: member.memberLabel,
+      memberUserId: member.userId,
       lines: [
-        DeskCheckoutLine(
-          toyId: booking.toyId,
-          toyName: booking.toyName ?? booking.toyId,
-          rentalPriceCents: booking.rentalPriceCents,
-        ),
+        for (final booking in bookings)
+          DeskCheckoutLine(
+            toyId: booking.toyId,
+            toyName: booking.toyName ?? booking.toyId,
+            rentalPriceCents: booking.rentalPriceCents,
+          ),
       ],
     );
     if (result == null || !mounted) return;
 
     final controller = context.read<LoansController>();
-    final catalog = context.read<CatalogController>();
     try {
-      await controller.checkOutFromBooking(
-        booking.bookingId,
-        rentalPayment: result.rentalPayment,
-        paymentMethod: result.paymentMethod,
-      );
-      await catalog.refresh();
+      for (final booking in bookings) {
+        await controller.checkOutFromBooking(
+          booking.bookingId,
+          rentalPayment: result.rentalPayment,
+          paymentMethod: result.paymentMethod,
+        );
+      }
       if (!mounted) return;
+      await syncAfterReservationCheckout(context, bookings);
+      if (!mounted) return;
+      final message = bookings.length == 1
+          ? "Checked out ${bookings.first.toyName ?? bookings.first.toyId}"
+          : "Checked out ${bookings.length} reserved toys";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Checked out ${booking.toyName ?? booking.toyId}")),
+        SnackBar(content: Text(message)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -445,6 +456,9 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
       );
     }
   }
+
+  Future<void> _checkOut(BookingItem booking) =>
+      _checkOutReservations([booking]);
 
   Future<void> _handleScannedToyId(String toyId) async {
     final controller = context.read<LoansController>();
@@ -560,7 +574,7 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
             child: TabBarView(
               children: [
                 _CheckOutTab(
-                  onCheckOut: _checkOut,
+                  onCheckOutReservations: _checkOutReservations,
                   onOpenToy: _openToy,
                   onRefresh: () =>
                       context.read<LoansController>().loadVolunteerDesk(),
@@ -584,12 +598,13 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
 
 class _CheckOutTab extends StatefulWidget {
   const _CheckOutTab({
-    required this.onCheckOut,
+    required this.onCheckOutReservations,
     required this.onOpenToy,
     required this.onRefresh,
   });
 
-  final Future<void> Function(BookingItem booking) onCheckOut;
+  final Future<void> Function(List<BookingItem> bookings)
+      onCheckOutReservations;
   final ValueChanged<String> onOpenToy;
   final Future<void> Function() onRefresh;
 
@@ -605,7 +620,7 @@ class _CheckOutTabState extends State<_CheckOutTab> {
     return Consumer<LoansController>(
       builder: (context, c, _) {
         if (c.deskLoading && c.pendingCheckouts.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: ToyLibraryLoadingIndicator());
         }
 
         final today = deskTodayReservations(c.pendingCheckouts);
@@ -625,14 +640,13 @@ class _CheckOutTabState extends State<_CheckOutTab> {
                     setState(() => _walkInDraft = active);
                   }
                 },
-                onCheckedOut: () async {
-                  await context.read<CatalogController>().refresh();
+                onCheckedOut: () {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Walk-in toy checked out")),
                   );
                 },
-                onCheckOutReservation: widget.onCheckOut,
+                onCheckOutReservations: widget.onCheckOutReservations,
                 onOpenToy: widget.onOpenToy,
               ),
               const SizedBox(height: 16),
@@ -653,7 +667,8 @@ class _CheckOutTabState extends State<_CheckOutTab> {
                     booking: today[i],
                     loading: c.deskLoading,
                     onOpen: () => widget.onOpenToy(today[i].toyId),
-                    onCheckOut: () => widget.onCheckOut(today[i]),
+                    onCheckOut: () =>
+                        widget.onCheckOutReservations([today[i]]),
                   ),
                 ],
               ],
@@ -667,7 +682,8 @@ class _CheckOutTabState extends State<_CheckOutTab> {
                     booking: earlier[i],
                     loading: c.deskLoading,
                     onOpen: () => widget.onOpenToy(earlier[i].toyId),
-                    onCheckOut: () => widget.onCheckOut(earlier[i]),
+                    onCheckOut: () =>
+                        widget.onCheckOutReservations([earlier[i]]),
                   ),
                 ],
               ],
@@ -726,7 +742,7 @@ class _CheckInTabState extends State<_CheckInTab> {
     return Consumer<LoansController>(
       builder: (context, c, _) {
         if (c.deskLoading && c.activeLoans.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: ToyLibraryLoadingIndicator());
         }
 
         final all = c.activeLoans;

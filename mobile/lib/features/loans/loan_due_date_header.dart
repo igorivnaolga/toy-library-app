@@ -12,12 +12,14 @@ class LoanDueDateHeader extends StatelessWidget {
     required this.isOverdue,
     this.isDueToday = false,
     this.embedded = false,
+    this.trailing,
   });
 
   final DateTime dueDate;
   final bool isOverdue;
   final bool isDueToday;
   final bool embedded;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +88,10 @@ class LoanDueDateHeader extends StatelessWidget {
               ),
             ),
           ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing!,
+        ],
       ],
     );
 

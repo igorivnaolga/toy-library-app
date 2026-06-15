@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "auth_messages.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
@@ -23,6 +24,7 @@ class RegistrationWelcomeScreen extends StatelessWidget {
     final dueLabel = auth.membershipDueCents > 0
         ? formatDueCents(auth.membershipDueCents)
         : null;
+    final firstName = signedInFirstName(auth.fullName);
 
     return Scaffold(
       appBar: AppBar(
@@ -32,10 +34,13 @@ class RegistrationWelcomeScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
-          Text(
-            "Welcome to ${LibraryInfoCopy.libraryName}!",
-            style: context.detailTitle,
-          ),
+          if (firstName.isEmpty)
+            Text(
+              "Welcome to ${LibraryInfoCopy.libraryName}!",
+              style: context.detailTitle,
+            )
+          else
+            WelcomeNameBanner(leadIn: "Welcome,", name: firstName),
           const SizedBox(height: 12),
           Text(
             "Your membership is set up. You can browse the toy catalog and "

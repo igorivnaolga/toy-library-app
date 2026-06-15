@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
@@ -24,7 +25,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _busy = false;
   String? _emailError;
   String? _submitError;
-  bool _emailTouched = false;
 
   @override
   void initState() {
@@ -35,16 +35,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   void _onEmailFocusChange() {
     if (!_emailFocus.hasFocus) {
-      _validateEmail(force: true);
+      _validateEmail();
     }
   }
 
-  void _validateEmail({bool force = false}) {
-    if (!force && !_emailTouched) return;
+  void _validateEmail() {
     final error = RegistrationValidation.requiredEmail(_email.text);
     if (error != _emailError) {
       setState(() => _emailError = error);
     }
+  }
+
+  void _clearEmailError() {
+    if (_emailError == null) return;
+    setState(() => _emailError = null);
   }
 
   @override
@@ -56,7 +60,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    _validateEmail(force: true);
+    _validateEmail();
     if (_emailError != null) return;
 
     final auth = context.read<AuthStore>();
@@ -114,8 +118,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               errorText: _emailError,
             ),
             onChanged: (_) {
-              _emailTouched = true;
-              _validateEmail();
+              _clearEmailError();
               if (_submitError != null) {
                 setState(() => _submitError = null);
               }
@@ -130,7 +133,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           if (_busy)
             const Padding(
               padding: EdgeInsets.only(top: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ToyLibraryLoadingIndicator()),
             ),
           if (_submitError != null)
             Padding(

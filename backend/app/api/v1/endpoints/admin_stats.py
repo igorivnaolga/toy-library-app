@@ -15,7 +15,10 @@ from app.schemas.stats import (
     StatsBreakdownOut,
     StatsCatalogOut,
     StatsCountRowOut,
+    StatsHeardAboutOut,
     StatsOverviewOut,
+    StatsPendingMemberOut,
+    StatsPendingMembersOut,
     ToyPopularityOut,
     ToyPopularityRowOut,
 )
@@ -23,7 +26,9 @@ from app.services.stats_period import StatsPeriodError, resolve_stats_period
 from app.services.stats_service import (
     catalog_counts_by_category,
     catalog_counts_by_status,
+    heard_about_us_counts,
     loan_counts_by_group,
+    pending_members_in_period,
     stats_overview,
     toy_popularity,
 )
@@ -104,6 +109,46 @@ def admin_stats_toy_popularity(
             ToyPopularityRowOut(toy_id=r.toy_id, name=r.name, count=r.count)
             for r in rows
         ],
+    )
+
+
+@router.get("/payments/pending-members", response_model=StatsPendingMembersOut)
+def admin_stats_pending_members(
+    limit: int = Query(100, ge=1, le=200),
+    resolved=Depends(_period_from_query),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StatsPendingMembersOut:
+    total, rows = pending_members_in_period(db, resolved, limit=limit)
+    return StatsPendingMembersOut(
+        period=resolved.kind,
+        period_label=resolved.label,
+        total_pending_cents=total,
+        data=[
+            StatsPendingMemberOut(
+                user_id=r.user_id,
+                email=r.email,
+                full_name=r.full_name,
+                pending_cents=r.pending_cents,
+            )
+            for r in rows
+        ],
+    )
+
+
+@router.get("/members/heard-about-us", response_model=StatsHeardAboutOut)
+def admin_stats_heard_about_us(
+    limit: int = Query(12, ge=1, le=30),
+    resolved=Depends(_period_from_query),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StatsHeardAboutOut:
+    total, rows = heard_about_us_counts(db, resolved, limit=limit)
+    return StatsHeardAboutOut(
+        period=resolved.kind,
+        period_label=resolved.label,
+        total_responses=total,
+        data=[StatsCountRowOut(label=r.label, count=r.count) for r in rows],
     )
 
 

@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../catalog/catalog_provider.dart";
@@ -36,7 +37,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     final catalog = context.read<CatalogController>();
     try {
       await controller.cancelBooking(item.bookingId);
-      await catalog.refresh();
+      await catalog.updateToyInCatalog(item.toyId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -130,7 +131,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return Consumer<BookingsController>(
       builder: (context, c, _) {
         if (c.loading && c.bookings.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: ToyLibraryLoadingIndicator());
         }
         if (c.error != null && c.bookings.isEmpty) {
           return Center(

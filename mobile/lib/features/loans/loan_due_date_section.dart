@@ -42,24 +42,15 @@ class LoanDueDateSection extends StatelessWidget {
           else
             InkWell(
               onTap: onHeaderTap,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: LoanDueDateHeader(
-                      dueDate: group.dueDate,
-                      isOverdue: group.isOverdue,
-                      isDueToday: group.isDueToday,
-                      embedded: true,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Icon(
-                      Icons.chevron_right,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+              child: LoanDueDateHeader(
+                dueDate: group.dueDate,
+                isOverdue: group.isOverdue,
+                isDueToday: group.isDueToday,
+                embedded: true,
+                trailing: Icon(
+                  Icons.chevron_right,
+                  color: colors.onSurfaceVariant,
+                ),
               ),
             ),
           Padding(

@@ -24,7 +24,7 @@ class AdminNotificationsOut(BaseModel):
     )
     new_members_count: int = Field(
         ge=0,
-        description="Members who joined in the last 30 days (excludes pending duty approvals).",
+        description="Members who joined in the last 7 days (excludes pending duty approvals).",
     )
 
 

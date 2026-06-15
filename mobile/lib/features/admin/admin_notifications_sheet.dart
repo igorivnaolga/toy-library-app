@@ -3,14 +3,31 @@ import "package:provider/provider.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/notification_bell_ack.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_theme.dart";
 import "../profile/profile_labels.dart";
 import "admin_controller.dart";
+import "admin_member_profile_screen.dart";
 import "admin_models.dart";
+
+/// Admin bell badge: pending volunteer approvals always; new members until first open.
+int adminNotificationBadgeCount(
+  AdminNotifications? summary,
+  NotificationBellAckStore ack,
+) {
+  if (summary == null) return 0;
+  final pending = summary.pendingVolunteerApprovals;
+  if (!ack.adminBellOpened) {
+    return pending + summary.newMembersCount;
+  }
+  return pending;
+}
 
 /// Opens admin notifications (full screen).
 Future<void> showAdminNotificationsSheet(BuildContext context) async {
   if (!context.mounted) return;
+  context.read<NotificationBellAckStore>().markAdminBellOpened();
   await Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => const AdminNotificationsScreen(),
@@ -26,15 +43,16 @@ class AdminNotificationBell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ack = context.watch<NotificationBellAckStore>();
     return Consumer<AdminController>(
       builder: (context, admin, _) {
-        final count = admin.notifications?.badgeCount ?? 0;
+        final count = adminNotificationBadgeCount(admin.notifications, ack);
         return IconButton(
           tooltip: "Admin notifications",
           onPressed: () => showAdminNotificationsSheet(context),
           icon: Badge(
             isLabelVisible: count > 0,
-            label: Text("$count"),
+            label: Text(count > 9 ? "9+" : "$count"),
             child: const Icon(Icons.notifications_outlined),
           ),
         );
@@ -95,7 +113,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     }
 
     try {
-      final json = await client.getJson("/api/v1/admin/recent-members");
+      final json = await client.getJson(
+        "/api/v1/admin/recent-members",
+        {"days": "7"},
+      );
       recent = parseAdminMemberList(json);
     } on ApiException catch (e) {
       recentError = e.message;
@@ -134,6 +155,17 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     }
   }
 
+  Future<void> _openMemberProfile(AdminMember member) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminMemberProfileScreen(
+          userId: member.userId,
+          initialMember: member,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -149,16 +181,8 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   Widget _buildBody() {
     if (_loading) {
       return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: kBrandYellow),
-            SizedBox(height: 16),
-            Text(
-              "Loading notifications…",
-              style: TextStyle(fontSize: 14, color: Color(0xFF5C5C5C)),
-            ),
-          ],
+        child: ToyLibraryLoadingIndicator(
+          message: "Loading notifications…",
         ),
       );
     }
@@ -210,7 +234,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
               ),
             ),
           const SizedBox(height: 24),
-          _sectionTitle("New members (last 30 days)"),
+          _sectionTitle("New members (last 7 days)"),
           const SizedBox(height: 8),
           if (_recentError != null) ...[
             Text(
@@ -220,9 +244,14 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
             const SizedBox(height: 8),
           ],
           if (_recent.isEmpty && _recentError == null)
-            _sectionBody("No new members in the last 30 days.")
+            _sectionBody("No new members in the last 7 days.")
           else
-            ..._recent.map((member) => _RecentMemberCard(member: member)),
+            ..._recent.map(
+              (member) => _RecentMemberCard(
+                member: member,
+                onTap: () => _openMemberProfile(member),
+              ),
+            ),
         ],
       ),
     );
@@ -298,9 +327,13 @@ class _PendingVolunteerCard extends StatelessWidget {
 }
 
 class _RecentMemberCard extends StatelessWidget {
-  const _RecentMemberCard({required this.member});
+  const _RecentMemberCard({
+    required this.member,
+    required this.onTap,
+  });
 
   final AdminMember member;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -309,32 +342,62 @@ class _RecentMemberCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              member.displayName,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
+      color: kGroupHeaderBackground,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: kGroupHeaderBorder.withValues(alpha: 0.75),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      member.displayName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    if (member.email.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        member.email,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF5C5C5C),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Text(
+                      "$role · $tier · Joined ${formatAdminDate(member.membershipStartedAt)}",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF5C5C5C),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (member.email.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                member.email,
-                style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ],
-            const SizedBox(height: 4),
-            Text(
-              "$role · $tier · Joined ${formatAdminDate(member.membershipStartedAt)}",
-              style: const TextStyle(fontSize: 13, color: Color(0xFF5C5C5C)),
-            ),
-          ],
+          ),
         ),
       ),
     );

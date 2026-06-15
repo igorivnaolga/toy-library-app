@@ -151,6 +151,17 @@ class LoansController extends ChangeNotifier {
     return loan;
   }
 
+  Future<DeskMember?> fetchDeskMember(String userId) async {
+    final trimmed = userId.trim();
+    if (trimmed.isEmpty) return null;
+    final json = await _client.getJson("/api/v1/duty/members", {"q": trimmed});
+    final members = parseDeskMemberList(json);
+    for (final member in members) {
+      if (member.userId == trimmed) return member;
+    }
+    return members.isNotEmpty ? members.first : null;
+  }
+
   Future<List<DeskMember>> searchDeskMembers(String query) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {

@@ -6,6 +6,7 @@ import "package:flutter/services.dart";
 import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
@@ -552,7 +553,7 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: ToyLibraryLoadingIndicator.compact(),
                             )
                           : const Icon(Icons.edit_outlined, size: 20),
                     ),

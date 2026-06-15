@@ -16,6 +16,7 @@ class BrandChipButton extends StatelessWidget {
     this.large = false,
     this.variant = BrandChipButtonVariant.filled,
     this.fixedWidth,
+    this.backgroundColor,
   });
 
   final String label;
@@ -23,6 +24,7 @@ class BrandChipButton extends StatelessWidget {
   final bool large;
   final BrandChipButtonVariant variant;
   final double? fixedWidth;
+  final Color? backgroundColor;
 
   static ButtonStyle get _largeFilledStyle => FilledButton.styleFrom(
         backgroundColor: kBrandYellow,
@@ -38,8 +40,8 @@ class BrandChipButton extends StatelessWidget {
         ),
       );
 
-  static ButtonStyle get _largeOutlinedStyle =>
-      brandOutlinedButtonStyle().copyWith(
+  ButtonStyle get _largeOutlinedStyle =>
+      brandOutlinedButtonStyle(backgroundColor: backgroundColor).copyWith(
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         ),

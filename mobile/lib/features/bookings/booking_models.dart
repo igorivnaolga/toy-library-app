@@ -38,6 +38,26 @@ class BookingItem {
   bool get isCancelled => status.toLowerCase() == "cancelled";
   bool get isCompleted => status.toLowerCase() == "completed";
 
+  BookingItem withStatus(String newStatus) {
+    return BookingItem(
+      bookingId: bookingId,
+      userId: userId,
+      toyId: toyId,
+      status: newStatus,
+      createdAt: createdAt,
+      toyName: toyName,
+      photoFile: photoFile,
+      pickupDate: pickupDate,
+      pickupLabel: pickupLabel,
+      cancelledAt: cancelledAt,
+      memberName: memberName,
+      memberEmail: memberEmail,
+      rentalPriceCents: rentalPriceCents,
+      memberBalanceDueCents: memberBalanceDueCents,
+      memberCreditBalanceCents: memberCreditBalanceCents,
+    );
+  }
+
   factory BookingItem.fromJson(Map<String, dynamic> json) {
     return BookingItem(
       bookingId: json["booking_id"]?.toString() ?? "",
@@ -330,6 +350,20 @@ List<BookingItem> deskEarlierReady(List<BookingItem> items) {
       .where(
         (item) =>
             item.pickupDate != null && item.pickupDate!.isBefore(today),
+      )
+      .toList();
+}
+
+List<BookingItem> deskReadyReservations(
+  Iterable<BookingItem> items, {
+  bool allowEarlyForAdmin = false,
+}) {
+  return items
+      .where(
+        (item) => bookingReadyForDeskCheckout(
+          item,
+          allowEarlyForAdmin: allowEarlyForAdmin,
+        ),
       )
       .toList();
 }

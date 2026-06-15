@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
@@ -82,7 +83,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     final catalog = context.read<CatalogController>();
     try {
       await bookings.createBooking(toy.toyId, selected.date);
-      await catalog.refresh();
+      await catalog.updateToyInCatalog(toy.toyId);
       _retry();
       if (!mounted) return;
       await showBookingConfirmedDialog(
@@ -133,7 +134,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     final catalog = context.read<CatalogController>();
     try {
       await bookings.cancelBooking(booking.bookingId);
-      await catalog.refresh();
+      await catalog.updateToyInCatalog(toy.toyId);
       _retry();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -171,7 +172,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
             snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             appBar: AppBar(title: const Text("Toy details")),
-            body: const Center(child: CircularProgressIndicator()),
+            body: const Center(child: ToyLibraryLoadingIndicator()),
           );
         }
 
@@ -316,7 +317,8 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                                   return child;
                                 }
                                 return const Center(
-                                    child: CircularProgressIndicator());
+                                  child: ToyLibraryLoadingIndicator.compact(),
+                                );
                               },
                             )
                           : ToyPhotoPlaceholder(

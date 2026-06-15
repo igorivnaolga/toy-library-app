@@ -40,6 +40,23 @@ class RegistrationValidation {
     "protonmail.con": "protonmail.com",
     "protonmai.com": "protonmail.com",
   };
+
+  /// Well-known providers; used to catch close misspellings (e.g. gmial.com).
+  static const _knownEmailProviders = [
+    "gmail.com",
+    "googlemail.com",
+    "hotmail.com",
+    "outlook.com",
+    "yahoo.com",
+    "yahoo.co.nz",
+    "icloud.com",
+    "live.com",
+    "msn.com",
+    "xtra.co.nz",
+    "clear.net.nz",
+    "protonmail.com",
+    "proton.me",
+  ];
   static final RegExp addressLine = RegExp(
     r"^[A-Za-z0-9][A-Za-z0-9\s,.#/''-]{2,119}$",
   );
@@ -91,9 +108,55 @@ class RegistrationValidation {
     final at = emailValue.lastIndexOf("@");
     if (at <= 0 || at >= emailValue.length - 1) return null;
     final domain = emailValue.substring(at + 1).toLowerCase();
-    final suggestion = _emailProviderTypos[domain];
-    if (suggestion == null) return null;
-    return "Did you mean $suggestion? Check your email provider.";
+    final mapped = _emailProviderTypos[domain];
+    if (mapped != null) {
+      return "Did you mean $mapped? Check your email provider.";
+    }
+    final nearest = _nearestKnownProvider(domain);
+    if (nearest != null) {
+      return "Did you mean $nearest? Check your email provider.";
+    }
+    return null;
+  }
+
+  static String? _nearestKnownProvider(String domain) {
+    if (_knownEmailProviders.contains(domain)) return null;
+    String? best;
+    var bestDistance = 999;
+    for (final known in _knownEmailProviders) {
+      final distance = _editDistance(domain, known);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = known;
+      }
+    }
+    if (best != null && bestDistance > 0 && bestDistance <= 2) {
+      return best;
+    }
+    return null;
+  }
+
+  static int _editDistance(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+
+    final previous = List<int>.generate(b.length + 1, (index) => index);
+    for (var i = 0; i < a.length; i++) {
+      var corner = previous[0];
+      previous[0] = i + 1;
+      for (var j = 0; j < b.length; j++) {
+        final upper = previous[j + 1];
+        final cost = a.codeUnitAt(i) == b.codeUnitAt(j) ? 0 : 1;
+        previous[j + 1] = [
+          previous[j + 1] + 1,
+          previous[j] + 1,
+          corner + cost,
+        ].reduce((left, right) => left < right ? left : right);
+        corner = upper;
+      }
+    }
+    return previous[b.length];
   }
 
   static String? requiredAddressLine(String? value) {
@@ -146,6 +209,16 @@ class RegistrationValidation {
     if (trimmed.isEmpty) return "Enter $label.";
     if (!freeText.hasMatch(trimmed) || trimmed.length < 2) {
       return "Enter at least 2 characters for $label.";
+    }
+    return null;
+  }
+
+  static String? heardAboutUs(String? source, String otherText) {
+    if (source == null || source.trim().isEmpty) {
+      return "Choose how you heard about us.";
+    }
+    if (source == "other") {
+      return requiredFreeText(otherText, label: "how you heard about us");
     }
     return null;
   }

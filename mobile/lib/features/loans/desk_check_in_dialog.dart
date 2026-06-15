@@ -8,6 +8,7 @@ import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/modal_action_buttons.dart";
 import "../../core/toy_pieces.dart";
@@ -513,7 +514,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: ToyLibraryLoadingIndicator.compact(),
                         )
                       : const Icon(Icons.camera_alt_outlined, size: 18),
                   label: Text(_estimating ? "Analysing…" : "Count from photo"),

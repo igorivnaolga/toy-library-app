@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 
 import "app_text_styles.dart";
 import "app_theme.dart";
+import "toy_loading_indicator.dart";
 
 TextStyle fieldTextStyle(BuildContext context) {
   final theme = Theme.of(context);
@@ -176,7 +177,7 @@ Widget searchLoadingSuffix() {
     child: SizedBox(
       width: 18,
       height: 18,
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: ToyLibraryLoadingIndicator.compact(),
     ),
   );
 }

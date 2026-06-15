@@ -107,6 +107,29 @@ class BookingsController extends ChangeNotifier {
     return item;
   }
 
+  /// Desk check-out: move reservations out of upcoming without a full reload.
+  void markBookingsCompleted(Iterable<String> bookingIds) {
+    final ids = bookingIds.map((id) => id.trim()).where((id) => id.isNotEmpty);
+    final idSet = ids.toSet();
+    if (idSet.isEmpty) return;
+
+    var changed = false;
+    bookings = [
+      for (final booking in bookings)
+        if (idSet.contains(booking.bookingId) && booking.isPending)
+          () {
+            changed = true;
+            return booking.withStatus("completed");
+          }()
+        else
+          booking,
+    ];
+    if (changed) {
+      sortBookingsList(bookings);
+      notifyListeners();
+    }
+  }
+
   /// Pending reservation for [toyId], if the member already booked this toy.
   BookingItem? pendingBookingForToy(String toyId) {
     for (final booking in bookings) {

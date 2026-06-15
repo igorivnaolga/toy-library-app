@@ -26,13 +26,20 @@ class RegistrationValidatedField extends StatefulWidget {
 
   @override
   State<RegistrationValidatedField> createState() =>
-      _RegistrationValidatedFieldState();
+      RegistrationValidatedFieldState();
 }
 
-class _RegistrationValidatedFieldState extends State<RegistrationValidatedField> {
+class RegistrationValidatedFieldState extends State<RegistrationValidatedField> {
   final FocusNode _focusNode = FocusNode();
   String? _error;
-  bool _touched = false;
+
+  String? get error => _error;
+
+  /// Validates the field and updates inline error state. Returns true if valid.
+  bool validate({bool showSnackBar = false}) {
+    _validate(showSnackBar: showSnackBar);
+    return _error == null;
+  }
 
   @override
   void initState() {
@@ -56,13 +63,12 @@ class _RegistrationValidatedFieldState extends State<RegistrationValidatedField>
   }
 
   void _onTextChanged() {
-    if (_touched) {
-      _validate(showSnackBar: false);
+    if (_error != null) {
+      setState(() => _error = null);
     }
   }
 
   void _validate({required bool showSnackBar}) {
-    _touched = true;
     final value = widget.controller.text;
     String? error;
     if (widget.optional && value.trim().isEmpty) {

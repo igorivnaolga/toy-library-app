@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/api_client.dart";
 import "../../core/auth_store.dart";
@@ -92,7 +93,7 @@ class _MembershipOnboardingScreenState
           ],
           if (_busy) const Padding(
             padding: EdgeInsets.only(top: 24),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: ToyLibraryLoadingIndicator()),
           ),
         ],
       ),

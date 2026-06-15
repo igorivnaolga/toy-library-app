@@ -1,9 +1,11 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/section_header.dart";
 import "../../core/brand_chip_button.dart";
+import "../bookings/booking_checkout_sync.dart";
 import "../bookings/booking_models.dart";
 import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
@@ -35,37 +37,42 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
     });
   }
 
-  Future<void> _checkOut(BookingItem booking) async {
+  Future<void> _checkOutReservations(List<BookingItem> bookings) async {
+    if (bookings.isEmpty) return;
+
+    final member = bookings.first;
     final result = await showDeskCheckoutDialog(
       context,
-      memberLabel: booking.memberLabel,
-      memberUserId: booking.userId,
+      memberLabel: member.memberLabel,
+      memberUserId: member.userId,
       lines: [
-        DeskCheckoutLine(
-          toyId: booking.toyId,
-          toyName: booking.toyName ?? booking.toyId,
-          rentalPriceCents: booking.rentalPriceCents,
-        ),
+        for (final booking in bookings)
+          DeskCheckoutLine(
+            toyId: booking.toyId,
+            toyName: booking.toyName ?? booking.toyId,
+            rentalPriceCents: booking.rentalPriceCents,
+          ),
       ],
     );
     if (result == null || !mounted) return;
 
     final controller = context.read<LoansController>();
-    final catalog = context.read<CatalogController>();
     try {
-      await controller.checkOutFromBooking(
-        booking.bookingId,
-        rentalPayment: result.rentalPayment,
-        paymentMethod: result.paymentMethod,
-      );
-      await catalog.refresh();
+      for (final booking in bookings) {
+        await controller.checkOutFromBooking(
+          booking.bookingId,
+          rentalPayment: result.rentalPayment,
+          paymentMethod: result.paymentMethod,
+        );
+      }
       if (!mounted) return;
+      await syncAfterReservationCheckout(context, bookings);
+      if (!mounted) return;
+      final message = bookings.length == 1
+          ? "Checked out ${bookings.first.toyName ?? bookings.first.toyId}"
+          : "Checked out ${bookings.length} reserved toys";
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Checked out ${booking.toyName ?? booking.toyId}",
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -75,6 +82,9 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
       rethrow;
     }
   }
+
+  Future<void> _checkOut(BookingItem booking) =>
+      _checkOutReservations([booking]);
 
   Future<void> _checkIn(LoanItem loan) async {
     final result = await showDeskCheckInDialog(context, loan);
@@ -111,11 +121,8 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
   }
 
   Future<void> _walkInCheckedOut() async {
-    final catalog = context.read<CatalogController>();
-    final messenger = ScaffoldMessenger.of(context);
-    await catalog.refresh();
     if (!mounted) return;
-    messenger.showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Walk-in toy checked out")),
     );
   }
@@ -135,7 +142,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
         if (c.deskLoading &&
             c.pendingCheckouts.isEmpty &&
             c.activeLoans.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: ToyLibraryLoadingIndicator());
         }
 
         final offDuty = c.deskError != null &&
@@ -186,7 +193,7 @@ class _VolunteerDeskScreenState extends State<VolunteerDeskScreen> {
                   }
                 },
                 onCheckedOut: _walkInCheckedOut,
-                onCheckOutReservation: _checkOut,
+                onCheckOutReservations: _checkOutReservations,
                 onOpenToy: _openToy,
               ),
               const SizedBox(height: 16),

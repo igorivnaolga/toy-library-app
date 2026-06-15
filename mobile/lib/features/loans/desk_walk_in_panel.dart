@@ -23,7 +23,7 @@ class DeskWalkInPanel extends StatefulWidget {
     required this.onCheckedOut,
     this.allowEarlyReservationCheckout = false,
     this.onDraftChanged,
-    this.onCheckOutReservation,
+    this.onCheckOutReservations,
     this.onOpenToy,
   });
 
@@ -36,8 +36,9 @@ class DeskWalkInPanel extends StatefulWidget {
   /// Called when a member or toy is selected for walk-in (draft in progress).
   final ValueChanged<bool>? onDraftChanged;
 
-  /// When set, used to check out a member reservation from the panel.
-  final Future<void> Function(BookingItem booking)? onCheckOutReservation;
+  /// Checks out one or more member reservations from the panel.
+  final Future<void> Function(List<BookingItem> bookings)?
+      onCheckOutReservations;
 
   final ValueChanged<String>? onOpenToy;
 
@@ -136,20 +137,40 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
     unawaited(_loadMemberReservations(member.userId));
   }
 
-  Future<void> _checkOutReservation(BookingItem booking) async {
-    final handler = widget.onCheckOutReservation;
-    if (handler == null) return;
+  Future<void> _refreshSelectedMember() async {
+    final current = _selectedMember;
+    if (current == null) return;
+    try {
+      final updated =
+          await context.read<LoansController>().fetchDeskMember(current.userId);
+      if (!mounted) return;
+      if (updated != null) {
+        setState(() => _selectedMember = updated);
+      }
+      await _loadMemberReservations(current.userId);
+    } catch (_) {
+      if (!mounted) return;
+      await _loadMemberReservations(current.userId);
+    }
+  }
+
+  Future<void> _checkOutReservations(List<BookingItem> bookings) async {
+    final handler = widget.onCheckOutReservations;
+    if (handler == null || bookings.isEmpty) return;
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
-      await handler(booking);
+      await handler(bookings);
       if (!mounted) return;
-      final member = _selectedMember;
-      if (member != null) {
-        await _loadMemberReservations(member.userId);
-      }
+      final checkedOutIds = bookings.map((booking) => booking.bookingId).toSet();
+      setState(() {
+        _memberReservations = _memberReservations
+            .where((booking) => !checkedOutIds.contains(booking.bookingId))
+            .toList();
+      });
+      await _refreshSelectedMember();
       if (!mounted) return;
       setState(() => _submitting = false);
     } catch (e) {
@@ -291,13 +312,12 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _selectedMember = null;
         _selectedToys.clear();
         _toyQuery.clear();
-        _memberQuery.clear();
         _toyResults = [];
-        _memberResults = [];
       });
+      await _refreshSelectedMember();
+      if (!mounted) return;
       _notifyDraftChanged();
       widget.onCheckedOut();
     } catch (e) {
@@ -328,8 +348,15 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final busy = widget.loading || _submitting;
+    final deskReloadBusy = widget.loading && !_hasMember;
+    final busy = deskReloadBusy || _submitting;
     final canSubmit = _hasMember && _selectedToys.isNotEmpty && !busy;
+    final readyReservations = deskReadyReservations(
+      _memberReservations,
+      allowEarlyForAdmin: widget.allowEarlyReservationCheckout,
+    );
+    final canCheckOutReservations =
+        widget.onCheckOutReservations != null && !busy;
 
     return Material(
       color: theme.colorScheme.surfaceContainerLowest,
@@ -395,7 +422,23 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                     )
                   else
                     Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (readyReservations.length >= 2) ...[
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: BrandChipButton(
+                              label:
+                                  "Check out all (${readyReservations.length})",
+                              fixedWidth: 168,
+                              onPressed: canCheckOutReservations
+                                  ? () =>
+                                      _checkOutReservations(readyReservations)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         for (var i = 0; i < _memberReservations.length; i++) ...[
                           if (i > 0) const SizedBox(height: 8),
                           DeskReservationTile(
@@ -408,11 +451,16 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                                 : () => widget.onOpenToy!(
                                       _memberReservations[i].toyId,
                                     ),
-                            onCheckOut: widget.onCheckOutReservation == null
-                                ? null
-                                : () => _checkOutReservation(
-                                      _memberReservations[i],
-                                    ),
+                            onCheckOut: canCheckOutReservations &&
+                                    readyReservations.any(
+                                      (item) =>
+                                          item.bookingId ==
+                                          _memberReservations[i].bookingId,
+                                    )
+                                ? () => _checkOutReservations(
+                                      [_memberReservations[i]],
+                                    )
+                                : null,
                           ),
                         ],
                       ],

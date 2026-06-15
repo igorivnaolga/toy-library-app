@@ -245,6 +245,22 @@ class CatalogController extends ChangeNotifier {
     return ToyItem.fromJson(json);
   }
 
+  /// Updates one cached toy after a booking change without reloading the list.
+  Future<void> updateToyInCatalog(String toyId) async {
+    try {
+      final updated = await fetchToy(toyId);
+      final index = toys.indexWhere((item) => item.toyId == toyId);
+      if (index < 0) return;
+      toys = [
+        for (var i = 0; i < toys.length; i++)
+          if (i == index) updated else toys[i],
+      ];
+      notifyListeners();
+    } catch (_) {
+      // Leave the cached row as-is; the next pull-to-refresh will reconcile.
+    }
+  }
+
   Future<ToyItem> updateToyPieces(
     String toyId, {
     required List<ToyPieceLine> pieceLines,
@@ -387,7 +403,6 @@ class CatalogController extends ChangeNotifier {
   Future<void> _fetchToyPage({required bool reset}) async {
     if (reset) {
       _nextToyPage = 1;
-      toys = [];
     }
     final query = <String, String>{
       "page": "$_nextToyPage",

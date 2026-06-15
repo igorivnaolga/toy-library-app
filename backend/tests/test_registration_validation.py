@@ -83,6 +83,7 @@ def test_registration_rejects_invalid_child_name():
         "user@gmal.com",
         "user@gmail.con",
         "user@hotmial.com",
+        "user@gmial.com",
     ],
 )
 def test_validate_email_rejects_common_provider_typos(email):

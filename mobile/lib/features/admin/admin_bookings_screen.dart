@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_theme.dart";
@@ -154,7 +155,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
           child: Consumer<AdminController>(
             builder: (context, admin, _) {
               if (admin.bookingsLoading && admin.bookings.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: ToyLibraryLoadingIndicator());
               }
               if (admin.bookingsError != null && admin.bookings.isEmpty) {
                 return Center(
@@ -175,7 +176,9 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
                   ),
                 );
               }
-              if (admin.bookings.isEmpty) {
+              final pendingBookings =
+                  admin.bookings.where((item) => item.isPending).toList();
+              if (pendingBookings.isEmpty) {
                 return RefreshIndicator(
                   onRefresh: _reload,
                   child: ListView(
@@ -188,7 +191,7 @@ class _AdminBookingsScreenState extends State<AdminBookingsScreen> {
               }
 
               final groups =
-                  groupAdminBookingsByDateAndMember(admin.bookings);
+                  groupAdminBookingsByDateAndMember(pendingBookings);
 
               return RefreshIndicator(
                 onRefresh: _reload,

@@ -40,6 +40,22 @@ EMAIL_PROVIDER_TYPOS: dict[str, str] = {
     "protonmail.con": "protonmail.com",
     "protonmai.com": "protonmail.com",
 }
+
+KNOWN_EMAIL_PROVIDERS = (
+    "gmail.com",
+    "googlemail.com",
+    "hotmail.com",
+    "outlook.com",
+    "yahoo.com",
+    "yahoo.co.nz",
+    "icloud.com",
+    "live.com",
+    "msn.com",
+    "xtra.co.nz",
+    "clear.net.nz",
+    "protonmail.com",
+    "proton.me",
+)
 ADDRESS_LINE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9\s,.#/''-]{2,119}$")
 SUBURB_RE = re.compile(r"^[A-Za-z][A-Za-z\s'.-]{1,79}$")
 FREE_TEXT_RE = re.compile(r"^[\s\S]{0,500}$")
@@ -101,12 +117,49 @@ def validate_optional_person_name(value: str | None) -> str | None:
     return validate_person_name(cleaned)
 
 
+def _edit_distance(a: str, b: str) -> int:
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+
+    previous = list(range(len(b) + 1))
+    for i, char_a in enumerate(a, start=1):
+        corner = previous[0]
+        previous[0] = i
+        for j, char_b in enumerate(b, start=1):
+            upper = previous[j]
+            cost = 0 if char_a == char_b else 1
+            previous[j] = min(previous[j] + 1, previous[j - 1] + 1, corner + cost)
+            corner = upper
+    return previous[-1]
+
+
+def _nearest_known_provider(domain: str) -> str | None:
+    if domain in KNOWN_EMAIL_PROVIDERS:
+        return None
+    best = None
+    best_distance = 999
+    for known in KNOWN_EMAIL_PROVIDERS:
+        distance = _edit_distance(domain, known)
+        if distance < best_distance:
+            best_distance = distance
+            best = known
+    if best is not None and 0 < best_distance <= 2:
+        return best
+    return None
+
+
 def _email_provider_typo_message(email_value: str) -> str | None:
     at = email_value.rfind("@")
     if at <= 0 or at >= len(email_value) - 1:
         return None
     domain = email_value[at + 1 :].lower()
     suggestion = EMAIL_PROVIDER_TYPOS.get(domain)
+    if suggestion is None:
+        suggestion = _nearest_known_provider(domain)
     if suggestion is None:
         return None
     return f"Did you mean {suggestion}? Check your email provider."

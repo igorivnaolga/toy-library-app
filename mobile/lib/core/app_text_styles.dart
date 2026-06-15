@@ -19,6 +19,36 @@ extension AppTextStyles on BuildContext {
         color: _colors.onSurface,
       );
 
+  /// Schedule sheet tabs and in-tab section titles (Duty roster / Library events).
+  TextStyle get scheduleMainTabSelected => _text.titleMedium!.copyWith(
+        fontWeight: FontWeight.w800,
+        fontSize: 16,
+        color: _colors.onSurface,
+      );
+
+  TextStyle get scheduleMainTabUnselected => scheduleMainTabSelected.copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 15,
+        color: _colors.onSurface.withValues(alpha: 0.48),
+      );
+
+  TextStyle get scheduleSubTabSelected => _text.titleSmall!.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+        color: _colors.onSurface,
+      );
+
+  TextStyle get scheduleSubTabUnselected => scheduleSubTabSelected.copyWith(
+        fontWeight: FontWeight.w600,
+        fontSize: 13,
+        color: _colors.onSurface.withValues(alpha: 0.48),
+      );
+
+  /// In-tab heading under schedule tabs (matches tab emphasis).
+  TextStyle get scheduleSectionTitle => scheduleMainTabSelected.copyWith(
+        fontSize: 17,
+      );
+
   /// Sheet / modal screen titles on white background.
   TextStyle get screenTitle => _text.titleLarge!.copyWith(
         fontWeight: FontWeight.w700,

@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_input_field.dart";
 import "../../core/search_field.dart";
@@ -181,7 +182,7 @@ class _AdminMembersScreenState extends State<AdminMembersScreen> {
           child: Consumer<AdminController>(
             builder: (context, admin, _) {
               if (admin.membersLoading && admin.members.isEmpty) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: ToyLibraryLoadingIndicator());
               }
               if (admin.membersError != null && admin.members.isEmpty) {
                 return Center(

@@ -201,9 +201,29 @@ class DutyController extends ChangeNotifier {
 
   /// Loads roster if needed and requests scroll to the first slot on [date].
   Future<bool> jumpToDate(DateTime date) async {
-    await _ensureDateLoaded(date);
     final day = calendarDay(date);
-    final match = sessions.where((s) => calendarDay(s.sessionDate) == day);
+    await _ensureDateLoaded(day);
+    var match = sessions.where((s) => calendarDay(s.sessionDate) == day).toList();
+    if (match.isEmpty) {
+      final from = day.subtract(const Duration(days: _initialPastDays));
+      final to = day.add(const Duration(days: _initialFutureDays));
+      loadingMore = true;
+      notifyListeners();
+      try {
+        await _fetchSessions(from, to, replace: false);
+        final fromDay = calendarDay(from);
+        final toDay = calendarDay(to);
+        _loadedFrom = _loadedFrom == null || fromDay.isBefore(_loadedFrom!)
+            ? fromDay
+            : _loadedFrom;
+        _loadedTo =
+            _loadedTo == null || toDay.isAfter(_loadedTo!) ? toDay : _loadedTo;
+      } finally {
+        loadingMore = false;
+        notifyListeners();
+      }
+      match = sessions.where((s) => calendarDay(s.sessionDate) == day).toList();
+    }
     if (match.isEmpty) {
       scrollToSessionId = null;
       notifyListeners();

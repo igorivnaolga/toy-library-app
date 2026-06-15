@@ -3,6 +3,7 @@ import "package:provider/provider.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
@@ -191,7 +192,7 @@ class _RegistrationPasswordScreenState extends State<RegistrationPasswordScreen>
           if (_busy)
             const Padding(
               padding: EdgeInsets.only(top: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ToyLibraryLoadingIndicator()),
             ),
           if (_error != null)
             Padding(

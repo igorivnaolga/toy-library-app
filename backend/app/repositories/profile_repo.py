@@ -5,14 +5,14 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import bindparam, select, text
 from sqlalchemy.orm import Session
 
 from app.models.profile import Profile
 from app.schemas.principal import KidProfile
 
 _ALLOWED_TIERS = frozenset({"casual", "non_duty", "duty"})
-RECENT_MEMBERS_DAYS = 30
+RECENT_MEMBERS_DAYS = 7
 
 
 def get_profile_by_id(session: Session, user_id: uuid.UUID) -> Profile | None:
@@ -28,6 +28,38 @@ def get_user_email(session: Session, user_id: uuid.UUID) -> str | None:
         return None
     email = str(row).strip()
     return email or None
+
+
+def get_user_display_map(
+    session: Session,
+    user_ids: set[uuid.UUID] | list[uuid.UUID],
+) -> dict[uuid.UUID, tuple[str, str]]:
+    """Batch load display names and emails for event/duty booking lists."""
+    ids = list(user_ids)
+    if not ids:
+        return {}
+    stmt = (
+        text(
+            """
+            select p.id as user_id,
+                   coalesce(p.full_name, '') as full_name,
+                   coalesce(u.email::text, '') as email
+            from public.profiles p
+            left join auth.users u on u.id = p.id
+            where p.id in :ids
+            """
+        ).bindparams(bindparam("ids", expanding=True))
+    )
+    rows = session.execute(stmt, {"ids": ids}).mappings().all()
+    result: dict[uuid.UUID, tuple[str, str]] = {}
+    for row in rows:
+        uid = row["user_id"]
+        if isinstance(uid, uuid.UUID):
+            key = uid
+        else:
+            key = uuid.UUID(str(uid))
+        result[key] = (row.get("full_name") or "", row.get("email") or "")
+    return result
 
 
 def auth_email_is_registered(session: Session, email: str) -> bool:
@@ -267,7 +299,7 @@ def approve_duty_volunteer(session: Session, profile: Profile) -> None:
 
 
 def _recent_members_sql_extra() -> str:
-    """Members with a chosen tier in the last month (duty-pending listed separately)."""
+    """Members with a chosen tier in the last week (duty-pending listed separately)."""
     return f"""
           and p.membership_tier is not null
           and p.role in ('member', 'volunteer')
@@ -478,3 +510,78 @@ def search_members_for_desk(
         {"pattern": pattern, "limit": limit},
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+def list_event_assignees(
+    session: Session,
+    *,
+    audience: str,
+    limit: int = 30,
+) -> list[dict[str, str]]:
+    """Volunteers or members eligible for admin event slot booking."""
+    roles = _event_assignee_roles(audience)
+    if not roles:
+        return []
+    roles_sql = ", ".join(f"'{role}'" for role in roles)
+    stmt = text(
+        f"""
+        select p.id::text as user_id,
+               coalesce(p.full_name, '') as full_name,
+               coalesce(u.email::text, '') as email
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where p.role in ({roles_sql})
+        order by p.full_name nulls last, u.email
+        limit :limit
+        """
+    )
+    rows = session.execute(stmt, {"limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def search_event_assignees(
+    session: Session,
+    query: str,
+    *,
+    audience: str,
+    limit: int = 20,
+) -> list[dict[str, str]]:
+    """Find volunteers or members by name, email, or id for event booking."""
+    roles = _event_assignee_roles(audience)
+    if not roles:
+        return []
+    cleaned = query.strip()
+    if not cleaned:
+        return list_event_assignees(session, audience=audience, limit=limit)
+    roles_sql = ", ".join(f"'{role}'" for role in roles)
+    pattern = f"%{cleaned}%"
+    stmt = text(
+        f"""
+        select p.id::text as user_id,
+               coalesce(p.full_name, '') as full_name,
+               coalesce(u.email::text, '') as email
+        from public.profiles p
+        join auth.users u on u.id = p.id
+        where p.role in ({roles_sql})
+          and (
+            coalesce(p.full_name, '') ilike :pattern
+            or coalesce(u.email::text, '') ilike :pattern
+            or p.id::text ilike :pattern
+          )
+        order by p.full_name nulls last, u.email
+        limit :limit
+        """
+    )
+    rows = session.execute(
+        stmt,
+        {"pattern": pattern, "limit": limit},
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def _event_assignee_roles(audience: str) -> tuple[str, ...] | None:
+    if audience == "volunteer":
+        return ("volunteer", "admin")
+    if audience == "member":
+        return ("member", "volunteer")
+    return None

@@ -53,3 +53,27 @@ class ToyPopularityOut(BaseModel):
     period: str
     period_label: str
     data: list[ToyPopularityRowOut] = Field(default_factory=list)
+
+
+class StatsHeardAboutOut(BaseModel):
+    period: str
+    period_label: str
+    total_responses: int = Field(
+        ge=0,
+        description="Members with a heard-about-us answer in the period.",
+    )
+    data: list[StatsCountRowOut] = Field(default_factory=list)
+
+
+class StatsPendingMemberOut(BaseModel):
+    user_id: str
+    email: str = ""
+    full_name: str = ""
+    pending_cents: int = Field(ge=0)
+
+
+class StatsPendingMembersOut(BaseModel):
+    period: str
+    period_label: str
+    total_pending_cents: int = Field(ge=0)
+    data: list[StatsPendingMemberOut] = Field(default_factory=list)

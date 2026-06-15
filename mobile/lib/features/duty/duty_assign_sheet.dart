@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../loans/desk_member.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/app_input_field.dart";
@@ -221,7 +222,7 @@ class _DutyAssignScreenState extends State<DutyAssignScreen> {
                 child: SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: ToyLibraryLoadingIndicator.compact(),
                 ),
               ),
             ),

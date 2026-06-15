@@ -4,6 +4,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_theme.dart";
 import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
@@ -485,7 +486,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: Consumer<CatalogController>(
               builder: (context, c, _) {
                 if (c.loading && c.toys.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: ToyLibraryLoadingIndicator());
                 }
                 if (c.error != null && c.toys.isEmpty) {
                   return Center(
@@ -542,7 +543,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           child: SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: const ToyLibraryLoadingIndicator.compact(),
                           ),
                         ),
                       );

@@ -6,6 +6,7 @@ import "../../core/brand_chip_button.dart";
 import "../info/library_info_copy.dart";
 import "../profile/kid_profile.dart";
 import "registration_form_data.dart";
+import "registration_heard_about_field.dart";
 import "registration_password_screen.dart";
 import "registration_validated_field.dart";
 import "registration_validation.dart";
@@ -33,12 +34,26 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   late final TextEditingController _altName;
   late final TextEditingController _altAddress;
   late final TextEditingController _altPhone;
-  late final TextEditingController _heardAbout;
+  late final TextEditingController _heardAboutOther;
   late final TextEditingController _skills;
+  String? _heardAboutSource;
   late final TextEditingController _kidName;
 
   DateTime? _kidBirthDate;
   int _kidFieldGeneration = 0;
+
+  final _parentAFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _parentBFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _address1FieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _address2FieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _suburbFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _mobileFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _emailFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _altNameFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _altAddressFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _altPhoneFieldKey = GlobalKey<RegistrationValidatedFieldState>();
+  final _heardAboutFieldKey = GlobalKey<RegistrationHeardAboutFieldState>();
+  final _skillsFieldKey = GlobalKey<RegistrationValidatedFieldState>();
 
   @override
   void initState() {
@@ -53,7 +68,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _altName = TextEditingController();
     _altAddress = TextEditingController();
     _altPhone = TextEditingController();
-    _heardAbout = TextEditingController();
+    _heardAboutOther = TextEditingController();
     _skills = TextEditingController();
     _kidName = TextEditingController();
   }
@@ -71,7 +86,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _altName.dispose();
     _altAddress.dispose();
     _altPhone.dispose();
-    _heardAbout.dispose();
+    _heardAboutOther.dispose();
     _skills.dispose();
     _kidName.dispose();
     super.dispose();
@@ -88,7 +103,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     _form.altContactName = _altName.text;
     _form.altContactAddress = _altAddress.text;
     _form.altContactPhone = _altPhone.text;
-    _form.heardAboutUs = _heardAbout.text;
+    _form.heardAboutUs = resolveHeardAboutUs(
+      source: _heardAboutSource,
+      otherText: _heardAboutOther.text,
+    );
     _form.skills = _skills.text;
   }
 
@@ -130,9 +148,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               _form.altContactAddress,
             ) ??
             RegistrationValidation.requiredNzPhone(_form.altContactPhone) ??
-            RegistrationValidation.requiredFreeText(
-              _form.heardAboutUs,
-              label: "how you heard about us",
+            RegistrationValidation.heardAboutUs(
+              _heardAboutSource,
+              _heardAboutOther.text,
             ) ??
             RegistrationValidation.optionalFreeText(_form.skills);
       case 3:
@@ -153,7 +171,43 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
   }
 
+  List<GlobalKey<RegistrationValidatedFieldState>> _fieldKeysForStep(int step) {
+    switch (step) {
+      case 0:
+        return [
+          _parentAFieldKey,
+          _parentBFieldKey,
+          _address1FieldKey,
+          _address2FieldKey,
+          _suburbFieldKey,
+          _mobileFieldKey,
+          _emailFieldKey,
+        ];
+      case 2:
+        return [
+          _altNameFieldKey,
+          _altAddressFieldKey,
+          _altPhoneFieldKey,
+          _skillsFieldKey,
+        ];
+      default:
+        return [];
+    }
+  }
+
+  void _validateFieldsForStep(int step) {
+    for (final key in _fieldKeysForStep(step)) {
+      key.currentState?.validate(showSnackBar: false);
+    }
+    if (step == 2) {
+      _heardAboutFieldKey.currentState?.validate(showSnackBar: false);
+    }
+  }
+
   Future<void> _next() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _syncFormFromControllers();
+    _validateFieldsForStep(_step);
     final error = _validateStep(_step);
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,11 +293,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _kidBirthDate = null;
       _kidFieldGeneration += 1;
     });
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text("$name added to the form")),
-      );
   }
 
   void _removeKid(int index) {
@@ -319,6 +368,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   suburb: _suburb,
                   mobilePhone: _mobilePhone,
                   email: _email,
+                  parentAFieldKey: _parentAFieldKey,
+                  parentBFieldKey: _parentBFieldKey,
+                  address1FieldKey: _address1FieldKey,
+                  address2FieldKey: _address2FieldKey,
+                  suburbFieldKey: _suburbFieldKey,
+                  mobileFieldKey: _mobileFieldKey,
+                  emailFieldKey: _emailFieldKey,
                 ),
                 _ChildrenStep(
                   kids: _form.kids,
@@ -334,8 +390,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   altName: _altName,
                   altAddress: _altAddress,
                   altPhone: _altPhone,
-                  heardAbout: _heardAbout,
+                  heardAboutSource: _heardAboutSource,
+                  heardAboutOther: _heardAboutOther,
+                  onHeardAboutSourceChanged: (source) =>
+                      setState(() => _heardAboutSource = source),
                   skills: _skills,
+                  altNameFieldKey: _altNameFieldKey,
+                  altAddressFieldKey: _altAddressFieldKey,
+                  altPhoneFieldKey: _altPhoneFieldKey,
+                  heardAboutFieldKey: _heardAboutFieldKey,
+                  skillsFieldKey: _skillsFieldKey,
                 ),
                 _MembershipStep(
                   selectedTier: _form.membershipTier,
@@ -401,6 +465,13 @@ class _FamilyStep extends StatelessWidget {
     required this.suburb,
     required this.mobilePhone,
     required this.email,
+    required this.parentAFieldKey,
+    required this.parentBFieldKey,
+    required this.address1FieldKey,
+    required this.address2FieldKey,
+    required this.suburbFieldKey,
+    required this.mobileFieldKey,
+    required this.emailFieldKey,
   });
 
   final TextEditingController parentA;
@@ -410,6 +481,13 @@ class _FamilyStep extends StatelessWidget {
   final TextEditingController suburb;
   final TextEditingController mobilePhone;
   final TextEditingController email;
+  final GlobalKey<RegistrationValidatedFieldState> parentAFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> parentBFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> address1FieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> address2FieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> suburbFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> mobileFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> emailFieldKey;
 
   @override
   Widget build(BuildContext context) {
@@ -432,6 +510,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         RegistrationValidatedField(
+          key: parentAFieldKey,
           controller: parentA,
           label: "Parent A's full name",
           textCapitalization: TextCapitalization.words,
@@ -442,6 +521,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: parentBFieldKey,
           controller: parentB,
           label: "Parent B's full name",
           optional: true,
@@ -453,6 +533,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: address1FieldKey,
           controller: address1,
           label: "Address line 1",
           textCapitalization: TextCapitalization.words,
@@ -460,6 +541,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: address2FieldKey,
           controller: address2,
           label: "Address line 2",
           optional: true,
@@ -468,6 +550,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: suburbFieldKey,
           controller: suburb,
           label: "Suburb",
           textCapitalization: TextCapitalization.words,
@@ -475,6 +558,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: mobileFieldKey,
           controller: mobilePhone,
           label: "Mobile phone",
           keyboardType: TextInputType.phone,
@@ -482,6 +566,7 @@ class _FamilyStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: emailFieldKey,
           controller: email,
           label: "Email",
           keyboardType: TextInputType.emailAddress,
@@ -590,15 +675,29 @@ class _AlternativeContactStep extends StatelessWidget {
     required this.altName,
     required this.altAddress,
     required this.altPhone,
-    required this.heardAbout,
+    required this.heardAboutSource,
+    required this.heardAboutOther,
+    required this.onHeardAboutSourceChanged,
     required this.skills,
+    required this.altNameFieldKey,
+    required this.altAddressFieldKey,
+    required this.altPhoneFieldKey,
+    required this.heardAboutFieldKey,
+    required this.skillsFieldKey,
   });
 
   final TextEditingController altName;
   final TextEditingController altAddress;
   final TextEditingController altPhone;
-  final TextEditingController heardAbout;
+  final String? heardAboutSource;
+  final TextEditingController heardAboutOther;
+  final ValueChanged<String?> onHeardAboutSourceChanged;
   final TextEditingController skills;
+  final GlobalKey<RegistrationValidatedFieldState> altNameFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> altAddressFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> altPhoneFieldKey;
+  final GlobalKey<RegistrationHeardAboutFieldState> heardAboutFieldKey;
+  final GlobalKey<RegistrationValidatedFieldState> skillsFieldKey;
 
   @override
   Widget build(BuildContext context) {
@@ -611,6 +710,7 @@ class _AlternativeContactStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: altNameFieldKey,
           controller: altName,
           label: "Full name",
           textCapitalization: TextCapitalization.words,
@@ -621,6 +721,7 @@ class _AlternativeContactStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: altAddressFieldKey,
           controller: altAddress,
           label: "Address",
           maxLines: 2,
@@ -629,22 +730,22 @@ class _AlternativeContactStep extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: altPhoneFieldKey,
           controller: altPhone,
           label: "Phone",
           keyboardType: TextInputType.phone,
           validator: RegistrationValidation.requiredNzPhone,
         ),
         const SizedBox(height: 20),
-        RegistrationValidatedField(
-          controller: heardAbout,
-          label: "How did you hear about us?",
-          validator: (value) => RegistrationValidation.requiredFreeText(
-            value,
-            label: "how you heard about us",
-          ),
+        RegistrationHeardAboutField(
+          key: heardAboutFieldKey,
+          selectedSource: heardAboutSource,
+          otherController: heardAboutOther,
+          onSourceChanged: onHeardAboutSourceChanged,
         ),
         const SizedBox(height: 12),
         RegistrationValidatedField(
+          key: skillsFieldKey,
           controller: skills,
           label: "What skills do you have that could help us?",
           optional: true,

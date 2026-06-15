@@ -3,11 +3,13 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_input_field.dart";
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/section_header.dart";
 import "../duty/duty_session_models.dart";
 import "admin_controller.dart";
+import "admin_stats_pending_members_screen.dart";
 import "admin_statistics_models.dart";
 
 /// Admin statistics: period filters, overview cards, charts, toy popularity.
@@ -61,6 +63,12 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
         groupBy: _groupBy,
       ),
       admin.loadStatsCatalog(),
+      admin.loadStatsHeardAbout(
+        period: _period,
+        sessionDate: _sessionDate,
+        year: _year,
+        month: _month,
+      ),
       admin.loadToyPopularity(
         period: _period,
         sessionDate: _sessionDate,
@@ -174,6 +182,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
     final overview = admin.statsOverview;
     final breakdown = admin.statsBreakdown;
     final catalog = admin.statsCatalog;
+    final heardAbout = admin.statsHeardAbout;
     final popularity = admin.toyPopularity;
     final loading = admin.statsLoading;
 
@@ -226,13 +235,22 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
+                      child: ToyLibraryLoadingIndicator(),
                     ),
                   )
                 else if (admin.statsError != null && overview == null)
                   _ErrorCard(message: admin.statsError!)
                 else if (overview != null) ...[
-                  _OverviewGrid(overview: overview),
+                  _OverviewGrid(
+                    overview: overview,
+                    period: _period,
+                    sessionDate: _sessionDate,
+                    year: _year,
+                    month: _month,
+                    periodLabel: periodLabel.isNotEmpty
+                        ? periodLabel
+                        : overview.periodLabel,
+                  ),
                   const SizedBox(height: 8),
                   SectionHeader(
                     "Checkouts by ${statsGroupByTitle(_groupBy)}",
@@ -256,7 +274,7 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
                     const SizedBox(
                       height: 120,
                       child: Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: ToyLibraryLoadingIndicator.compact(),
                       ),
                     )
                   else if (breakdown != null && breakdown.data.isNotEmpty)
@@ -264,6 +282,32 @@ class _AdminStatisticsScreenState extends State<AdminStatisticsScreen> {
                   else
                     const _EmptyChartCard(
                       message: "No checkouts in this period.",
+                    ),
+                  const SizedBox(height: 8),
+                  const SectionHeader("How members found us"),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+                    child: Text(
+                      heardAbout == null
+                          ? "Answers from registration in this period."
+                          : "${heardAbout.totalResponses} registration "
+                              "${heardAbout.totalResponses == 1 ? "answer" : "answers"} "
+                              "in this period.",
+                      style: context.listSubtitle,
+                    ),
+                  ),
+                  if (admin.statsHeardAboutLoading)
+                    const SizedBox(
+                      height: 120,
+                      child: Center(
+                        child: ToyLibraryLoadingIndicator.compact(),
+                      ),
+                    )
+                  else if (heardAbout != null && heardAbout.data.isNotEmpty)
+                    _BarChartCard(rows: heardAbout.data)
+                  else
+                    const _EmptyChartCard(
+                      message: "No heard-about-us answers in this period.",
                     ),
                   const SizedBox(height: 8),
                   const SectionHeader("Catalog by category"),
@@ -616,9 +660,35 @@ Future<int?> showYearPicker(
 }
 
 class _OverviewGrid extends StatelessWidget {
-  const _OverviewGrid({required this.overview});
+  const _OverviewGrid({
+    required this.overview,
+    required this.period,
+    required this.sessionDate,
+    required this.year,
+    required this.month,
+    required this.periodLabel,
+  });
 
   final StatsOverview overview;
+  final String period;
+  final DateTime? sessionDate;
+  final int year;
+  final int month;
+  final String periodLabel;
+
+  void _openPendingMembers(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdminStatsPendingMembersScreen(
+          period: period,
+          sessionDate: sessionDate,
+          year: year,
+          month: month,
+          periodLabel: periodLabel,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -643,6 +713,8 @@ class _OverviewGrid extends StatelessWidget {
       _StatCard(
         label: "Pending",
         value: formatRevenueCents(overview.pendingRevenueCents),
+        onTap: () => _openPendingMembers(context),
+        hint: "View members",
       ),
     ];
 
@@ -665,32 +737,77 @@ class _OverviewGrid extends StatelessWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    this.onTap,
+    this.hint,
+  });
 
   final String label;
   final String value;
+  final VoidCallback? onTap;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: context.listSubtitle.copyWith(fontSize: 12),
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: colors.onSurfaceVariant,
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: context.cardTitle,
+        ),
+        if (hint != null && onTap != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            hint!,
+            style: context.listSubtitle.copyWith(
+              fontSize: 10,
+              color: colors.primary,
+            ),
+          ),
+        ],
+      ],
+    );
+
+    final card = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: colors.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(label, style: context.listSubtitle.copyWith(fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: context.cardTitle,
-          ),
-        ],
+      child: content,
+    );
+
+    if (onTap == null) return card;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: card,
       ),
     );
   }
@@ -776,18 +893,25 @@ class _BarChartCard extends StatelessWidget {
 
   static const _barSlotWidth = 44.0;
 
+  double _yAxisReservedSize(double maxY) {
+    final digits = maxY.toInt().toString().length;
+    return (digits * 8.0 + 14).clamp(38.0, 52.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final peak = rows.map((r) => r.count).reduce((a, b) => a > b ? a : b);
     final maxY = niceChartMaxY(peak).toDouble();
     final yInterval = niceChartYInterval(maxY.toInt()).toDouble();
+    final yReserved = _yAxisReservedSize(maxY);
     final barColor = kBrandYellow.withValues(alpha: 0.85);
-    final chartWidth = rows.length * _barSlotWidth + 40;
+    final chartWidth = rows.length * _barSlotWidth + yReserved + 12;
     const axisStyle = TextStyle(fontSize: 9, height: 1.1);
 
     return _StatsSurfaceCard(
+      clipContent: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 12, 8, 8),
+        padding: const EdgeInsets.fromLTRB(4, 12, 8, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -797,7 +921,7 @@ class _BarChartCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             SizedBox(
-              height: 188,
+              height: 200,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
@@ -819,6 +943,15 @@ class _BarChartCard extends StatelessWidget {
                       borderData: FlBorderData(show: false),
                       barTouchData: BarTouchData(
                         touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => kBrandOnYellow,
+                          maxContentWidth: 260,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          tooltipPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          tooltipMargin: 6,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             final row = rows[group.x.toInt()];
                             return BarTooltipItem(
@@ -827,7 +960,9 @@ class _BarChartCard extends StatelessWidget {
                                 color: Colors.white,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12,
+                                height: 1.35,
                               ),
+                              textAlign: TextAlign.left,
                             );
                           },
                         ),
@@ -842,15 +977,21 @@ class _BarChartCard extends StatelessWidget {
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 30,
+                            reservedSize: yReserved,
                             interval: yInterval,
                             getTitlesWidget: (value, meta) {
                               if (value < 0 || value > maxY) {
                                 return const SizedBox.shrink();
                               }
-                              return Text(
-                                value.toInt().toString(),
-                                style: axisStyle,
+                              return Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Text(
+                                    value.toInt().toString(),
+                                    style: axisStyle,
+                                  ),
+                                ),
                               );
                             },
                           ),
@@ -1101,9 +1242,13 @@ class _ToyPopularityRow extends StatelessWidget {
 }
 
 class _StatsSurfaceCard extends StatelessWidget {
-  const _StatsSurfaceCard({required this.child});
+  const _StatsSurfaceCard({
+    required this.child,
+    this.clipContent = true,
+  });
 
   final Widget child;
+  final bool clipContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1114,7 +1259,7 @@ class _StatsSurfaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: colors.outlineVariant),
       ),
-      clipBehavior: Clip.antiAlias,
+      clipBehavior: clipContent ? Clip.antiAlias : Clip.none,
       child: child,
     );
   }

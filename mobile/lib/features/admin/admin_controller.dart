@@ -24,10 +24,12 @@ class AdminController extends ChangeNotifier {
   StatsOverview? statsOverview;
   StatsBreakdown? statsBreakdown;
   StatsCatalog? statsCatalog;
+  StatsHeardAbout? statsHeardAbout;
   ToyPopularity? toyPopularity;
   int _breakdownRequestId = 0;
   int _overviewRequestId = 0;
   int _popularityRequestId = 0;
+  int _heardAboutRequestId = 0;
 
   bool notificationsLoading = false;
   bool pendingLoading = false;
@@ -36,6 +38,7 @@ class AdminController extends ChangeNotifier {
   bool membersLoading = false;
   bool statsLoading = false;
   bool statsBreakdownLoading = false;
+  bool statsHeardAboutLoading = false;
 
   String? notificationsError;
   String? pendingError;
@@ -148,6 +151,40 @@ class AdminController extends ChangeNotifier {
     }
   }
 
+  Future<void> loadStatsHeardAbout({
+    required String period,
+    DateTime? sessionDate,
+    int? year,
+    int? month,
+  }) async {
+    final requestId = ++_heardAboutRequestId;
+    statsHeardAboutLoading = true;
+    notifyListeners();
+    try {
+      final json = await _client.getJson(
+        "/api/v1/admin/stats/members/heard-about-us",
+        _statsQuery(
+          period: period,
+          sessionDate: sessionDate,
+          year: year,
+          month: month,
+        ),
+      );
+      if (requestId != _heardAboutRequestId) return;
+      statsHeardAbout = StatsHeardAbout.fromJson(json);
+      statsError = null;
+    } catch (e) {
+      if (requestId != _heardAboutRequestId) return;
+      statsHeardAbout = null;
+      statsError ??= e.toString();
+    } finally {
+      if (requestId == _heardAboutRequestId) {
+        statsHeardAboutLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> loadToyPopularity({
     required String period,
     DateTime? sessionDate,
@@ -198,7 +235,10 @@ class AdminController extends ChangeNotifier {
     recentMembersError = null;
     notifyListeners();
     try {
-      final json = await _client.getJson("/api/v1/admin/recent-members");
+      final json = await _client.getJson(
+        "/api/v1/admin/recent-members",
+        {"days": "7"},
+      );
       recentMembers = parseAdminMemberList(json);
       recentMembersError = null;
     } catch (e) {
@@ -291,6 +331,21 @@ class AdminController extends ChangeNotifier {
       bookingsLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Desk check-out: drop checked-out reservations from the admin list.
+  void removeBookings(Iterable<String> bookingIds) {
+    final idSet = bookingIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (idSet.isEmpty) return;
+
+    final next =
+        bookings.where((booking) => !idSet.contains(booking.bookingId)).toList();
+    if (next.length == bookings.length) return;
+    bookings = next;
+    notifyListeners();
   }
 
   Future<void> loadMembers({

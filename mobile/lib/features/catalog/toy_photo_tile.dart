@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/toy_photo_url.dart";
 import "toy_photo_placeholder.dart";
 
@@ -66,18 +67,8 @@ class _ToyPhotoTileState extends State<ToyPhotoTile> {
             if (loadingProgress == null) {
               return child;
             }
-            return Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              ),
+            return const Center(
+              child: ToyLibraryLoadingIndicator.compact(),
             );
           },
         ),

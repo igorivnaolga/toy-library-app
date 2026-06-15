@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/section_header.dart";
 import "duty_session_models.dart";
@@ -71,7 +72,7 @@ class _VolunteerDutyShiftsBodyState extends State<VolunteerDutyShiftsBody> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: ToyLibraryLoadingIndicator()),
       );
     }
     if (_error != null) {

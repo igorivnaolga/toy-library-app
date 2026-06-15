@@ -163,6 +163,66 @@ def _apply_schema_patches(engine) -> None:
                 "ON public.push_notification_logs (user_id)"
             )
         )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.library_events (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  name text NOT NULL,
+                  description text,
+                  event_date date NOT NULL,
+                  is_published boolean NOT NULL DEFAULT true,
+                  created_by uuid REFERENCES public.profiles (id) ON DELETE SET NULL,
+                  created_at timestamptz NOT NULL DEFAULT now(),
+                  updated_at timestamptz DEFAULT now()
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE public.library_events "
+                "ADD COLUMN IF NOT EXISTS end_date date"
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE public.library_events
+                SET end_date = event_date
+                WHERE end_date IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.event_time_slots (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  event_id uuid NOT NULL REFERENCES public.library_events (id) ON DELETE CASCADE,
+                  start_time time NOT NULL,
+                  end_time time NOT NULL,
+                  capacity integer NOT NULL CHECK (capacity >= 1),
+                  audience text NOT NULL CHECK (audience IN ('volunteer', 'member')),
+                  created_at timestamptz NOT NULL DEFAULT now(),
+                  CHECK (end_time > start_time)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.event_bookings (
+                  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                  slot_id uuid NOT NULL REFERENCES public.event_time_slots (id) ON DELETE CASCADE,
+                  user_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
+                  booked_at timestamptz NOT NULL DEFAULT now(),
+                  UNIQUE (slot_id, user_id)
+                )
+                """
+            )
+        )
 
 
 @asynccontextmanager

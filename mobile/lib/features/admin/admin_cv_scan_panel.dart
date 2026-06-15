@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:image_picker/image_picker.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../loans/toy_id_ocr_service.dart";
 
@@ -116,7 +117,7 @@ class _AdminCvScanPanelState extends State<AdminCvScanPanel> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: ToyLibraryLoadingIndicator.compact(),
                     )
                   : const Icon(Icons.qr_code_scanner),
               label: Text(_busy ? "Reading…" : "Open camera"),

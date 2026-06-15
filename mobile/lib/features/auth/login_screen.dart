@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_input_field.dart";
 import "../../core/auth_store.dart";
 import "auth_messages.dart";
@@ -22,7 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailFocus = FocusNode();
   AuthStore? _auth;
   String? _emailError;
-  bool _emailTouched = false;
   bool _obscurePassword = true;
 
   @override
@@ -37,16 +37,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _onEmailFocusChange() {
     if (!_emailFocus.hasFocus) {
-      _validateEmail(force: true);
+      _validateEmail();
     }
   }
 
-  void _validateEmail({bool force = false}) {
-    if (!force && !_emailTouched) return;
+  void _validateEmail() {
     final error = RegistrationValidation.requiredEmail(_email.text);
     if (error != _emailError) {
       setState(() => _emailError = error);
     }
+  }
+
+  void _clearEmailError() {
+    if (_emailError == null) return;
+    setState(() => _emailError = null);
   }
 
   @override
@@ -56,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _validate() {
-    _validateEmail(force: true);
+    _validateEmail();
     if (_emailError != null) return _emailError;
     if (_password.text.isEmpty) {
       return "Enter your password.";
@@ -85,8 +89,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await showAuthSuccessDialog(
         context,
         title: "Signed in",
-        message: signedInMessage(
+        content: SignedInWelcomeContent(
           needsMembershipOnboarding: auth.needsMembershipOnboarding,
+          fullName: auth.fullName,
         ),
       );
       if (!mounted) return;
@@ -159,8 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
               errorText: _emailError,
             ),
             onChanged: (_) {
-              _emailTouched = true;
-              _validateEmail();
+              _clearEmailError();
               _clearAuthError(auth);
             },
           ),
@@ -196,14 +200,16 @@ class _LoginScreenState extends State<LoginScreen> {
             child: const Text("Sign in"),
           ),
           const SizedBox(height: 8),
-          OutlinedButton(
+          OutlinedButton.icon(
             onPressed: auth.loading ? null : _openRegistration,
-            child: const Text("Join the library"),
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.toys),
+            label: const Text("Join the library"),
           ),
           if (auth.loading)
             const Padding(
               padding: EdgeInsets.only(top: 12),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ToyLibraryLoadingIndicator()),
             ),
           if (auth.error != null) ...[
             const SizedBox(height: 12),

@@ -79,6 +79,10 @@ class AuthStore extends ChangeNotifier {
   bool get isVolunteer => role == AppRole.volunteer;
   bool get isAdmin => role == AppRole.admin;
 
+  /// Duty-tier member waiting for admin to confirm volunteer access.
+  bool get isVolunteerApprovalPending =>
+      membershipTier == "duty" && !volunteerConfirmed && role == AppRole.member;
+
   bool get canBookToys => isMember || isVolunteer;
 
   bool get hasPendingMembershipFees =>

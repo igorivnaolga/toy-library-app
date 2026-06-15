@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
@@ -305,7 +306,7 @@ class _ToyDetailPiecesSectionState extends State<ToyDetailPiecesSection> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: ToyLibraryLoadingIndicator.compact(),
                             )
                           : const Text("Save"),
                     ),

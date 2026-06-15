@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
@@ -593,6 +594,12 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     final displayName = member?.displayName ??
         widget.initialMember?.displayName ??
         "Member";
+    final parentBName = member?.contact.parentBName;
+    final headingLabel = memberDisplayLabel(
+      fullName: displayName,
+      parentBName: parentBName,
+    );
+    final heading = headingLabel.isNotEmpty ? headingLabel : displayName;
     final email = member?.email ?? widget.initialMember?.email ?? "";
 
     return Scaffold(
@@ -600,7 +607,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
         title: const SizedBox.shrink(),
       ),
       body: _loading && member == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: ToyLibraryLoadingIndicator())
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
@@ -615,12 +622,13 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                   children: [
                     ProfileAvatar(
                       fullName: displayName,
+                      parentBName: parentBName,
                       avatarPath: member?.avatarPath,
                       radius: AdminMemberProfileScreen.avatarRadius,
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      displayName,
+                      heading,
                       textAlign: TextAlign.center,
                       style: context.detailTitle,
                     ),
@@ -661,7 +669,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
                         onMarkMembershipPaid: () => _showMarkPaidSheet(),
                         onMarkPaymentPaid: (payment) =>
                             _showMarkPaidSheet(payment: payment),
-                        onMarkSelectedPaid: (payments) =>
+                        onMarkAllPendingPaid: (payments) =>
                             _showMarkPaidSheet(selectedPayments: payments),
                         onAddTopUp: _showTopUpSheet,
                       ),
@@ -914,7 +922,7 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   }
 }
 
-class _AdminMemberPaymentsBody extends StatefulWidget {
+class _AdminMemberPaymentsBody extends StatelessWidget {
   const _AdminMemberPaymentsBody({
     required this.member,
     required this.payments,
@@ -926,7 +934,7 @@ class _AdminMemberPaymentsBody extends StatefulWidget {
     required this.onToggle,
     required this.onMarkMembershipPaid,
     required this.onMarkPaymentPaid,
-    required this.onMarkSelectedPaid,
+    required this.onMarkAllPendingPaid,
     required this.onAddTopUp,
   });
 
@@ -940,101 +948,36 @@ class _AdminMemberPaymentsBody extends StatefulWidget {
   final VoidCallback onToggle;
   final VoidCallback onMarkMembershipPaid;
   final ValueChanged<PaymentItem> onMarkPaymentPaid;
-  final ValueChanged<List<PaymentItem>> onMarkSelectedPaid;
+  final ValueChanged<List<PaymentItem>> onMarkAllPendingPaid;
   final VoidCallback onAddTopUp;
-
-  @override
-  State<_AdminMemberPaymentsBody> createState() =>
-      _AdminMemberPaymentsBodyState();
-}
-
-class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
-  final Set<String> _selectedPaymentIds = {};
 
   bool _isMembershipCharge(PaymentItem payment) =>
       payment.paymentType == "membership" || payment.paymentType == "bond";
 
-  List<PaymentItem> get _pendingPayments =>
-      widget.payments.where((p) => p.isPending).toList();
-
-  List<PaymentItem> get _selectedPayments => _pendingPayments
-      .where((payment) => _selectedPaymentIds.contains(payment.paymentId))
-      .toList();
-
-  int get _selectedTotalCents => _selectedPayments.fold<int>(
-        0,
-        (sum, payment) => sum + payment.amountCents,
-      );
-
-  int get _pendingTotalCents => _pendingPayments.fold<int>(
-        0,
-        (sum, payment) => sum + payment.amountCents,
-      );
-
-  bool? get _selectAllValue {
-    final pending = _pendingPayments;
-    if (pending.isEmpty) return false;
-    final selectedCount = pending
-        .where((payment) => _selectedPaymentIds.contains(payment.paymentId))
-        .length;
-    if (selectedCount == 0) return false;
-    if (selectedCount == pending.length) return true;
-    return null;
-  }
-
-  @override
-  void didUpdateWidget(covariant _AdminMemberPaymentsBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.payments != widget.payments) {
-      final pendingIds =
-          _pendingPayments.map((payment) => payment.paymentId).toSet();
-      _selectedPaymentIds.removeWhere((id) => !pendingIds.contains(id));
-    }
-  }
-
-  void _togglePaymentSelection(String paymentId, bool? selected) {
-    setState(() {
-      if (selected == true) {
-        _selectedPaymentIds.add(paymentId);
-      } else {
-        _selectedPaymentIds.remove(paymentId);
-      }
-    });
-  }
-
-  void _toggleSelectAll(bool? value) {
-    final pendingIds =
-        _pendingPayments.map((payment) => payment.paymentId).toList();
-    setState(() {
-      if (value == true || (_selectAllValue != true && value == null)) {
-        _selectedPaymentIds.addAll(pendingIds);
-      } else {
-        _selectedPaymentIds.removeAll(pendingIds);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final balanceCents = widget.member?.balanceDueCents ?? 0;
-    final creditCents = widget.member?.creditBalanceCents ?? 0;
-    final pendingPayments = _pendingPayments;
+    final balanceCents = member?.balanceDueCents ?? 0;
+    final creditCents = member?.creditBalanceCents ?? 0;
+    final pendingPayments = payments.where((p) => p.isPending).toList();
     final pendingCount = pendingPayments.length;
-    final selectedCount = _selectedPayments.length;
+    final pendingTotalCents = pendingPayments.fold<int>(
+      0,
+      (sum, payment) => sum + payment.amountCents,
+    );
     final pendingMembershipCharges =
         pendingPayments.where(_isMembershipCharge).toList();
-    final showMembershipSummary = widget.member != null &&
-        !widget.member!.membershipFeesPaid &&
-        widget.member!.membershipDueCents > 0 &&
+    final showMembershipSummary = member != null &&
+        !member!.membershipFeesPaid &&
+        member!.membershipDueCents > 0 &&
         pendingMembershipCharges.isEmpty;
     final chargesLabel = pendingCount > 0
         ? "Charges ($pendingCount pending)"
-        : "Charges (${widget.payments.length})";
-    final paymentActionsBusy = widget.payingPaymentId != null ||
-        widget.recordingMembership ||
-        widget.recordingTopUp ||
-        widget.markingSelectedPayments;
+        : "Charges (${payments.length})";
+    final paymentActionsBusy = payingPaymentId != null ||
+        recordingMembership ||
+        recordingTopUp ||
+        markingSelectedPayments;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1090,9 +1033,9 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
-              onPressed: paymentActionsBusy ? null : widget.onMarkMembershipPaid,
+              onPressed: paymentActionsBusy ? null : onMarkMembershipPaid,
               child: Text(
-                widget.recordingMembership
+                recordingMembership
                     ? "Recording membership payment…"
                     : "Mark all membership paid",
               ),
@@ -1101,8 +1044,8 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
           const SizedBox(height: 4),
         ],
         BrandChipButton(
-          label: widget.recordingTopUp ? "Recording top-up…" : "Add top-up",
-          onPressed: paymentActionsBusy ? null : widget.onAddTopUp,
+          label: recordingTopUp ? "Recording top-up…" : "Add top-up",
+          onPressed: paymentActionsBusy ? null : onAddTopUp,
         ),
         if (pendingCount > 0) ...[
           const SizedBox(height: 12),
@@ -1110,78 +1053,23 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
             width: double.infinity,
             child: BrandChipButton(
               large: true,
-              label: widget.markingSelectedPayments
+              variant: BrandChipButtonVariant.outlined,
+              backgroundColor: Colors.white,
+              label: markingSelectedPayments
                   ? "Recording payment…"
-                  : "Mark all pending paid · ${formatDueCents(_pendingTotalCents)}",
+                  : "Mark all pending paid · ${formatDueCents(pendingTotalCents)}",
               onPressed: paymentActionsBusy
                   ? null
-                  : () => widget.onMarkSelectedPaid(pendingPayments),
+                  : () => onMarkAllPendingPaid(pendingPayments),
             ),
           ),
         ],
         const SizedBox(height: 12),
         CollapsibleSection(
-          title: widget.payments.isEmpty ? "Charges" : chargesLabel,
-          expanded: widget.expanded,
-          onToggle: widget.onToggle,
+          title: payments.isEmpty ? "Charges" : chargesLabel,
+          expanded: expanded,
+          onToggle: onToggle,
           children: [
-            if (pendingCount > 0) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-                child: InkWell(
-                  onTap: paymentActionsBusy
-                      ? null
-                      : () => _toggleSelectAll(
-                            _selectAllValue == true ? false : true,
-                          ),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Checkbox(
-                          value: _selectAllValue,
-                          tristate: true,
-                          onChanged: paymentActionsBusy
-                              ? null
-                              : (value) => _toggleSelectAll(value),
-                        ),
-                        Expanded(
-                          child: Text(
-                            pendingCount == 1
-                                ? "Select charge"
-                                : "Select all ($pendingCount)",
-                            style: context.bodyText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (selectedCount > 0 &&
-                  selectedCount < pendingCount) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: BrandChipButton(
-                      label: widget.markingSelectedPayments
-                          ? "Recording…"
-                          : "Mark selected paid · ${formatDueCents(_selectedTotalCents)}",
-                      onPressed: paymentActionsBusy
-                          ? null
-                          : () =>
-                              widget.onMarkSelectedPaid(_selectedPayments),
-                    ),
-                  ),
-                ),
-              ],
-              Divider(
-                height: 1,
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
-            ],
             if (showMembershipSummary) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -1196,7 +1084,7 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          formatDueCents(widget.member!.membershipDueCents),
+                          formatDueCents(member!.membershipDueCents),
                           style: context.bodyText.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -1209,24 +1097,24 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
                         const BookingStatusChip(status: "pending", width: 88),
                         const Spacer(),
                         _AdminMarkPaidChip(
-                          processing: widget.recordingMembership,
+                          processing: recordingMembership,
                           enabled: !paymentActionsBusy,
-                          onPressed: widget.onMarkMembershipPaid,
+                          onPressed: onMarkMembershipPaid,
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              if (widget.payments.isNotEmpty)
+              if (payments.isNotEmpty)
                 Divider(
                   height: 1,
                   color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
                 ),
             ],
-            if (widget.payments.isEmpty &&
-                (widget.member == null ||
-                    widget.member!.membershipFeesPaid ||
+            if (payments.isEmpty &&
+                (member == null ||
+                    member!.membershipFeesPaid ||
                     !showMembershipSummary))
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
@@ -1235,19 +1123,14 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
                   style: context.listSubtitle,
                 ),
               )
-            else if (widget.payments.isNotEmpty)
+            else if (payments.isNotEmpty)
               PaymentsGroupedByDate(
-                payments: widget.payments,
+                payments: payments,
                 itemBuilder: (payment) => _AdminPaymentRow(
                   payment: payment,
-                  selected: _selectedPaymentIds.contains(payment.paymentId),
-                  processing: widget.payingPaymentId == payment.paymentId,
+                  processing: payingPaymentId == payment.paymentId,
                   actionsEnabled: !paymentActionsBusy,
-                  onSelectionChanged: payment.isPending
-                      ? (selected) =>
-                          _togglePaymentSelection(payment.paymentId, selected)
-                      : null,
-                  onMarkPaid: () => widget.onMarkPaymentPaid(payment),
+                  onMarkPaid: () => onMarkPaymentPaid(payment),
                 ),
               ),
           ],
@@ -1260,19 +1143,15 @@ class _AdminMemberPaymentsBodyState extends State<_AdminMemberPaymentsBody> {
 class _AdminPaymentRow extends StatelessWidget {
   const _AdminPaymentRow({
     required this.payment,
-    required this.selected,
     required this.processing,
     required this.actionsEnabled,
     required this.onMarkPaid,
-    this.onSelectionChanged,
   });
 
   final PaymentItem payment;
-  final bool selected;
   final bool processing;
   final bool actionsEnabled;
   final VoidCallback onMarkPaid;
-  final ValueChanged<bool?>? onSelectionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1290,15 +1169,6 @@ class _AdminPaymentRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (onSelectionChanged != null)
-                Checkbox(
-                  value: selected,
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onChanged: actionsEnabled ? onSelectionChanged : null,
-                )
-              else
-                const SizedBox(width: 48),
               Expanded(
                 child: Text(title, style: context.bodyText),
               ),
@@ -1316,7 +1186,22 @@ class _AdminPaymentRow extends StatelessWidget {
           Row(
             children: [
               if (payment.isPending)
-                const BookingStatusChip(status: "pending", width: 88)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: kGroupHeaderBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: kGroupHeaderBorder),
+                  ),
+                  child: Text(
+                    "Pending",
+                    style: context.listSubtitle.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                    ),
+                  ),
+                )
               else
                 Text(
                   payment.statusLabel,
@@ -1360,7 +1245,7 @@ class _AdminMarkPaidChip extends StatelessWidget {
           child: SizedBox(
             width: 22,
             height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: ToyLibraryLoadingIndicator.compact(),
           ),
         ),
       );
@@ -1369,7 +1254,7 @@ class _AdminMarkPaidChip extends StatelessWidget {
     return BrandChipButton(
       label: "Mark paid",
       fixedWidth: 100,
-      variant: BrandChipButtonVariant.outlined,
+      variant: BrandChipButtonVariant.filled,
       onPressed: enabled ? onPressed : null,
     );
   }
@@ -1762,7 +1647,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
             if (_submitting)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: ToyLibraryLoadingIndicator()),
               ),
             const SizedBox(height: 8),
           ],

@@ -12,12 +12,14 @@ import "core/auth_store.dart";
 import "core/reminder_sync.dart";
 import "core/library_app_bar_title.dart";
 import "core/main_tab_navigation.dart";
+import "core/notification_bell_ack.dart";
 import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
 import "features/admin/admin_loans_screen.dart";
 import "features/admin/admin_members_screen.dart";
 import "features/admin/admin_statistics_screen.dart";
 import "features/admin/admin_notifications_sheet.dart";
+import "core/toy_loading_indicator.dart";
 import "features/auth/login_screen.dart";
 import "features/auth/registration_welcome_screen.dart";
 import "features/bookings/bookings_controller.dart";
@@ -27,8 +29,10 @@ import "features/loans/loans_controller.dart";
 import "features/loans/loans_screen.dart";
 import "features/catalog/catalog_screen.dart";
 import "features/duty/duty_controller.dart";
+import "features/events/schedule_sheet.dart";
 import "features/duty/volunteer_duty_tab_screen.dart";
-import "features/duty/duty_screen.dart";
+import "features/events/event_notification_bell.dart";
+import "features/events/events_controller.dart";
 import "features/info/contact_screen.dart";
 import "features/info/membership_info_screen.dart";
 import "features/info/library_info_copy.dart";
@@ -70,7 +74,9 @@ class ToyLibraryApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BookingsController(client)),
         ChangeNotifierProvider(create: (_) => LoansController(client)),
         ChangeNotifierProvider(create: (_) => DutyController(client)),
+        ChangeNotifierProvider(create: (_) => EventsController(client)),
         ChangeNotifierProvider(create: (_) => AdminController(client)),
+        ChangeNotifierProvider(create: (_) => NotificationBellAckStore()),
         ChangeNotifierProvider(create: (_) => MainTabNavigation()),
         ChangeNotifierProxyProvider2<BackendClient, AuthStore, ProfileController>(
           create: (context) => ProfileController(
@@ -119,7 +125,7 @@ class _AppShellState extends State<_AppShell> {
 
     if (auth.isLoggedIn && auth.profileLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: ToyLibraryLoadingIndicator()),
       );
     }
 
@@ -163,6 +169,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
 
   void _syncCatalogForAuthChange(AuthStore auth) {
     final userId = auth.userId;
+    context.read<NotificationBellAckStore>().syncUser(userId);
     if (_lastAuthUserId == null) {
       _lastAuthUserId = userId;
       return;
@@ -205,6 +212,10 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
       _memberRemindersBootstrapped = true;
       await ReminderSync.refreshForMember(context);
     }
+    if (auth.isMember || auth.isVolunteer) {
+      if (!mounted) return;
+      await context.read<EventsController>().refreshAvailability();
+    }
   }
 
   void _syncMemberRemindersIfChanged(AuthStore auth) {
@@ -232,8 +243,8 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
     return "$enabled#$pending#$active";
   }
 
-  void _openDuty(BuildContext context) {
-    showDutyRosterSheet(context);
+  void _openSchedule(BuildContext context) {
+    showScheduleSheet(context);
   }
 
   void _openLogin(BuildContext context) {
@@ -287,24 +298,34 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                     if (auth.isAdmin) ...[
                       const AdminNotificationBell(),
                       IconButton(
-                        tooltip: "Duty roster",
+                        tooltip: "Schedule",
                         icon: const Icon(Icons.event_available_outlined),
-                        onPressed: () => _openDuty(context),
+                        onPressed: () => _openSchedule(context),
                       ),
                     ] else if (auth.isVolunteer) ...[
+                      const EventNotificationBell(),
                       IconButton(
-                        tooltip: "Duty roster",
+                        tooltip: "Schedule",
                         icon: const Icon(Icons.event_available_outlined),
-                        onPressed: () => _openDuty(context),
+                        onPressed: () => _openSchedule(context),
+                      ),
+                    ] else if (auth.isMember) ...[
+                      const EventNotificationBell(),
+                      IconButton(
+                        tooltip: "Schedule",
+                        icon: const Icon(Icons.event_available_outlined),
+                        onPressed: () => _openSchedule(context),
                       ),
                     ],
                     if (!auth.isLoggedIn)
                       _guestAuthActions()
-                    else
+                    else ...[
+                      const SizedBox(width: 12),
                       Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.only(right: 10),
                         child: ProfileAvatar(
                           fullName: auth.fullName,
+                          parentBName: auth.contact.parentBName,
                           avatarPath: auth.avatarPath,
                           radius: 18,
                           onTap: () {
@@ -317,6 +338,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                           },
                         ),
                       ),
+                    ],
                   ],
                   bottom: TabBar(
                     isScrollable: false,

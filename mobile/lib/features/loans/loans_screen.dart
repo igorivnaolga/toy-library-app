@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../catalog/toy_detail_screen.dart";
@@ -114,7 +115,7 @@ class _MyLoansViewState extends State<_MyLoansView> {
     return Consumer<LoansController>(
       builder: (context, c, _) {
         if (c.myLoansLoading && c.myLoans.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: ToyLibraryLoadingIndicator());
         }
         if (c.myLoansError != null && c.myLoans.isEmpty) {
           return _ErrorState(

@@ -1,15 +1,17 @@
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
-import "../../core/app_theme.dart";
 import "../../core/section_header.dart";
 import "../../core/auth_store.dart";
 import "../../core/brand_chip_button.dart";
 import "duty_assign_sheet.dart";
 import "duty_controller.dart";
-import "duty_date_finder.dart";
 import "duty_session_models.dart";
+import "../bookings/booking_models.dart";
+import "../events/event_scroll.dart";
+import "../events/schedule_date_finder.dart";
 
 /// Volunteer duty roster: Wed/Sat slots, book shifts, admin assign members.
 class DutyScreen extends StatefulWidget {
@@ -22,111 +24,122 @@ class DutyScreen extends StatefulWidget {
   final bool hidePast;
 
   @override
-  State<DutyScreen> createState() => _DutyScreenState();
+  State<DutyScreen> createState() => DutyScreenState();
 }
 
-/// Admin app-bar action: duty slots in a sheet matching other modals.
-Future<void> showDutyRosterSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: kModalSurface,
-    barrierColor: Colors.black54,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (sheetContext) {
-      final height = MediaQuery.sizeOf(sheetContext).height * 0.85;
-      return SizedBox(
-        height: height,
-        child: const _DutyRosterSheet(),
-      );
-    },
-  );
-}
-
-/// Duty roster content for the app-bar sheet (admin: tabs; volunteer: upcoming only).
-class _DutyRosterSheet extends StatelessWidget {
-  const _DutyRosterSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final isAdmin = context.watch<AuthStore>().isAdmin;
-
-    return ColoredBox(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Text(
-              "Duty roster",
-              style: context.screenTitle,
-            ),
-          ),
-          if (isAdmin)
-            Expanded(
-              child: DefaultTabController(
-                length: 2,
-                child: Column(
-                  children: [
-                    Material(
-                      color: Theme.of(context).colorScheme.surface,
-                      child: const TabBar(
-                        tabs: [
-                          Tab(text: "Upcoming slots"),
-                          Tab(text: "Past slots"),
-                        ],
-                      ),
-                    ),
-                    const Expanded(
-                      child: DutyScreen(useTabs: true),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            const Expanded(
-              child: DutyScreen(hidePast: true),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DutyScreenState extends State<DutyScreen> {
+class DutyScreenState extends State<DutyScreen> {
   final Map<String, GlobalKey> _tileKeys = {};
+  final ScrollController upcomingScrollController = ScrollController();
+  final ScrollController pastScrollController = ScrollController();
+  String? _scrollInProgressFor;
+  DutyController? _duty;
 
   GlobalKey _keyForSession(String sessionId) =>
       _tileKeys.putIfAbsent(sessionId, GlobalKey.new);
+
+  ScrollController _scrollControllerFor(bool isPast) =>
+      isPast ? pastScrollController : upcomingScrollController;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<DutyController>().loadRoster();
+      _duty = context.read<DutyController>();
+      _duty!.addListener(_onDutyControllerChanged);
+      if (_duty!.sessions.isEmpty && !_duty!.loading) {
+        _duty!.loadRoster();
+      }
     });
   }
 
-  void _scrollToSession(BuildContext context, DutyController controller) {
-    final sessionId = controller.scrollToSessionId;
-    if (sessionId == null) return;
-    final key = _tileKeys[sessionId];
-    final target = key?.currentContext;
-    if (target != null) {
-      Scrollable.ensureVisible(
-        target,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        alignment: 0.15,
-      );
+  @override
+  void dispose() {
+    _duty?.removeListener(_onDutyControllerChanged);
+    upcomingScrollController.dispose();
+    pastScrollController.dispose();
+    super.dispose();
+  }
+
+  void _onDutyControllerChanged() {
+    final sessionId = _duty?.scrollToSessionId;
+    if (sessionId == null || sessionId == _scrollInProgressFor || !mounted) {
+      return;
     }
-    controller.clearScrollRequest();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      scrollToPendingSession();
+    });
+  }
+
+  Future<bool> scrollToPendingSession() async {
+    final controller = context.read<DutyController>();
+    if (controller.scrollToSessionId == null) return false;
+    await _scrollToRequestedSession(context, controller);
+    return controller.scrollToSessionId == null;
+  }
+
+  Future<void> _switchSubTabForSession(DutySessionItem session) async {
+    if (!widget.useTabs) return;
+    final innerTab = DefaultTabController.maybeOf(context);
+    if (innerTab == null || innerTab.length < 2) return;
+    await switchDutySubTabForDate(context, session.sessionDate);
+  }
+
+  Future<void> _scrollToRequestedSession(
+    BuildContext context,
+    DutyController controller,
+  ) async {
+    final sessionId = controller.scrollToSessionId;
+    if (sessionId == null || sessionId == _scrollInProgressFor) return;
+    _scrollInProgressFor = sessionId;
+
+    try {
+      DutySessionItem? session;
+      for (final item in controller.sessions) {
+        if (item.sessionId == sessionId) {
+          session = item;
+          break;
+        }
+      }
+      if (session != null) {
+        await _switchSubTabForSession(session);
+        await waitForScheduleTabLayout(frames: 4);
+      }
+      if (!mounted) return;
+
+      final isPast = session != null &&
+          calendarDay(session.sessionDate).isBefore(calendarDay(DateTime.now()));
+
+      List<DutySessionItem> listItems;
+      if (widget.useTabs) {
+        listItems = isPast
+            ? splitDutySessions(controller.sessions).past
+            : splitDutySessions(controller.sessions).upcoming;
+      } else {
+        listItems = splitDutySessions(
+          controller.sessions,
+          pastForVolunteerId: context.read<AuthStore>().isAdmin
+              ? null
+              : context.read<AuthStore>().userId,
+        ).upcoming;
+      }
+      final listIndex = listItems.indexWhere((s) => s.sessionId == sessionId);
+      final scrolled = await scrollToSessionCard(
+        sessionId: sessionId,
+        keyForSession: _keyForSession,
+        scrollController: _scrollControllerFor(widget.useTabs ? isPast : false),
+        listIndex: listIndex >= 0 ? listIndex : null,
+      );
+      if (!mounted) return;
+      if (scrolled) {
+        controller.clearScrollRequest();
+      }
+    } finally {
+      if (_scrollInProgressFor == sessionId) {
+        _scrollInProgressFor = null;
+      }
+    }
   }
 
   Future<void> _book(DutySessionItem session) async {
@@ -212,13 +225,6 @@ class _DutyScreenState extends State<DutyScreen> {
 
     return Consumer<DutyController>(
       builder: (context, controller, _) {
-        if (controller.scrollToSessionId != null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _scrollToSession(context, controller);
-          });
-        }
-
         if (widget.useTabs) {
           return TabBarView(
             children: [
@@ -230,6 +236,7 @@ class _DutyScreenState extends State<DutyScreen> {
                   sessions: splitDutySessions(controller.sessions).upcoming,
                   isPast: false,
                   showFindDate: true,
+                  scrollController: upcomingScrollController,
                   onBook: _book,
                   onCancel: _cancel,
                   onAssign: auth.isAdmin ? _openAssign : null,
@@ -243,7 +250,9 @@ class _DutyScreenState extends State<DutyScreen> {
                   controller: controller,
                   sessions: splitDutySessions(controller.sessions).past,
                   isPast: true,
+                  showFindDate: true,
                   pastSectionTitle: "Past slots",
+                  scrollController: pastScrollController,
                   onBook: _book,
                   onCancel: _cancel,
                   onAssign: auth.isAdmin ? _openAssign : null,
@@ -260,6 +269,7 @@ class _DutyScreenState extends State<DutyScreen> {
             auth: auth,
             controller: controller,
             hidePast: widget.hidePast,
+            scrollController: upcomingScrollController,
             onBook: _book,
             onCancel: _cancel,
             onAssign: auth.isAdmin ? _openAssign : null,
@@ -284,6 +294,7 @@ class _DutyBody extends StatelessWidget {
     this.pastSectionTitle,
     this.onAssign,
     this.sessionKeyFor,
+    this.scrollController,
   });
 
   final AuthStore auth;
@@ -297,6 +308,7 @@ class _DutyBody extends StatelessWidget {
   final bool showFindDate;
   final String? pastSectionTitle;
   final GlobalKey Function(String sessionId)? sessionKeyFor;
+  final ScrollController? scrollController;
 
   DutySessionSections _sections() => splitDutySessions(
         controller.sessions,
@@ -310,7 +322,7 @@ class _DutyBody extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         children: const [
           SizedBox(height: 160),
-          Center(child: CircularProgressIndicator()),
+          Center(child: ToyLibraryLoadingIndicator()),
         ],
       );
     }
@@ -350,7 +362,7 @@ class _DutyBody extends StatelessWidget {
       loadPast: false,
       pinnedHeader: _DutySlotsSectionHeader(
         title: "Upcoming slots",
-        onFindDate: () => findDutyDate(context),
+        onFindDate: () => findScheduleDate(context, source: ScheduleDateSource.duty),
       ),
       children: [
         if (sections.upcoming.isEmpty)
@@ -392,6 +404,7 @@ class _DutyBody extends StatelessWidget {
     ];
 
     final scrollArea = _DutyScrollArea(
+      scrollController: scrollController,
       padding: pinnedHeader == null
           ? const EdgeInsets.fromLTRB(12, 8, 12, 12)
           : listPadding,
@@ -450,12 +463,16 @@ class _DutyBody extends StatelessWidget {
         loadPast: isPast,
         pinnedHeader: showFindDate
             ? _DutySlotsSectionHeader(
-                title: "Upcoming slots",
-                onFindDate: () => findDutyDate(context),
+                title: isPast
+                    ? (pastSectionTitle ?? "Past slots")
+                    : "Upcoming slots",
+                onFindDate: () =>
+                    findScheduleDate(context, source: ScheduleDateSource.duty),
               )
             : null,
-        scrollHeader:
-            pastSectionTitle != null ? SectionHeader(pastSectionTitle) : null,
+        scrollHeader: pastSectionTitle != null && !showFindDate
+            ? SectionHeader(pastSectionTitle)
+            : null,
         children: [
           const SizedBox(height: 80),
           Center(
@@ -474,12 +491,16 @@ class _DutyBody extends StatelessWidget {
       loadPast: isPast,
       pinnedHeader: showFindDate
           ? _DutySlotsSectionHeader(
-              title: "Upcoming slots",
-              onFindDate: () => findDutyDate(context),
+              title: isPast
+                  ? (pastSectionTitle ?? "Past slots")
+                  : "Upcoming slots",
+              onFindDate: () =>
+                  findScheduleDate(context, source: ScheduleDateSource.duty),
             )
           : null,
-      scrollHeader:
-          pastSectionTitle != null ? SectionHeader(pastSectionTitle) : null,
+      scrollHeader: pastSectionTitle != null && !showFindDate
+          ? SectionHeader(pastSectionTitle)
+          : null,
       children: _slotTiles(context, items, isPast: isPast),
     );
   }
@@ -522,7 +543,7 @@ class _LoadMoreFooter extends StatelessWidget {
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: ToyLibraryLoadingIndicator.compact(),
               )
             : const SizedBox(height: 8),
       ),
@@ -535,12 +556,14 @@ class _DutyScrollArea extends StatefulWidget {
     required this.children,
     required this.padding,
     required this.onNearEnd,
+    this.scrollController,
     this.enabled = true,
   });
 
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
   final VoidCallback onNearEnd;
+  final ScrollController? scrollController;
   final bool enabled;
 
   @override
@@ -548,12 +571,18 @@ class _DutyScrollArea extends StatefulWidget {
 }
 
 class _DutyScrollAreaState extends State<_DutyScrollArea> {
-  final ScrollController _controller = ScrollController();
+  ScrollController? _ownedController;
   bool _nearEndHandled = false;
+
+  ScrollController get _controller =>
+      widget.scrollController ?? _ownedController!;
 
   @override
   void initState() {
     super.initState();
+    if (widget.scrollController == null) {
+      _ownedController = ScrollController();
+    }
     _controller.addListener(_onScroll);
   }
 
@@ -568,7 +597,7 @@ class _DutyScrollAreaState extends State<_DutyScrollArea> {
   @override
   void dispose() {
     _controller.removeListener(_onScroll);
-    _controller.dispose();
+    _ownedController?.dispose();
     super.dispose();
   }
 

@@ -304,6 +304,136 @@ def catalog_counts_by_status(session: Session) -> list[CountRow]:
     return [CountRow(label=str(label), count=int(cnt)) for label, cnt in rows]
 
 
+def _registration_date_expr() -> str:
+    return (
+        "coalesce("
+        "p.registered_at, "
+        f"{_AUCKLAND_DATE.format(col='p.terms_accepted_at')}, "
+        f"{_AUCKLAND_DATE.format(col='u.created_at')}"
+        ")"
+    )
+
+
+def _registration_date_filter(period: StatsPeriod) -> tuple[str, dict[str, date]]:
+    if period.start is None or period.end is None:
+        return "", {}
+    expr = _registration_date_expr()
+    return (
+        f" and {expr} between :start_date and :end_date",
+        {"start_date": period.start, "end_date": period.end},
+    )
+
+
+@dataclass(frozen=True)
+class PendingMemberRow:
+    user_id: str
+    email: str
+    full_name: str
+    pending_cents: int
+
+
+def pending_members_in_period(
+    session: Session,
+    period: StatsPeriod,
+    *,
+    limit: int = 100,
+) -> tuple[int, list[PendingMemberRow]]:
+    """Members with pending payment charges in the stats period."""
+    date_filter, params = _date_filter_sql("p.created_at", period)
+    params["lim"] = limit
+
+    total_pending_cents = int(
+        session.execute(
+            text(
+                f"""
+                select coalesce(sum(p.amount_cents), 0) from payments p
+                where p.status = 'pending'
+                {date_filter}
+                """
+            ),
+            params,
+        ).scalar_one()
+        or 0
+    )
+
+    rows = session.execute(
+        text(
+            f"""
+            select prof.id::text as user_id,
+                   coalesce(u.email::text, '') as email,
+                   coalesce(prof.full_name, '') as full_name,
+                   sum(p.amount_cents)::int as pending_cents
+            from payments p
+            join profiles prof on prof.id = p.user_id
+            join auth.users u on u.id = prof.id
+            where p.status = 'pending'
+            {date_filter}
+            group by prof.id, u.email, prof.full_name
+            order by pending_cents desc, prof.full_name asc
+            limit :lim
+            """
+        ),
+        params,
+    ).all()
+    data = [
+        PendingMemberRow(
+            user_id=str(user_id),
+            email=str(email),
+            full_name=str(full_name),
+            pending_cents=int(pending_cents),
+        )
+        for user_id, email, full_name, pending_cents in rows
+    ]
+    return total_pending_cents, data
+
+
+def heard_about_us_counts(
+    session: Session,
+    period: StatsPeriod,
+    *,
+    limit: int = 12,
+) -> tuple[int, list[CountRow]]:
+    """Group registration answers for how members heard about the library."""
+    date_filter, params = _registration_date_filter(period)
+    params["lim"] = limit
+
+    total_responses = int(
+        session.execute(
+            text(
+                f"""
+                select count(*) from profiles p
+                join auth.users u on u.id = p.id
+                where p.role in ('member', 'volunteer')
+                  and nullif(trim(p.heard_about_us), '') is not null
+                {date_filter}
+                """
+            ),
+            params,
+        ).scalar_one()
+        or 0
+    )
+
+    rows = session.execute(
+        text(
+            f"""
+            select initcap(lower(trim(p.heard_about_us))) as label,
+                   count(*)::int as cnt
+            from profiles p
+            join auth.users u on u.id = p.id
+            where p.role in ('member', 'volunteer')
+              and nullif(trim(p.heard_about_us), '') is not null
+            {date_filter}
+            group by 1
+            order by cnt desc, label asc
+            limit :lim
+            """
+        ),
+        params,
+    ).all()
+    data = [CountRow(label=str(label), count=int(cnt)) for label, cnt in rows]
+    return total_responses, data
+
+
 def toy_popularity(
     session: Session,
     period: StatsPeriod,

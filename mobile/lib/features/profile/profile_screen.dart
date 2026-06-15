@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
+import "../../core/toy_loading_indicator.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
@@ -193,6 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fullName: profile.fullName.trim().isEmpty
                 ? "Your name"
                 : profile.fullName.trim(),
+            parentBName: profile.contact.parentBName,
             email: auth.email,
             avatarPath: profile.avatarPath,
             uploadingAvatar: profile.uploadingAvatar,
@@ -202,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (_paymentsLoading)
             const Padding(
               padding: EdgeInsets.only(bottom: 20),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ToyLibraryLoadingIndicator()),
             )
           else
             Padding(
@@ -405,6 +407,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({
     required this.fullName,
+    this.parentBName,
     required this.email,
     required this.avatarPath,
     required this.uploadingAvatar,
@@ -412,6 +415,7 @@ class _ProfileHeader extends StatelessWidget {
   });
 
   final String fullName;
+  final String? parentBName;
   final String? email;
   final String? avatarPath;
   final bool uploadingAvatar;
@@ -420,6 +424,15 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final heading = fullName == "Your name"
+        ? fullName
+        : () {
+            final label = memberDisplayLabel(
+              fullName: fullName,
+              parentBName: parentBName,
+            );
+            return label.isNotEmpty ? label : fullName;
+          }();
 
     return Column(
       children: [
@@ -428,6 +441,7 @@ class _ProfileHeader extends StatelessWidget {
           children: [
             ProfileAvatar(
               fullName: fullName == "Your name" ? null : fullName,
+              parentBName: parentBName,
               avatarPath: avatarPath,
               radius: 68,
               onTap: uploadingAvatar ? null : onChangePhoto,
@@ -441,7 +455,7 @@ class _ProfileHeader extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 68,
                   backgroundColor: const Color(0x66000000),
-                  child: const CircularProgressIndicator(strokeWidth: 2),
+                  child: const ToyLibraryLoadingIndicator.compact(),
                 ),
               )
             else
@@ -461,7 +475,7 @@ class _ProfileHeader extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          fullName,
+          heading,
           textAlign: TextAlign.center,
           style: context.detailTitle,
         ),

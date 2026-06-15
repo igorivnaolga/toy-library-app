@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
@@ -30,9 +31,20 @@ from app.repositories.profile_repo import (
     list_members_for_admin,
     list_pending_duty_members,
     list_recent_members_for_admin,
+    list_event_assignees,
+    search_event_assignees,
     update_member_for_admin,
     update_membership_tier_for_admin,
 )
+from app.repositories.event_repo import get_event_by_id, list_events_in_range
+from app.schemas.event import (
+    EventAdminBookIn,
+    EventCreateIn,
+    EventOut,
+    EventsListResponse,
+    EventUpdateIn,
+)
+from app.schemas.duty import DeskMemberOut, DeskMembersResponse
 from app.schemas.admin import (
     AdminBookingsListResponse,
     AdminMemberDetailOut,
@@ -65,6 +77,15 @@ from app.services.payment_service import (
 )
 from app.services.toy_photo_upload import upload_toy_photo_service
 from app.services.toy_service import create_toy_service, delete_toy_service, update_toy_service
+from app.services.event_service import (
+    EventError,
+    admin_book_slot_service,
+    admin_cancel_booking_service,
+    create_event_service,
+    delete_event_service,
+    event_out_from_model,
+    update_event_service,
+)
 
 router = APIRouter()
 
@@ -531,3 +552,153 @@ async def upload_toy_photo(
             detail="Toy not found or catalog is not loaded in the database yet.",
         )
     return updated
+
+
+@router.get("/events", response_model=EventsListResponse)
+def admin_list_events(
+    from_date: date = Query(..., alias="from"),
+    to_date: date = Query(..., alias="to"),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventsListResponse:
+    if to_date < from_date:
+        raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
+    rows = list_events_in_range(
+        db, from_date=from_date, to_date=to_date, published_only=False
+    )
+    return EventsListResponse(
+        data=[
+            event_out_from_model(db, row, include_bookings=True) for row in rows
+        ]
+    )
+
+
+@router.get("/events/assignees", response_model=DeskMembersResponse)
+def admin_event_assignees(
+    audience: Literal["volunteer", "member"] = Query(...),
+    q: str = Query("", description="Name, email, or user id."),
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> DeskMembersResponse:
+    rows = (
+        search_event_assignees(db, q, audience=audience)
+        if q.strip()
+        else list_event_assignees(db, audience=audience)
+    )
+    return DeskMembersResponse(
+        data=[
+            DeskMemberOut(
+                user_id=row["user_id"],
+                full_name=row.get("full_name", ""),
+                email=row.get("email", ""),
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.post("/events/slots/{slot_id}/book", response_model=EventOut)
+def admin_book_event_slot(
+    slot_id: uuid.UUID,
+    body: EventAdminBookIn,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventOut:
+    try:
+        event_id = admin_book_slot_service(
+            db,
+            slot_id=slot_id,
+            user_id=body.user_id,
+        )
+    except EventError as exc:
+        status = 404 if exc.code in {"not_found", "profile_not_found"} else 409
+        if exc.code in {"invalid_assignee", "unpublished", "past_event"}:
+            status = 422
+        elif exc.code == "full":
+            status = 409
+        raise HTTPException(status_code=status, detail=exc.message) from exc
+    db.commit()
+    refreshed = get_event_by_id(db, event_id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    return event_out_from_model(db, refreshed, include_bookings=True)
+
+
+@router.delete("/events/slots/{slot_id}/book/{user_id}", response_model=EventOut)
+def admin_cancel_event_booking(
+    slot_id: uuid.UUID,
+    user_id: uuid.UUID,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventOut:
+    try:
+        event_id = admin_cancel_booking_service(
+            db,
+            slot_id=slot_id,
+            user_id=user_id,
+        )
+    except EventError as exc:
+        status = 404 if exc.code == "not_found" else 409
+        raise HTTPException(status_code=status, detail=exc.message) from exc
+    db.commit()
+    refreshed = get_event_by_id(db, event_id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Event not found.")
+    return event_out_from_model(db, refreshed, include_bookings=True)
+
+
+@router.post("/events", response_model=EventOut, status_code=201)
+def admin_create_event(
+    body: EventCreateIn,
+    principal: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventOut:
+    try:
+        event = create_event_service(
+            db,
+            name=body.name,
+            description=body.description,
+            event_date=body.event_date,
+            end_date=body.end_date,
+            is_published=body.is_published,
+            created_by=principal.id,
+            slots=body.slots,
+        )
+    except EventError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+    db.commit()
+    refreshed = get_event_by_id(db, event.id)
+    return event_out_from_model(db, refreshed or event, include_bookings=True)
+
+
+@router.patch("/events/{event_id}", response_model=EventOut)
+def admin_update_event(
+    event_id: uuid.UUID,
+    body: EventUpdateIn,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> EventOut:
+    payload = body.model_dump(exclude_unset=True)
+    slots = payload.pop("slots", None)
+    try:
+        event = update_event_service(db, event_id, slots=slots, **payload)
+    except EventError as exc:
+        status = 404 if exc.code == "not_found" else 422
+        raise HTTPException(status_code=status, detail=exc.message) from exc
+    db.commit()
+    refreshed = get_event_by_id(db, event_id)
+    return event_out_from_model(db, refreshed or event, include_bookings=True)
+
+
+@router.delete("/events/{event_id}")
+def admin_delete_event(
+    event_id: uuid.UUID,
+    _: Principal = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    try:
+        delete_event_service(db, event_id)
+    except EventError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    db.commit()
+    return {"deleted": True}
