@@ -18,6 +18,7 @@ class ReminderNotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+  bool _available = true;
   bool _permissionRequested = false;
 
   static const _channelId = "toy_library_reminders";
@@ -26,31 +27,36 @@ class ReminderNotificationService {
       "Pickup, return, and overdue reminders for your toys.";
 
   Future<void> initialize() async {
-    if (_initialized) return;
+    if (_initialized || !_available) return;
 
-    tz_data.initializeTimeZones();
     try {
-      tz.setLocalLocation(tz.getLocation("Pacific/Auckland"));
-    } catch (_) {
-      tz.setLocalLocation(tz.local);
+      tz_data.initializeTimeZones();
+      try {
+        tz.setLocalLocation(tz.getLocation("Pacific/Auckland"));
+      } catch (_) {
+        tz.setLocalLocation(tz.local);
+      }
+
+      const android = AndroidInitializationSettings("@mipmap/ic_launcher");
+      const settings = InitializationSettings(android: android);
+      await _plugin.initialize(settings);
+
+      const channel = AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDescription,
+        importance: Importance.high,
+      );
+      final androidPlugin =
+          _plugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(channel);
+
+      _initialized = true;
+    } catch (e, stack) {
+      _available = false;
+      debugPrint("Local notifications unavailable: $e\n$stack");
     }
-
-    const android = AndroidInitializationSettings("@mipmap/ic_launcher");
-    const settings = InitializationSettings(android: android);
-    await _plugin.initialize(settings);
-
-    const channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: _channelDescription,
-      importance: Importance.high,
-    );
-    final androidPlugin =
-        _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(channel);
-
-    _initialized = true;
   }
 
   Future<bool> ensurePermission() async {
@@ -82,6 +88,7 @@ class ReminderNotificationService {
 
   Future<void> cancelAll() async {
     await initialize();
+    if (!_initialized) return;
     await _plugin.cancelAll();
   }
 
@@ -91,6 +98,7 @@ class ReminderNotificationService {
     required bool enabled,
   }) async {
     await initialize();
+    if (!_initialized) return;
     await cancelAll();
     if (!enabled) return;
 

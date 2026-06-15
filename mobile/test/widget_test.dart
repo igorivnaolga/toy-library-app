@@ -99,8 +99,8 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
         ToyLibraryApp(backend: _FakeBackend(), authStore: AuthStore.guest()));
-    expect(find.text("Toy catalog"), findsOneWidget);
     await tester.pumpAndSettle();
+    expect(find.text("Catalog"), findsOneWidget);
     expect(find.text("Robot"), findsOneWidget);
   });
 }

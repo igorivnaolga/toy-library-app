@@ -1,0 +1,6 @@
+{
+  "SUPABASE_URL": "https://YOUR_PROJECT.supabase.co",
+  "SUPABASE_ANON_KEY": "your-anon-key-from-supabase-dashboard",
+  "API_BASE": "http://192.168.1.100:8000",
+  "FIREBASE_ENABLED": "true"
+}

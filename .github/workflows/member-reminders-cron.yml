@@ -1,0 +1,35 @@
+name: Member push reminders
+
+# Calls the hosted API cron endpoint. Set repository secrets:
+#   PRODUCTION_API_URL  e.g. https://your-api.up.railway.app
+#   CRON_SECRET         same value as backend CRON_SECRET
+#
+# Times below are UTC approximations for Pacific/Auckland:
+#   05:00 UTC ≈ 5:00 pm NZDT (duty + event eve reminders)
+#   18:00 UTC ≈ 6:00 am NZST next calendar day
+#   21:00 UTC ≈ 9:00 am NZST next calendar day
+# Adjust after daylight-saving changes if needed.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+    - cron: "0 18 * * *"
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST member reminder cron
+        env:
+          API_URL: ${{ secrets.PRODUCTION_API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Skipping: set PRODUCTION_API_URL and CRON_SECRET repository secrets to enable."
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            "${API_URL%/}/api/v1/admin/notifications/send-member-reminders/cron"

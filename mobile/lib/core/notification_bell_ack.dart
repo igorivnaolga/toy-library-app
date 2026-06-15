@@ -31,6 +31,9 @@ class NotificationBellAckStore extends ChangeNotifier {
     if (normalized == _userId && _adminAckLoaded && _memberAckLoaded) return;
 
     if (normalized == null || normalized.isEmpty) {
+      if (_userId == null && !_adminAckLoaded && !_memberAckLoaded) {
+        return;
+      }
       _userId = null;
       _adminAckLoaded = false;
       _memberAckLoaded = false;

@@ -29,3 +29,5 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 Then open **http://127.0.0.1:8000/docs** (Swagger) and **http://127.0.0.1:8000/api/v1/health**.
 
 **Mobile app:** from `mobile/`, run `flutter pub get` and `flutter run`. Configure the API base URL and Supabase keys with `--dart-define` as in your setup (see `mobile/lib/core/api_base_url.dart` and `mobile/lib/main.dart`).
+
+**Deploying a pilot:** see [`docs/DEPLOY.md`](docs/DEPLOY.md) (Supabase, Docker/Railway, CI, cron, release APK).

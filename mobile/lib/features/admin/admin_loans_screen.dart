@@ -10,7 +10,6 @@ import "../../core/section_header.dart";
 import "../../core/brand_chip_button.dart";
 import "../bookings/booking_checkout_sync.dart";
 import "../bookings/booking_models.dart";
-import "../duty/duty_session_models.dart";
 import "../catalog/catalog_provider.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../catalog/toy_photo_tile.dart";
@@ -457,9 +456,6 @@ class _AdminLoansScreenState extends State<AdminLoansScreen> {
     }
   }
 
-  Future<void> _checkOut(BookingItem booking) =>
-      _checkOutReservations([booking]);
-
   Future<void> _handleScannedToyId(String toyId) async {
     final controller = context.read<LoansController>();
     LoanItem? match;
@@ -728,8 +724,6 @@ class _CheckInTab extends StatefulWidget {
     required this.onToyIdScanned,
     required this.onRefresh,
     this.enableToyIdScan = true,
-    this.filterMemberUserId,
-    this.filterDueDate,
   });
 
   final Future<void> Function(LoanItem loan) onCheckIn;
@@ -737,8 +731,6 @@ class _CheckInTab extends StatefulWidget {
   final Future<void> Function(String toyId) onToyIdScanned;
   final Future<void> Function() onRefresh;
   final bool enableToyIdScan;
-  final String? filterMemberUserId;
-  final DateTime? filterDueDate;
 
   @override
   State<_CheckInTab> createState() => _CheckInTabState();
@@ -758,8 +750,6 @@ class _CheckInTabState extends State<_CheckInTab> {
     return filterCheckInLoans(
       loans,
       query: _query,
-      memberUserId: widget.filterMemberUserId,
-      dueDate: widget.filterDueDate,
     );
   }
 
@@ -773,8 +763,6 @@ class _CheckInTabState extends State<_CheckInTab> {
 
         final all = c.activeLoans;
         final filtered = _filtered(all);
-        final hasDeskFilters = widget.filterMemberUserId != null ||
-            widget.filterDueDate != null;
 
         return RefreshIndicator(
           onRefresh: widget.onRefresh,
@@ -792,7 +780,7 @@ class _CheckInTabState extends State<_CheckInTab> {
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
               ],
-              if (all.isNotEmpty && !hasDeskFilters)
+              if (all.isNotEmpty)
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   sliver: SliverToBoxAdapter(
@@ -817,7 +805,7 @@ class _CheckInTabState extends State<_CheckInTab> {
                     ),
                   ),
                 ),
-              if (all.isNotEmpty && !hasDeskFilters)
+              if (all.isNotEmpty)
                 const SliverToBoxAdapter(child: SizedBox(height: 12)),
               if (all.isEmpty)
                 SliverToBoxAdapter(
@@ -838,9 +826,7 @@ class _CheckInTabState extends State<_CheckInTab> {
                 SliverToBoxAdapter(
                   child: Center(
                     child: Text(
-                      hasDeskFilters
-                          ? "No toys on loan for this member on this due date."
-                          : 'No toys match "${_query.trim()}".',
+                      'No toys match "${_query.trim()}".',
                       textAlign: TextAlign.center,
                     ),
                   ),

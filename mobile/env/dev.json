@@ -1,0 +1,7 @@
+{
+  "SUPABASE_URL": "https://hcedwdlsugbrjfvnvpsv.supabase.co",
+  "SUPABASE_ANON_KEY": "sb_publishable_E3z5H0WYDk0c7Pcq_ZFTBA_hv1pAjVe",
+  "API_BASE": "http://192.168.1.8:8000",
+  "USE_ADB_REVERSE": "true",
+  "FIREBASE_ENABLED": "true"
+}

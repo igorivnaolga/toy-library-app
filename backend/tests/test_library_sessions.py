@@ -24,14 +24,14 @@ def _dt(y: int, m: int, d: int, hh: int, mm: int = 0) -> datetime:
 
 
 def test_earliest_bookable_same_day_before_session_end() -> None:
-    # Wednesday 19 May 2026, 10:00 — session not started yet.
-    now = _dt(2026, 5, 19, 10, 0)
-    assert earliest_bookable_date(now=now) == date(2026, 5, 19)
+    # Wednesday 20 May 2026, 10:00 — session not started yet.
+    now = _dt(2026, 5, 20, 10, 0)
+    assert earliest_bookable_date(now=now) == date(2026, 5, 20)
 
 
 def test_earliest_bookable_skips_today_after_session_end() -> None:
-    # Wednesday after 2:30 pm → next Saturday.
-    now = _dt(2026, 5, 19, 15, 0)
+    # Wednesday 20 May 2026 after 2:30 pm → next Saturday.
+    now = _dt(2026, 5, 20, 15, 0)
     assert earliest_bookable_date(now=now) == date(2026, 5, 23)
 
 

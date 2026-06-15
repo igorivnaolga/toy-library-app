@@ -1,4 +1,3 @@
-import "../bookings/booking_models.dart";
 import "../payments/payment_models.dart";
 
 class StatsOverview {
