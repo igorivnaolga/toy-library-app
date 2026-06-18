@@ -1,17 +1,22 @@
 # toy_library_mobile
 
-A new Flutter project.
+Flutter client for Church Corner Toy Library.
 
-## Getting Started
+## Development
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+Configure API and Supabase with `--dart-define` (see `lib/core/api_base_url.dart` and `env/production.json.example`).
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Install on a phone (pilot)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. Build a release APK (requires `env/production.json` — see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)):
+   ```bash
+   flutter build apk --release --dart-define-from-file=env/production.json
+   ```
+2. Install **`build/app/outputs/flutter-apk/app-release.apk`** on the device (not the `.sha1` file).
+
+Full sideload steps (USB, Drive, unknown apps, Xiaomi, updates): [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload).

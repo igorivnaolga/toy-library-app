@@ -107,7 +107,7 @@ String passwordResetErrorMessage(Object error) {
 }
 
 const passwordRequirementsMessage =
-    "Use at least 8 characters with at least one letter and one number.";
+    "Use at least 8 characters with at least one letter, one number, and one symbol.";
 
 String _rawMessage(Object error) {
   if (error is String) return error.trim();

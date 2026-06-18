@@ -12,13 +12,15 @@ class ToyDetailActionBar extends StatelessWidget {
   const ToyDetailActionBar({
     super.key,
     required this.toy,
-    required this.isLoggedIn,
+    required this.showsSignedInUi,
+    required this.needsMembershipOnboarding,
     required this.canBookToys,
     required this.myBooking,
     required this.bookingInProgress,
     required this.cancellingInProgress,
     required this.reschedulingInProgress,
     required this.onSignIn,
+    required this.onChooseMembership,
     required this.onBook,
     required this.onChangePickupDate,
     required this.onCancelBooking,
@@ -26,13 +28,15 @@ class ToyDetailActionBar extends StatelessWidget {
   });
 
   final ToyItem toy;
-  final bool isLoggedIn;
+  final bool showsSignedInUi;
+  final bool needsMembershipOnboarding;
   final bool canBookToys;
   final BookingItem? myBooking;
   final bool bookingInProgress;
   final bool cancellingInProgress;
   final bool reschedulingInProgress;
   final VoidCallback onSignIn;
+  final VoidCallback onChooseMembership;
   final VoidCallback onBook;
   final VoidCallback onChangePickupDate;
   final VoidCallback onCancelBooking;
@@ -60,11 +64,17 @@ class ToyDetailActionBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!isLoggedIn)
+              if (!showsSignedInUi)
                 BrandChipButton(
                   label: "Sign in to book",
                   large: true,
                   onPressed: onSignIn,
+                )
+              else if (needsMembershipOnboarding)
+                BrandChipButton(
+                  label: "Choose membership",
+                  large: true,
+                  onPressed: onChooseMembership,
                 )
               else if (!canBookToys)
                 ToyBookingHintBanner(

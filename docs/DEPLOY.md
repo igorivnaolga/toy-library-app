@@ -87,7 +87,52 @@ flutter build apk --release \
 
 5. Before store release: change Android `applicationId` from `com.example.toy_library_mobile` and configure release signing in `android/app/build.gradle.kts`.
 
-### 5. Smoke test after deploy
+### 5. Install the APK on a phone (pilot sideload)
+
+For pilot testers who are **not** installing from the Play Store yet.
+
+#### Build the file (once)
+
+Follow [§4 Mobile (Android release)](#4-mobile-android-release) above. After a successful build, the installable file is:
+
+```text
+mobile/build/app/outputs/flutter-apk/app-release.apk
+```
+
+Use **`app-release.apk`** only. Do **not** open or share `app-release.apk.sha1` — that is a checksum file, not the app.
+
+#### Copy the APK to the phone
+
+Any of these work:
+
+| Method | Steps |
+|--------|--------|
+| **USB cable** | Connect the phone to your PC, copy `app-release.apk` to **Downloads** (or another folder you can find in the Files app). |
+| **Cloud / chat** | Upload to Google Drive, Dropbox, or email it to yourself; open the link on the phone and download. |
+| **ADB (developers)** | With USB debugging enabled: `adb install -r mobile/build/app/outputs/flutter-apk/app-release.apk` |
+
+#### Install on the phone
+
+1. Open **Files** (or **Downloads**) and tap **`app-release.apk`**.
+2. If Android asks to allow installs from that app (Files, Drive, Chrome, etc.), turn on **Install unknown apps** / **Allow from this source** for that app only.
+3. Tap **Install**, then **Open**.
+
+**Xiaomi / MIUI / some OEM skins:** Settings → **Privacy** → **Special permissions** → **Install unknown apps** → allow the app you use to open the APK (often **Files** or **Mi Browser**).
+
+**Updates:** Install a new build over the old one when the signing key is the same. If you see a signature conflict, uninstall the old app first, then install the new APK (you will need to sign in again).
+
+#### Install directly from your PC (optional, for developers)
+
+With the phone connected and [USB debugging](https://developer.android.com/studio/debug/dev-options) enabled:
+
+```bash
+cd mobile
+flutter install --release --dart-define-from-file=env/production.json
+```
+
+Or, after `flutter build apk`, run `adb install -r build/app/outputs/flutter-apk/app-release.apk`.
+
+### 6. Smoke test after deploy
 
 - [ ] Health: `/api/v1/health`
 - [ ] Sign in on device with production Supabase

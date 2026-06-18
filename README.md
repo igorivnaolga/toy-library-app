@@ -31,3 +31,5 @@ Then open **http://127.0.0.1:8000/docs** (Swagger) and **http://127.0.0.1:8000/a
 **Mobile app:** from `mobile/`, run `flutter pub get` and `flutter run`. Configure the API base URL and Supabase keys with `--dart-define` as in your setup (see `mobile/lib/core/api_base_url.dart` and `mobile/lib/main.dart`).
 
 **Deploying a pilot:** see [`docs/DEPLOY.md`](docs/DEPLOY.md) (Supabase, Docker/Railway, CI, cron, release APK).
+
+**Install on Android (pilot testers):** build `app-release.apk`, copy it to the phone, and sideload — full steps in [`docs/DEPLOY.md` §5](docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload).

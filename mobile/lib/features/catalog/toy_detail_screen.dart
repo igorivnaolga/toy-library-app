@@ -11,6 +11,7 @@ import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
 import "../../core/toy_pieces.dart";
 import "../auth/login_screen.dart";
+import "../membership/membership_onboarding_screen.dart";
 import "../bookings/booking_confirmed_dialog.dart";
 import "../bookings/booking_models.dart";
 import "../bookings/bookings_controller.dart";
@@ -196,6 +197,14 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
     );
   }
 
+  void _chooseMembershipToBook() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const MembershipOnboardingScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthStore>();
@@ -314,6 +323,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                   cancellingInProgress: _cancellingInProgress,
                   reschedulingInProgress: _reschedulingInProgress,
                   onSignIn: _signInToBook,
+                  onChooseMembership: _chooseMembershipToBook,
                   onBook: () => _startBookFlow(t),
                   onChangePickupDate: (booking) => _changePickupDate(booking, t),
                   onCancelBooking: (booking) => _cancelBooking(booking, t),
@@ -621,6 +631,7 @@ class _ToyDetailMemberBar extends StatelessWidget {
     required this.cancellingInProgress,
     required this.reschedulingInProgress,
     required this.onSignIn,
+    required this.onChooseMembership,
     required this.onBook,
     required this.onChangePickupDate,
     required this.onCancelBooking,
@@ -631,6 +642,7 @@ class _ToyDetailMemberBar extends StatelessWidget {
   final bool cancellingInProgress;
   final bool reschedulingInProgress;
   final VoidCallback onSignIn;
+  final VoidCallback onChooseMembership;
   final VoidCallback onBook;
   final ValueChanged<BookingItem> onChangePickupDate;
   final ValueChanged<BookingItem> onCancelBooking;
@@ -650,7 +662,8 @@ class _ToyDetailMemberBar extends StatelessWidget {
 
     return ToyDetailActionBar(
       toy: toy,
-      isLoggedIn: auth.isLoggedIn,
+      showsSignedInUi: auth.showsSignedInUi,
+      needsMembershipOnboarding: auth.needsMembershipOnboarding,
       canBookToys: auth.canBookToys,
       myBooking: myBooking,
       myActiveLoan: myActiveLoan,
@@ -658,6 +671,7 @@ class _ToyDetailMemberBar extends StatelessWidget {
       cancellingInProgress: cancellingInProgress,
       reschedulingInProgress: reschedulingInProgress,
       onSignIn: onSignIn,
+      onChooseMembership: onChooseMembership,
       onBook: onBook,
       onChangePickupDate: myBooking == null
           ? () {}

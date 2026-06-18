@@ -39,6 +39,8 @@ import "features/info/library_info_copy.dart";
 import "features/profile/profile_avatar.dart";
 import "features/profile/profile_controller.dart";
 import "features/profile/profile_screen.dart";
+import "features/welcome/welcome_launch_prefs.dart";
+import "features/welcome/welcome_screen.dart";
 
 class ToyLibraryApp extends StatelessWidget {
   const ToyLibraryApp({super.key, this.backend, this.authStore});
@@ -109,6 +111,23 @@ class _AppShell extends StatefulWidget {
 
 class _AppShellState extends State<_AppShell> {
   bool _handledRestoredSession = false;
+  bool? _welcomeSeen;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadWelcomeState());
+  }
+
+  Future<void> _loadWelcomeState() async {
+    final seen = await WelcomeLaunchPrefs.hasSeenWelcome();
+    if (mounted) setState(() => _welcomeSeen = seen);
+  }
+
+  Future<void> _completeWelcome() async {
+    await WelcomeLaunchPrefs.markWelcomeSeen();
+    if (mounted) setState(() => _welcomeSeen = true);
+  }
 
   void _maybeHandleRestoredSession(AuthStore auth) {
     if (_handledRestoredSession || auth.profileLoading) return;
@@ -133,6 +152,17 @@ class _AppShellState extends State<_AppShell> {
 
     if (auth.showPostRegistrationWelcome) {
       return const RegistrationWelcomeScreen();
+    }
+
+    if (_welcomeSeen == null) {
+      return const Scaffold(
+        backgroundColor: kBrandYellow,
+        body: Center(child: ToyLibraryLoadingIndicator()),
+      );
+    }
+
+    if (_welcomeSeen == false) {
+      return WelcomeScreen(onContinue: () => unawaited(_completeWelcome()));
     }
 
     return const _RoleHome();

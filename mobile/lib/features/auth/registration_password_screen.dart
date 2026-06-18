@@ -46,6 +46,17 @@ class _RegistrationPasswordScreenState extends State<RegistrationPasswordScreen>
     );
   }
 
+  void _applySuggestedPassword() {
+    final suggested = PasswordValidation.generateStrongPassword();
+    setState(() {
+      _password.text = suggested;
+      _confirmPassword.text = suggested;
+      _obscurePassword = false;
+      _obscureConfirmPassword = false;
+      _error = null;
+    });
+  }
+
   Future<void> _createAccount() async {
     final validationError = _validatePassword();
     if (validationError != null) {
@@ -140,7 +151,14 @@ class _RegistrationPasswordScreenState extends State<RegistrationPasswordScreen>
             PasswordValidation.requirementsHint,
             style: context.listSubtitle,
           ),
-          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _busy ? null : _applySuggestedPassword,
+              child: const Text("Suggest strong password"),
+            ),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _password,
             obscureText: _obscurePassword,

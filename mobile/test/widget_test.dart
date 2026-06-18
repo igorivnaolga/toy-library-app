@@ -1,4 +1,5 @@
 import "package:flutter_test/flutter_test.dart";
+import "package:shared_preferences/shared_preferences.dart";
 import "package:toy_library_mobile/app.dart";
 import "package:toy_library_mobile/core/api_client.dart";
 import "package:toy_library_mobile/core/auth_store.dart";
@@ -97,6 +98,9 @@ class _FakeBackend implements BackendClient {
 void main() {
   testWidgets("ToyLibraryApp loads catalog from fake API",
       (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(
+      {"welcome_screen_seen_v1": true},
+    );
     await tester.pumpWidget(
         ToyLibraryApp(backend: _FakeBackend(), authStore: AuthStore.guest()));
     await tester.pumpAndSettle();
