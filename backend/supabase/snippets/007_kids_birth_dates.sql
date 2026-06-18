@@ -19,3 +19,5 @@ SET kids = (
 WHERE p.kids = '[]'::jsonb
   AND p.kids_names IS NOT NULL
   AND cardinality(p.kids_names) > 0;
+
+alter table public.profiles enable row level security;

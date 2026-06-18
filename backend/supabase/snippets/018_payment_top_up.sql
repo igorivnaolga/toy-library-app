@@ -19,3 +19,5 @@ alter table public.payments add constraint payments_status_check
 comment on column public.payments.payment_type is 'membership | bond | rental | top_up';
 comment on column public.payments.status is
   'pending until staff records payment; paid_credit when settled from account credit';
+
+alter table public.payments enable row level security;

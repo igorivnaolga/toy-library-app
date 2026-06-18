@@ -9,3 +9,5 @@ comment on column public.duty_sessions.admin_confirmed_at is
   'When an admin confirmed this volunteer for desk duty (required on the duty day)';
 comment on column public.duty_sessions.admin_confirmed_by is
   'Admin profile id that confirmed the shift';
+
+alter table public.duty_sessions enable row level security;

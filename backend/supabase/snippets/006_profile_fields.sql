@@ -31,3 +31,5 @@ DROP POLICY IF EXISTS "avatars_select_public" ON storage.objects;
 CREATE POLICY "avatars_select_public"
 ON storage.objects FOR SELECT TO public
 USING (bucket_id = 'avatars');
+
+alter table public.profiles enable row level security;

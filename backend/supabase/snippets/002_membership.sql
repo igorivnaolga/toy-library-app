@@ -22,3 +22,5 @@ end $$;
 
 comment on column public.profiles.membership_tier is 'MVP: casual | non_duty | duty (chosen in onboarding)';
 comment on column public.profiles.volunteer_confirmed is 'For duty tier: admin must confirm before role becomes volunteer';
+
+alter table public.profiles enable row level security;

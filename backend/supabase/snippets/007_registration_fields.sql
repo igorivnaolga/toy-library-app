@@ -15,3 +15,5 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS text_reminders_consent boolean,
   ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz,
   ADD COLUMN IF NOT EXISTS registered_at date;
+
+alter table public.profiles enable row level security;

@@ -27,3 +27,5 @@ create unique index if not exists idx_payments_volunteer_duty_session
 
 comment on column public.payments.duty_session_id is
   'Duty roster shift when payment_type is volunteer_credit';
+
+alter table public.payments enable row level security;

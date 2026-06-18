@@ -33,3 +33,6 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 comment on table public.profiles is 'App roles for Toy Library; linked to auth.users';
+
+-- RLS: app uses FastAPI (DATABASE_URL), not PostgREST on this table.
+alter table public.profiles enable row level security;

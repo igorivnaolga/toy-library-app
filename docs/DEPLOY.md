@@ -8,7 +8,8 @@ Pilot-ready deployment path: **Supabase** (database, auth, storage) + **hosted F
 
 1. Create a **production** Supabase project (separate from dev).
 2. Run SQL snippets **in numeric order** in the SQL editor (`backend/supabase/snippets/`):
-   - `001_profiles.sql` through `020_library_events.sql`
+   - `001_profiles.sql` through `021_push_notifications.sql`
+   - Run `002_catalog.sql` after `001_profiles.sql` (before bookings that reference toys).
    - Apply both `007_kids_birth_dates.sql` and `007_registration_fields.sql`.
 3. Enable Auth (email) and configure redirect URLs if needed.
 4. Run `017_toy_photos_storage.sql` and set `SUPABASE_SERVICE_ROLE_KEY` on the API.

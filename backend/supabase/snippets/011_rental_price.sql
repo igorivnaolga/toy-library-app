@@ -4,3 +4,5 @@ alter table public.toys
 
 comment on column public.toys.rental_price_cents is
   'Toy rental price in NZD cents (from SETLS).';
+
+alter table public.toys enable row level security;

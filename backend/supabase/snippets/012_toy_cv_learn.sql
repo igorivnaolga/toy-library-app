@@ -11,3 +11,5 @@ comment on column public.toys.cv_learn_fg_pixels is
   'Foreground pixel count from the learned baseline photo.';
 comment on column public.toys.cv_learn_peak_count is
   'Peak-detection count from the learned baseline photo.';
+
+alter table public.toys enable row level security;

@@ -14,3 +14,5 @@ comment on column public.toys.cv_ref_layout is
   'JSON array: 8x8 normalized foreground layout signature.';
 comment on column public.toys.cv_ref_source is
   'Reference origin: setls (catalog) or checkin (volunteer-confirmed).';
+
+alter table public.toys enable row level security;

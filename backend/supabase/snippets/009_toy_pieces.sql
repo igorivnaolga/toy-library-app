@@ -5,3 +5,5 @@ alter table public.toys
 
 comment on column public.toys.total_pieces is 'Expected number of pieces in the toy set.';
 comment on column public.toys.missing_pieces is 'Pieces currently known to be missing from the set.';
+
+alter table public.toys enable row level security;

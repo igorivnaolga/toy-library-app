@@ -32,3 +32,7 @@ create table if not exists setls_toy_status_counts (
 
 create index if not exists setls_toy_status_counts_run_id_idx
   on setls_toy_status_counts (run_id);
+
+alter table public.setls_import_runs enable row level security;
+alter table public.setls_category_stats enable row level security;
+alter table public.setls_toy_status_counts enable row level security;
