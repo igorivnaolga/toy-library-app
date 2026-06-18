@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "booking_models.dart";
 
 /// Loads and mutates bookings via `/api/v1/bookings`.
@@ -35,7 +36,10 @@ class BookingsController extends ChangeNotifier {
       error = _friendlyMessage(e);
       bookings = [];
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load your bookings. Pull down to refresh.",
+      );
       bookings = [];
     } finally {
       loading = false;
@@ -141,31 +145,30 @@ class BookingsController extends ChangeNotifier {
   }
 
   String _friendlyMessage(ApiException e) {
-    if (e.statusCode == 401) {
-      return "Please sign in again to view your bookings.";
-    }
-    if (e.statusCode == 403) {
-      return "Your account cannot make bookings yet.";
-    }
-    return e.message;
+    return friendlyErrorMessage(
+      e,
+      fallback: "Couldn't load your bookings. Pull down to refresh.",
+      statusMessages: {
+        401: "Please sign in again to view your bookings.",
+        403: "Your account cannot make bookings yet.",
+      },
+    );
   }
 }
 
 String bookingActionErrorMessage(Object error) {
-  if (error is ApiException) {
-    if (error.statusCode == 409 && error.message.isNotEmpty) {
-      return error.message;
-    }
-    if (error.statusCode == 404) {
-      return "Toy not found.";
-    }
-    if (error.statusCode == 403) {
-      return "Sign in as a member to book toys.";
-    }
-    if (error.statusCode == 422) {
-      return error.message;
-    }
-    return error.message;
+  if (error is ApiException &&
+      error.statusCode == 409 &&
+      error.message.trim().isNotEmpty) {
+    return error.message.trim();
   }
-  return error.toString();
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't complete your booking. Please try again.",
+    statusMessages: {
+      401: "Please sign in again to manage bookings.",
+      403: "Sign in as a member to book toys.",
+      404: "Toy not found.",
+    },
+  );
 }

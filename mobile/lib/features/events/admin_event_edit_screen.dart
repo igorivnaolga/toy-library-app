@@ -4,6 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_session_models.dart";
 import "event_models.dart";
@@ -157,7 +158,12 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      _showError(e.toString());
+      _showError(
+        friendlyErrorMessage(
+          e,
+          fallback: "Couldn't save this event. Please try again.",
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

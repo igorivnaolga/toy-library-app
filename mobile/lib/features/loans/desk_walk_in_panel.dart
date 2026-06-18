@@ -7,6 +7,7 @@ import "../../core/app_text_styles.dart";
 import "../../core/app_input_field.dart";
 import "../../core/search_field.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/user_friendly_error.dart";
 import "../catalog/catalog_models.dart";
 import "../bookings/booking_models.dart";
 import "desk_member.dart";
@@ -233,7 +234,10 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         setState(() {
           _toyResults = [];
           _searchingToys = false;
-          _error = e.toString();
+          _error = friendlyErrorMessage(
+            e,
+            fallback: "Couldn't search for toys. Please try again.",
+          );
         });
       }
     });
@@ -268,7 +272,10 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
         setState(() {
           _memberResults = [];
           _searchingMembers = false;
-          _error = e.toString();
+          _error = friendlyErrorMessage(
+            e,
+            fallback: "Couldn't search for toys. Please try again.",
+          );
         });
       }
     });

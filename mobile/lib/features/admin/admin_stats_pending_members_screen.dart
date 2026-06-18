@@ -5,6 +5,7 @@ import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/toy_loading_indicator.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "admin_member_profile_screen.dart";
 import "admin_models.dart";
@@ -83,7 +84,10 @@ class _AdminStatsPendingMembersScreenState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: "Couldn't load pending members.",
+        );
         _loading = false;
       });
     }

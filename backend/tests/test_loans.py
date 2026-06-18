@@ -11,6 +11,7 @@ from app.services.loan_service import (
     _due_date_from_checkout,
     check_in_loan,
     check_out_from_booking,
+    check_out_walk_in,
     loan_is_due_today,
     loan_is_overdue,
     renew_loan_for_user,
@@ -329,3 +330,61 @@ def test_check_in_raises_when_loan_not_active() -> None:
         with pytest.raises(LoanError) as exc:
             check_in_loan(session, loan_id)
     assert exc.value.code == "loan_not_active"
+
+
+def test_walk_in_allows_stale_on_loan_label_without_active_loan() -> None:
+    session = MagicMock()
+    user_id = uuid.uuid4()
+    toy = SimpleNamespace(toy_id="T1", status="On loan", category_id=1)
+    loan = SimpleNamespace(id=uuid.uuid4(), toy_id="T1")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.services.loan_service._get_toy_row", lambda _s, _id: toy)
+        mp.setattr("app.services.loan_service.get_toy_by_id", lambda _id: toy)
+        mp.setattr(
+            "app.services.loan_service.get_active_loan_for_toy",
+            lambda _s, _id: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_pending_booking_for_toy",
+            lambda _s, _id: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.create_loan",
+            lambda _s, **kwargs: loan,
+        )
+        mp.setattr(
+            "app.services.loan_service.create_rental_payment_for_loan",
+            lambda _s, _loan, _toy: None,
+        )
+        mp.setattr("app.services.loan_service._apply_checkout_payment", lambda *a, **k: None)
+        mp.setattr(
+            "app.services.loan_service.get_loan_by_id",
+            lambda _s, _id: loan,
+        )
+        result = check_out_walk_in(session, user_id=user_id, toy_id="T1")
+    assert result is loan
+    assert toy.status == "On loan"
+
+
+def test_walk_in_blocks_when_reserved_for_another_member() -> None:
+    session = MagicMock()
+    user_id = uuid.uuid4()
+    other_id = uuid.uuid4()
+    toy = SimpleNamespace(toy_id="T1", status="In library", category_id=1)
+    pending = SimpleNamespace(user_id=other_id)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.services.loan_service._get_toy_row", lambda _s, _id: toy)
+        mp.setattr("app.services.loan_service.get_toy_by_id", lambda _id: toy)
+        mp.setattr(
+            "app.services.loan_service.get_active_loan_for_toy",
+            lambda _s, _id: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.get_pending_booking_for_toy",
+            lambda _s, _id: pending,
+        )
+        with pytest.raises(LoanError) as exc:
+            check_out_walk_in(session, user_id=user_id, toy_id="T1")
+    assert exc.value.code == "toy_booked_by_other"

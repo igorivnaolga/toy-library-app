@@ -8,6 +8,7 @@ import "package:provider/provider.dart";
 
 import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
@@ -252,7 +253,10 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      final message = e is ApiException ? e.message : e.toString();
+      final message = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't save this toy. Please try again.",
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -431,7 +435,10 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
       Navigator.pop(context, ToyFormSaved(saved));
     } catch (e) {
       if (!mounted) return;
-      final message = e is ApiException ? e.message : e.toString();
+      final message = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't save this toy. Please try again.",
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
@@ -463,7 +470,10 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
       );
     } catch (e) {
       if (!mounted) return;
-      final message = e is ApiException ? e.message : e.toString();
+      final message = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't save this toy. Please try again.",
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );

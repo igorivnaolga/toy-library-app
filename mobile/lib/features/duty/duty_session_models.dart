@@ -1,4 +1,5 @@
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 
 /// Duty roster slot from `/api/v1/duty/sessions`.
@@ -323,17 +324,13 @@ DutySessionSections splitDutySessions(
 }
 
 String dutyActionErrorMessage(Object error) {
-  if (error is ApiException) {
-    switch (error.statusCode) {
-      case 403:
-        return "You do not have permission for this duty action.";
-      case 409:
-        return "This duty slot is no longer available.";
-      case 404:
-        return "Duty session not found.";
-      default:
-        return error.message;
-    }
-  }
-  return error.toString();
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't complete that duty action. Please try again.",
+    statusMessages: {
+      403: "You do not have permission for this duty action.",
+      409: "This duty slot is no longer available.",
+      404: "Duty session not found.",
+    },
+  );
 }

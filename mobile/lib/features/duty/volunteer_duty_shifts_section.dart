@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 
+import "../../core/user_friendly_error.dart";
 import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/section_header.dart";
@@ -62,7 +63,10 @@ class _VolunteerDutyShiftsBodyState extends State<VolunteerDutyShiftsBody> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: "Couldn't load your duty shifts.",
+        );
       });
     }
   }

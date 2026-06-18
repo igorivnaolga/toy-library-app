@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../loans/desk_member.dart";
 import "duty_session_models.dart";
@@ -75,7 +76,10 @@ class DutyController extends ChangeNotifier {
     } on ApiException catch (e) {
       error = _friendlyLoadMessage(e);
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the duty roster. Pull down to refresh.",
+      );
     } finally {
       loadingMore = false;
       notifyListeners();
@@ -105,7 +109,10 @@ class DutyController extends ChangeNotifier {
     } on ApiException catch (e) {
       error = _friendlyLoadMessage(e);
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the duty roster. Pull down to refresh.",
+      );
     } finally {
       loadingMore = false;
       notifyListeners();
@@ -136,7 +143,10 @@ class DutyController extends ChangeNotifier {
         _loadedTo = null;
       }
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the duty roster. Pull down to refresh.",
+      );
       if (replace) {
         sessions = [];
         onDutyStatus = const OnDutyStatus(onDuty: false);

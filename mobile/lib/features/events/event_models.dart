@@ -1,3 +1,4 @@
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_session_models.dart";
 
@@ -216,18 +217,20 @@ int _asInt(Object? value) {
 }
 
 String eventActionErrorMessage(Object error) {
-  if (error is Exception) return error.toString().replaceFirst("Exception: ", "");
-  return error.toString();
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't complete that event action. Please try again.",
+    statusMessages: {
+      403: "You can't book this event slot.",
+      409: "This slot is full or no longer available.",
+      404: "Event not found.",
+    },
+  );
 }
 
 String eventLoadErrorMessage(Object error) {
-  final raw = eventActionErrorMessage(error);
-  if (raw.contains("Connection closed") ||
-      raw.contains("Connection refused") ||
-      raw.contains("Failed host lookup") ||
-      raw.contains("SocketException")) {
-    return "Could not reach the library server. Check that the backend is "
-        "running and try again.";
-  }
-  return raw;
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't load library events. Pull down to refresh.",
+  );
 }

@@ -7,6 +7,7 @@ import "api_client.dart";
 import "api_exception.dart";
 import "push_notifications.dart";
 import "reminder_sync.dart";
+import "user_friendly_error.dart";
 import "../features/auth/auth_error_messages.dart";
 import "../features/profile/kid_profile.dart";
 import "../features/profile/member_contact_info.dart";
@@ -68,10 +69,14 @@ class AuthStore extends ChangeNotifier {
   int creditBalanceCents = 0;
   bool showPostRegistrationWelcome = false;
   bool _freshAuthAttempt = false;
+  bool _signingOut = false;
 
   bool get isAuthConfigured => _supabase != null;
 
   bool get isLoggedIn => _supabase?.auth.currentSession != null;
+
+  /// Signed-in chrome (avatar, member tabs) — false during/after local sign-out.
+  bool get showsSignedInUi => isLoggedIn && userId != null && !_signingOut;
   String? get accessToken => _supabase?.auth.currentSession?.accessToken;
 
   bool get isGuest => role == AppRole.guest;
@@ -239,20 +244,47 @@ class AuthStore extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    final backend = _backend;
-    if (backend != null) {
-      await PushNotificationService.instance.unregisterFromBackend(backend);
-    }
-    final supa = _supabase;
-    if (supa != null) {
-      await supa.auth.signOut();
-    }
-    await ReminderSync.clear();
+    if (_signingOut) return;
+    _signingOut = true;
     _setGuest();
     notifyListeners();
+
+    final backend = _backend;
+    final supa = _supabase;
+    try {
+      if (backend != null) {
+        try {
+          await PushNotificationService.instance
+              .unregisterFromBackend(backend)
+              .timeout(const Duration(seconds: 5));
+        } catch (e) {
+          debugPrint("FCM unregister on sign-out skipped: $e");
+        }
+      }
+      try {
+        await ReminderSync.clear();
+      } catch (e) {
+        debugPrint("Reminder clear on sign-out skipped: $e");
+      }
+      if (supa != null) {
+        try {
+          await supa.auth.signOut().timeout(const Duration(seconds: 10));
+        } catch (e) {
+          debugPrint("Supabase signOut failed, clearing local session: $e");
+          try {
+            await supa.auth.signOut(scope: SignOutScope.local);
+          } catch (_) {}
+        }
+      }
+    } finally {
+      _signingOut = false;
+      _setGuest();
+      notifyListeners();
+    }
   }
 
   Future<void> refreshProfile({bool silent = false}) async {
+    if (_signingOut) return;
     final supa = _supabase;
     final backend = _backend;
     if (supa == null || backend == null) return;
@@ -391,8 +423,11 @@ String authProfileErrorMessage(Object error) {
     return "Couldn't load your profile: your device clock may be ahead of the "
         "server. Check date & time settings (use automatic time) and try again.";
   }
-  if (error is ApiException) {
-    return "Couldn't load your profile: ${error.message}";
-  }
-  return "Couldn't load your profile: $error";
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't load your profile. Pull down to refresh or sign in again.",
+    statusMessages: {
+      401: "Please sign in again to view your profile.",
+    },
+  );
 }

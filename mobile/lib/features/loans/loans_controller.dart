@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../payments/payment_models.dart";
 import "../catalog/catalog_models.dart";
@@ -47,7 +48,10 @@ class LoansController extends ChangeNotifier {
       myLoansError = _friendlyMyLoansMessage(e);
       myLoans = [];
     } catch (e) {
-      myLoansError = e.toString();
+      myLoansError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load your loans. Pull down to refresh.",
+      );
       myLoans = [];
     } finally {
       myLoansLoading = false;
@@ -71,7 +75,12 @@ class LoansController extends ChangeNotifier {
           activeError = e;
           activeLoans = [];
         } catch (e) {
-          activeError = ApiException(e.toString());
+          activeError = ApiException(
+            friendlyErrorMessage(
+              e,
+              fallback: "Couldn't load the volunteer desk.",
+            ),
+          );
           activeLoans = [];
         }
       }(),
@@ -299,52 +308,53 @@ class LoansController extends ChangeNotifier {
   }
 
   String _friendlyMyLoansMessage(ApiException e) {
-    if (e.statusCode == 401) {
-      return "Please sign in again to view your loans.";
-    }
-    if (e.statusCode == 403) {
-      return "Your account cannot view loans yet.";
-    }
-    return e.message;
+    return friendlyErrorMessage(
+      e,
+      fallback: "Couldn't load your loans. Pull down to refresh.",
+      statusMessages: {
+        401: "Please sign in again to view your loans.",
+        403: "Your account cannot view loans yet.",
+      },
+    );
   }
 
   String _friendlyDeskMessage(ApiException e) {
-    if (e.statusCode == 401) {
-      return "Please sign in again to use the volunteer desk.";
-    }
     if (e.statusCode == 403) {
       final lower = e.message.toLowerCase();
       if (lower.contains("30 minutes") || lower.contains("duty desk opens")) {
         return e.message;
       }
-      return "Book a duty shift from the duty roster (calendar icon), "
-          "then return to the desk on your shift day.";
     }
-    final lower = e.message.toLowerCase();
-    if (lower.contains("timeout")) {
-      return "Desk load timed out. Pull down to refresh.";
-    }
-    return e.message;
+    return friendlyErrorMessage(
+      e,
+      fallback: "Couldn't load the volunteer desk. Pull down to refresh.",
+      statusMessages: {
+        401: "Please sign in again to use the volunteer desk.",
+        403: "Book a duty shift from the duty roster (calendar icon), "
+            "then return to the desk on your shift day.",
+      },
+    );
   }
 }
 
 String loanActionErrorMessage(Object error) {
-  if (error is ApiException) {
-    switch (error.statusCode) {
-      case 409:
-        if (error.message.toLowerCase().contains("booked")) {
-          return error.message;
-        }
-        return "This toy is not available for that action right now.";
-      case 404:
-        return "Loan or booking not found.";
-      case 403:
-        return "Book a duty shift on the Duty tab to use the volunteer desk.";
-      case 422:
-        return error.message;
-      default:
-        return error.message;
+  if (error is ApiException &&
+      error.statusCode == 409 &&
+      error.message.trim().isNotEmpty) {
+    return error.message.trim();
+  }
+  if (error is ApiException && error.statusCode == 403) {
+    final lower = error.message.toLowerCase();
+    if (lower.contains("30 minutes") || lower.contains("duty desk opens")) {
+      return error.message;
     }
   }
-  return error.toString();
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't complete that loan action. Please try again.",
+    statusMessages: {
+      403: "Book a duty shift on the Duty tab to use the volunteer desk.",
+      404: "Loan or booking not found.",
+    },
+  );
 }

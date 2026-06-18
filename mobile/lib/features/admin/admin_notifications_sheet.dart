@@ -3,6 +3,7 @@ import "package:provider/provider.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/notification_bell_ack.dart";
 import "../../core/toy_loading_indicator.dart";
 import "../profile/profile_labels.dart";
@@ -142,7 +143,10 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
     } on ApiException catch (e) {
       recentError = e.message;
     } catch (e) {
-      recentError = e.toString();
+      recentError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load recent members.",
+      );
     }
 
     if (!mounted) return;

@@ -3,6 +3,7 @@ import "package:image_picker/image_picker.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "../../core/api_client.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/auth_store.dart";
 import "kid_profile.dart";
 import "member_contact_info.dart";
@@ -70,7 +71,10 @@ class ProfileController extends ChangeNotifier {
       return true;
     } catch (e) {
       kids = List<KidProfile>.from(_auth.kids);
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't save your profile. Please try again.",
+      );
       notifyListeners();
       return false;
     } finally {
@@ -136,7 +140,10 @@ class ProfileController extends ChangeNotifier {
       syncFromAuth();
       return true;
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't save your profile. Please try again.",
+      );
       notifyListeners();
       return false;
     } finally {

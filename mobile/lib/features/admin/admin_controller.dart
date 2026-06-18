@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_session_models.dart";
 import "../payments/payment_models.dart";
@@ -94,7 +95,10 @@ class AdminController extends ChangeNotifier {
       statsError = null;
     } catch (e) {
       if (requestId != _overviewRequestId) return;
-      statsError = e.toString();
+      statsError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load statistics. Pull down to refresh.",
+      );
     } finally {
       if (requestId == _overviewRequestId) {
         statsLoading = false;
@@ -130,7 +134,10 @@ class AdminController extends ChangeNotifier {
     } catch (e) {
       if (requestId != _breakdownRequestId) return;
       statsBreakdown = null;
-      statsError ??= e.toString();
+      statsError ??= friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load statistics. Pull down to refresh.",
+      );
     } finally {
       if (requestId == _breakdownRequestId) {
         statsBreakdownLoading = false;
@@ -146,7 +153,10 @@ class AdminController extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       statsCatalog = null;
-      statsError ??= e.toString();
+      statsError ??= friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load statistics. Pull down to refresh.",
+      );
       notifyListeners();
     }
   }
@@ -176,7 +186,10 @@ class AdminController extends ChangeNotifier {
     } catch (e) {
       if (requestId != _heardAboutRequestId) return;
       statsHeardAbout = null;
-      statsError ??= e.toString();
+      statsError ??= friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load statistics. Pull down to refresh.",
+      );
     } finally {
       if (requestId == _heardAboutRequestId) {
         statsHeardAboutLoading = false;
@@ -208,7 +221,10 @@ class AdminController extends ChangeNotifier {
     } catch (e) {
       if (requestId != _popularityRequestId) return;
       toyPopularity = null;
-      statsError ??= e.toString();
+      statsError ??= friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load statistics. Pull down to refresh.",
+      );
       notifyListeners();
     }
   }
@@ -223,7 +239,10 @@ class AdminController extends ChangeNotifier {
       notifications = AdminNotifications.fromJson(json);
       notificationsError = null;
     } catch (e) {
-      notificationsError = e.toString();
+      notificationsError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load notifications. Pull down to refresh.",
+      );
     } finally {
       notificationsLoading = false;
       notifyListeners();
@@ -242,7 +261,10 @@ class AdminController extends ChangeNotifier {
       recentMembers = parseAdminMemberList(json);
       recentMembersError = null;
     } catch (e) {
-      recentMembersError = e.toString();
+      recentMembersError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load recent members.",
+      );
       recentMembers = [];
     } finally {
       recentMembersLoading = false;
@@ -266,7 +288,10 @@ class AdminController extends ChangeNotifier {
           : [];
       pendingError = null;
     } catch (e) {
-      pendingError = e.toString();
+      pendingError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load pending members.",
+      );
       pendingVolunteers = [];
     } finally {
       pendingLoading = false;
@@ -325,7 +350,10 @@ class AdminController extends ChangeNotifier {
       bookings = parseAdminBookingList(json);
       bookingsError = null;
     } catch (e) {
-      bookingsError = e.toString();
+      bookingsError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load bookings.",
+      );
       bookings = [];
     } finally {
       bookingsLoading = false;
@@ -376,7 +404,10 @@ class AdminController extends ChangeNotifier {
       members = parseAdminMemberList(json);
       membersError = null;
     } catch (e) {
-      membersError = e.toString();
+      membersError = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load members.",
+      );
       members = [];
     } finally {
       membersLoading = false;
@@ -491,6 +522,8 @@ class AdminController extends ChangeNotifier {
 }
 
 String adminActionErrorMessage(Object error) {
-  if (error is ApiException) return error.message;
-  return error.toString();
+  return friendlyErrorMessage(
+    error,
+    fallback: "Couldn't complete that admin action. Please try again.",
+  );
 }

@@ -3,6 +3,7 @@ import "package:provider/provider.dart";
 
 import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/toy_pieces.dart";
@@ -123,13 +124,27 @@ class _ToyDetailPiecesSectionState extends State<ToyDetailPiecesSection> {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: "Couldn't save pieces. Please try again.",
+            ),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: "Couldn't save pieces. Please try again.",
+            ),
+          ),
+        ),
       );
     }
   }

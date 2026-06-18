@@ -321,7 +321,7 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                     ] else if (auth.showsScheduleSheet) ...[
                       const ScheduleAppBarButton(),
                     ],
-                    if (!auth.isLoggedIn)
+                    if (!auth.showsSignedInUi)
                       _guestAuthActions()
                     else ...[
                       const SizedBox(width: 12),

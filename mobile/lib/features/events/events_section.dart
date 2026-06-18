@@ -436,6 +436,7 @@ class EventsSectionState extends State<EventsSection> {
             event: event,
             auth: auth,
             adminMode: widget.adminMode,
+            initialExpanded: controller.scrollToEventId == event.eventId,
             actionSlotId: _actionSlotId,
             onBook: _book,
             onCancel: _cancel,
@@ -456,6 +457,7 @@ class EventsSectionState extends State<EventsSection> {
               event: event,
               auth: auth,
               adminMode: widget.adminMode,
+              initialExpanded: controller.scrollToEventId == event.eventId,
               actionSlotId: _actionSlotId,
               onBook: _book,
               onCancel: _cancel,
@@ -480,6 +482,7 @@ class _EventCard extends StatefulWidget {
     required this.adminMode,
     required this.onBook,
     required this.onCancel,
+    this.initialExpanded = false,
     this.onAdminBook,
     this.onAdminRemoveBooking,
     this.onEdit,
@@ -491,6 +494,7 @@ class _EventCard extends StatefulWidget {
   final LibraryEventItem event;
   final AuthStore auth;
   final bool adminMode;
+  final bool initialExpanded;
   final String? actionSlotId;
   final Future<void> Function(EventSlotItem slot, LibraryEventItem event) onBook;
   final Future<void> Function(EventSlotItem slot, LibraryEventItem event) onCancel;
@@ -510,9 +514,22 @@ class _EventCard extends StatefulWidget {
 }
 
 class _EventCardState extends State<_EventCard> {
-  bool _expanded = false;
+  late bool _expanded = widget.initialExpanded;
+
+  @override
+  void didUpdateWidget(covariant _EventCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialExpanded && !_expanded) {
+      _expanded = true;
+    }
+  }
 
   LibraryEventItem get event => widget.event;
+
+  bool get _collapsible =>
+      widget.adminMode ||
+      (!widget.auth.isAdmin &&
+          (widget.auth.isMember || widget.auth.isVolunteer));
 
   String get _slotSummary {
     final count = event.slots.length;
@@ -527,7 +544,7 @@ class _EventCardState extends State<_EventCard> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final eventColor = const Color(0xFF5C6BC0);
-    final showDetails = !widget.adminMode || _expanded;
+    final showDetails = !_collapsible || _expanded;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -547,14 +564,14 @@ class _EventCardState extends State<_EventCard> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               InkWell(
-                onTap: widget.adminMode
+                onTap: _collapsible
                     ? () => setState(() => _expanded = !_expanded)
                     : null,
                 borderRadius: BorderRadius.circular(8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (widget.adminMode)
+                    if (_collapsible)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Icon(
@@ -567,7 +584,7 @@ class _EventCardState extends State<_EventCard> {
                       )
                     else
                       Icon(Icons.celebration_outlined, color: eventColor, size: 20),
-                    SizedBox(width: widget.adminMode ? 4 : 8),
+                    SizedBox(width: _collapsible ? 4 : 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,7 +658,7 @@ class _EventCardState extends State<_EventCard> {
                                 ),
                               ),
                             ),
-                          if (widget.adminMode && !showDetails) ...[
+                          if (_collapsible && !showDetails) ...[
                             const SizedBox(height: 4),
                             Text(
                               _slotSummary,

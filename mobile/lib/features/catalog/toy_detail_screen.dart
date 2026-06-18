@@ -5,6 +5,7 @@ import "package:provider/provider.dart";
 
 import "../../core/toy_loading_indicator.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/auth_store.dart";
 import "../../core/toy_photo_url.dart";
@@ -260,8 +261,10 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                       await shareToyLabelPdf(t);
                     } catch (e) {
                       if (!context.mounted) return;
-                      final message =
-                          e is ApiException ? e.message : e.toString();
+                      final message = friendlyErrorMessage(
+                        e,
+                        fallback: "Couldn't create the shelf label PDF.",
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(message)),
                       );

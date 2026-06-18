@@ -7,6 +7,7 @@ import "package:image_picker/image_picker.dart";
 import "package:provider/provider.dart";
 
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/app_input_field.dart";
 import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
@@ -67,13 +68,10 @@ void runDeskPhotoLearnInBackground(
       ),
     );
   }).catchError((Object error) {
-    final hint = error is ApiException
-        ? (error.statusCode == 404
-            ? "restart the backend server"
-            : error.message)
-        : error is TimeoutException
-            ? "connection too slow"
-            : error.toString();
+    final hint = friendlyErrorMessage(
+      error,
+      fallback: "photo baseline not saved",
+    );
     messenger.showSnackBar(
       SnackBar(
         content: Text(

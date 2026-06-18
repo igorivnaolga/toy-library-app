@@ -2,6 +2,7 @@ import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
 import "../../core/api_exception.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/toy_pieces.dart";
 import "catalog_models.dart";
 
@@ -40,9 +41,15 @@ class CatalogController extends ChangeNotifier {
       await _fetchToyPage(reset: true);
       error = null;
     } on ApiException catch (e) {
-      error = e.message;
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } finally {
       loading = false;
       notifyListeners();
@@ -63,7 +70,10 @@ class CatalogController extends ChangeNotifier {
       error = e.message;
     } catch (e) {
       _fillFormOptionsFromLoadedToys();
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } finally {
       notifyListeners();
     }
@@ -231,9 +241,15 @@ class CatalogController extends ChangeNotifier {
       await _fetchToyPage(reset: false);
       error = null;
     } on ApiException catch (e) {
-      error = e.message;
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } finally {
       loadingMore = false;
       notifyListeners();
@@ -378,9 +394,15 @@ class CatalogController extends ChangeNotifier {
       await _fetchToyPage(reset: true);
       error = null;
     } on ApiException catch (e) {
-      error = e.message;
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } catch (e) {
-      error = e.toString();
+      error = friendlyErrorMessage(
+        e,
+        fallback: "Couldn't load the catalog. Pull down to refresh.",
+      );
     } finally {
       loading = false;
       notifyListeners();

@@ -4,6 +4,7 @@ import "package:provider/provider.dart";
 import "../../core/toy_loading_indicator.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/api_client.dart";
+import "../../core/user_friendly_error.dart";
 import "../../core/auth_store.dart";
 import "membership_tier_card.dart";
 import "membership_tiers.dart";
@@ -42,7 +43,12 @@ class _MembershipOnboardingScreenState
         Navigator.of(context).pop();
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(
+        () => _error = friendlyErrorMessage(
+          e,
+          fallback: "Couldn't save your membership choice. Please try again.",
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _busy = false);

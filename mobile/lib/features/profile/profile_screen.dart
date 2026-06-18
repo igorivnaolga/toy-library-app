@@ -176,9 +176,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _signOut() async {
-    await context.read<AuthStore>().signOut();
-    if (!mounted) return;
-    Navigator.of(context).pop();
+    try {
+      await context.read<AuthStore>().signOut();
+    } finally {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
   }
 
   @override

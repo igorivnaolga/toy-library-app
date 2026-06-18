@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.availability import AVAILABLE, RESERVED, normalize_availability
+from app.core.availability import AVAILABLE, RESERVED, UNAVAILABLE, normalize_availability
 from app.core.library_sessions import (
     LIBRARY_TIMEZONE,
     first_session_on_or_after,
@@ -181,6 +181,33 @@ def _ensure_toy_available_for_checkout(toy: Toy) -> None:
         )
 
 
+def _ensure_toy_available_for_walk_in(
+    session: Session,
+    toy: Toy,
+    *,
+    user_id: uuid.UUID,
+) -> None:
+    """Desk walk-in: block real holds; ignore stale On loan / Reserved labels."""
+    pending = get_pending_booking_for_toy(session, toy.toy_id)
+    if pending is not None:
+        if pending.user_id == user_id:
+            raise LoanError(
+                "booking_not_checkoutable",
+                "This member already has a reservation — check it out from their reservations list.",
+            )
+        raise LoanError(
+            "toy_booked_by_other",
+            "This toy is reserved for another member.",
+        )
+
+    code = normalize_availability(toy.status)
+    if code == UNAVAILABLE:
+        raise LoanError(
+            "toy_not_available",
+            "This toy is marked unavailable (repair, missing, etc.).",
+        )
+
+
 def _ensure_toy_ready_for_booking_checkout(toy: Toy) -> None:
     """Pending booking checkout: toy must be in library (available or reserved)."""
     code = normalize_availability(toy.status)
@@ -276,7 +303,7 @@ def check_out_walk_in(
     if get_active_loan_for_toy(session, toy.toy_id) is not None:
         raise LoanError("toy_on_loan", "This toy already has an active loan.")
 
-    _ensure_toy_available_for_checkout(toy)
+    _ensure_toy_available_for_walk_in(session, toy, user_id=user_id)
 
     checkout_day = library_now().date()
     loan = create_loan(
