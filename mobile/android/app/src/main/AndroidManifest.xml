@@ -7,9 +7,6 @@
         android:label="Toy Library"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${GOOGLE_MAPS_API_KEY}" />
         <!-- Impeller + some x86_64 emulators can hang on the splash until first frame; Skia is more reliable here. -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
