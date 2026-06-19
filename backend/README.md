@@ -1,6 +1,6 @@
 # Toy Library — Backend (FastAPI)
 
-REST API for the Toy Library mobile app: catalog, categories, toy photos, and Supabase-backed authentication (`/api/v1/auth/me`).
+REST API for the **Church Corner Toy Library** mobile app (see [`../README.md`](../README.md)): catalog, bookings, loans, duty roster, events, admin desk, and Supabase-backed authentication.
 
 ## Prerequisites
 

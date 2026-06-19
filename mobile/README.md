@@ -1,22 +1,25 @@
-# toy_library_mobile
+# Church Corner Toy Library — mobile app
 
-Flutter client for Church Corner Toy Library.
+Flutter client for members, volunteers, and admins.
 
 ## Development
 
 ```bash
 flutter pub get
-flutter run
+flutter run --dart-define-from-file=env/dev.json
 ```
 
-Configure API and Supabase with `--dart-define` (see `lib/core/api_base_url.dart` and `env/production.json.example`).
+For USB debugging with a local backend, see `run_android.sh` / `run_android.ps1` (`USE_ADB_REVERSE`).
+
+Configure API and Supabase with `--dart-define` or `env/production.json` (`API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`).
 
 ## Install on a phone (pilot)
 
-1. Build a release APK (requires `env/production.json` — see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)):
+1. Create `env/production.json` from `env/production.json.example` (see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)).
+2. Build:
    ```bash
    flutter build apk --release --dart-define-from-file=env/production.json
    ```
-2. Install **`build/app/outputs/flutter-apk/app-release.apk`** on the device (not the `.sha1` file).
+3. Install `build/app/outputs/flutter-apk/app-release.apk` on the device.
 
-Full sideload steps (USB, Drive, unknown apps, Xiaomi, updates): [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload).
+Full sideload steps: [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload).

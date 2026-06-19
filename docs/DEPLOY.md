@@ -99,7 +99,7 @@ Follow [§4 Mobile (Android release)](#4-mobile-android-release) above. After a 
 mobile/build/app/outputs/flutter-apk/app-release.apk
 ```
 
-Use **`app-release.apk`** only. Do **not** open or share `app-release.apk.sha1` — that is a checksum file, not the app.
+Use **`app-release.apk`**.
 
 #### Copy the APK to the phone
 
@@ -116,10 +116,6 @@ Any of these work:
 1. Open **Files** (or **Downloads**) and tap **`app-release.apk`**.
 2. If Android asks to allow installs from that app (Files, Drive, Chrome, etc.), turn on **Install unknown apps** / **Allow from this source** for that app only.
 3. Tap **Install**, then **Open**.
-
-**Xiaomi / MIUI / some OEM skins:** Settings → **Privacy** → **Special permissions** → **Install unknown apps** → allow the app you use to open the APK (often **Files** or **Mi Browser**).
-
-**Updates:** Install a new build over the old one when the signing key is the same. If you see a signature conflict, uninstall the old app first, then install the new APK (you will need to sign in again).
 
 #### Install directly from your PC (optional, for developers)
 
