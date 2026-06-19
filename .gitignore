@@ -25,3 +25,7 @@ backend/.env
 backend/.env.production
 backend/firebase-service-account.json
 mobile/env/production.json
+
+# Local toy catalog photos (served from Supabase in production)
+toy_library_photos/
+toy_library_photos_matched/
