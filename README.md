@@ -48,9 +48,10 @@ See [`mobile/README.md`](mobile/README.md) for production builds and `--dart-def
 
 | Task | Guide |
 |------|--------|
+| **Try the app (pilot testers)** | [`docs/TRY_THE_APP.md`](docs/TRY_THE_APP.md) |
 | Supabase, Railway, env vars, cron | [`docs/DEPLOY.md`](docs/DEPLOY.md) |
 | Build release APK | [`docs/DEPLOY.md` §4](docs/DEPLOY.md#4-mobile-android-release) |
-| Install APK on Android phones | [`docs/DEPLOY.md` §5](docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload) |
+| Install APK on Android phones (maintainers) | [`docs/DEPLOY.md` §5](docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload) |
 
 Railway redeploys the API automatically when you push to `main` (if the repo is connected). Mobile changes require rebuilding and reinstalling `app-release.apk` on each device.
 
@@ -59,6 +60,7 @@ Railway redeploys the API automatically when you push to `main` (if the repo is 
 ```text
 backend/          FastAPI app, SQL snippets, Docker/Railway config
 mobile/           Flutter client
-docs/DEPLOY.md    Production and sideload instructions
+docs/DEPLOY.md       Production deployment (maintainers)
+docs/TRY_THE_APP.md  Install guide for pilot testers
 .github/          CI and scheduled reminder workflows
 ```

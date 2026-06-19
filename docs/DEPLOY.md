@@ -89,7 +89,7 @@ flutter build apk --release \
 
 ### 5. Install the APK on a phone (pilot sideload)
 
-For pilot testers who are **not** installing from the Play Store yet.
+For pilot testers who are **not** installing from the Play Store yet. **Testers:** use [`TRY_THE_APP.md`](TRY_THE_APP.md) instead (GitHub Release download, install, sign in).
 
 #### Build the file (once)
 

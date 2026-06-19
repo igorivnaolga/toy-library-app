@@ -15,6 +15,10 @@ Configure API and Supabase with `--dart-define` or `env/production.json` (`API_B
 
 ## Install on a phone (pilot)
 
+**Testers:** see [`../docs/TRY_THE_APP.md`](../docs/TRY_THE_APP.md) (download from a GitHub Release, install, sign in).
+
+**Maintainers** — build and sideload:
+
 1. Create `env/production.json` from `env/production.json.example` (see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)).
 2. Build:
    ```bash
@@ -22,4 +26,4 @@ Configure API and Supabase with `--dart-define` or `env/production.json` (`API_B
    ```
 3. Install `build/app/outputs/flutter-apk/app-release.apk` on the device.
 
-Full sideload steps: [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload).
+Full sideload steps: [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload). Share [`../docs/TRY_THE_APP.md`](../docs/TRY_THE_APP.md) with testers.

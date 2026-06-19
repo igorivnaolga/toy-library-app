@@ -25,8 +25,8 @@ class WelcomeScreen extends StatelessWidget {
               const Spacer(flex: 2),
               Image.asset(
                 _appMarkAsset,
-                width: 168,
-                height: 168,
+                width: 208,
+                height: 208,
                 fit: BoxFit.contain,
                 semanticLabel: "Toy library building blocks",
               ),
