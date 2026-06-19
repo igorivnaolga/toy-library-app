@@ -9,25 +9,28 @@ class LibraryLogoTitle extends StatelessWidget {
     super.key,
     this.size = LibraryLogoSize.appBar,
     this.showBackground = true,
+    this.foregroundColor,
   });
 
   final LibraryLogoSize size;
   final bool showBackground;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
+    final ink = foregroundColor ?? kBrandOnYellow;
     final churchCornerStyle = GoogleFonts.playfairDisplay(
       fontSize: size.churchCornerFontSize,
       fontWeight: FontWeight.w600,
       letterSpacing: 1.8,
       height: 1.05,
-      color: kBrandOnYellow,
+      color: ink,
     );
     final toyLibraryStyle = GoogleFonts.bebasNeue(
       fontSize: size.toyLibraryFontSize,
       letterSpacing: 7.0,
       height: 0.62,
-      color: kBrandOnYellow,
+      color: ink,
     );
 
     final content = Column(

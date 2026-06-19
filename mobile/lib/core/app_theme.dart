@@ -2,6 +2,8 @@ import "package:flutter/material.dart";
 
 const Color kBrandYellow = Color(0xFFFDC435);
 const Color kBrandOnYellow = Color(0xFF1A1A1A);
+/// Softer copy on brand yellow (e.g. welcome screen) — less harsh than [kBrandOnYellow].
+const Color kBrandOnYellowSoft = Color(0xFF424242);
 
 const Color kMembershipTierCardBg = Color(0xFFFFF6E0);
 
