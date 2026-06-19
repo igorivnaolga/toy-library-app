@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, timedelta
 from typing import Literal
@@ -87,6 +88,9 @@ from app.services.event_service import (
     event_out_from_model,
     update_event_service,
 )
+from app.services.member_push_reminders import send_due_member_push_reminders
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -137,8 +141,15 @@ def send_member_push_reminders_cron(
     expected = get_settings().cron_secret
     if not expected or cron_secret != expected:
         raise HTTPException(status_code=403, detail="Invalid cron secret")
-    result = send_due_member_push_reminders(db)
-    return MemberPushRemindersResult(**result)
+    try:
+        result = send_due_member_push_reminders(db)
+        return MemberPushRemindersResult(**result)
+    except Exception as exc:
+        logger.exception("Member push reminder cron failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Member push reminder cron failed: {exc}",
+        ) from exc
 
 
 @router.get("/notifications", response_model=AdminNotificationsOut)

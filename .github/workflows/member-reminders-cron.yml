@@ -32,4 +32,5 @@ jobs:
           fi
           curl --fail-with-body -sS -X POST \
             -H "X-Cron-Secret: ${CRON_SECRET}" \
-            "${API_URL%/}/api/v1/admin/notifications/send-member-reminders/cron"
+            "${API_URL%/}/api/v1/admin/notifications/send-member-reminders/cron" \
+            || { echo "Cron request failed (see response body above)."; exit 1; }
