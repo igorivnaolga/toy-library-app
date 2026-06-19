@@ -262,6 +262,7 @@ class EventsSectionState extends State<EventsSection> {
     LibraryEventItem event,
   ) async {
     final controller = context.read<EventsController>();
+    setState(() => _actionSlotId = slot.slotId);
     try {
       await controller.adminCancelBooking(slot.slotId, booking.userId);
       if (!mounted) return;
@@ -277,6 +278,8 @@ class EventsSectionState extends State<EventsSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(eventActionErrorMessage(e))),
       );
+    } finally {
+      if (mounted) setState(() => _actionSlotId = null);
     }
   }
 
@@ -686,6 +689,10 @@ class _EventCardState extends State<_EventCard> {
                 const SizedBox(height: 10),
                 for (final slot in event.slots) ...[
                   _EventSlotRow(
+                    key: ValueKey(
+                      "${slot.slotId}:${slot.bookedCount}:"
+                      "${slot.bookings.map((b) => b.userId).join(',')}",
+                    ),
                     slot: slot,
                     event: event,
                     auth: widget.auth,
@@ -710,6 +717,7 @@ class _EventCardState extends State<_EventCard> {
 
 class _EventSlotRow extends StatelessWidget {
   const _EventSlotRow({
+    super.key,
     required this.slot,
     required this.event,
     required this.auth,

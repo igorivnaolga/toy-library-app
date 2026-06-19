@@ -2,12 +2,20 @@ import "package:url_launcher/url_launcher.dart";
 
 import "library_info_copy.dart";
 
-Future<void> openLibraryInGoogleMaps() {
-  final uri = Uri.parse(
-    "https://www.google.com/maps/search/?api=1"
-    "&query=${LibraryInfoCopy.locationLat},${LibraryInfoCopy.locationLng}",
+Future<void> openLibraryInGoogleMaps() async {
+  final query = Uri.encodeComponent(LibraryInfoCopy.locationMapsQuery);
+  final mapsUri = Uri.parse(
+    "https://www.google.com/maps/search/?api=1&query=$query",
   );
-  return launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (await canLaunchUrl(mapsUri)) {
+    await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+    return;
+  }
+
+  final geoUri = Uri.parse(
+    "geo:0,0?q=${Uri.encodeComponent(LibraryInfoCopy.locationMapsQuery)}",
+  );
+  await launchUrl(geoUri, mode: LaunchMode.externalApplication);
 }
 
 Future<void> launchPhoneCall() {

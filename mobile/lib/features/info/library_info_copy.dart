@@ -63,10 +63,15 @@ Email: library@cctoylibrary.org.nz""";
 
   static const locationAddressLine1 = "Sir John McKenzie Memorial building";
   static const locationAddressLine2 = "393 Riccarton Road, Upper Riccarton";
-  static const locationAddressHint = "Next to Countdown Church Corner";
+  static const locationAddressHint = "Next to Woolworths";
 
-  static const locationLat = -43.53803;
-  static const locationLng = 172.60456;
+  /// Used when opening Google Maps (name + address pins more reliably than lat/lng alone).
+  static const locationMapsQuery =
+      "Church Corner Toy Library, Sir John McKenzie Memorial Building, "
+      "393 Riccarton Road, Upper Riccarton, Christchurch, New Zealand";
+
+  static const locationLat = -43.53799;
+  static const locationLng = 172.60439;
 
   static const locationBody = """
 $locationAddressLine1

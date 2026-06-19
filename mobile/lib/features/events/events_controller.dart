@@ -238,6 +238,7 @@ class EventsController extends ChangeNotifier {
   }
 
   Future<LibraryEventItem> bookSlot(String slotId) async {
+    _invalidateInFlightLoads();
     final json =
         await _client.postJson("/api/v1/events/slots/$slotId/book");
     final event = LibraryEventItem.fromJson(json["event"] as Map<String, dynamic>);
@@ -247,6 +248,7 @@ class EventsController extends ChangeNotifier {
   }
 
   Future<LibraryEventItem> cancelSlot(String slotId) async {
+    _invalidateInFlightLoads();
     final json =
         await _client.deleteJson("/api/v1/events/slots/$slotId/book");
     final event = LibraryEventItem.fromJson(json["event"] as Map<String, dynamic>);
@@ -274,12 +276,14 @@ class EventsController extends ChangeNotifier {
     String slotId,
     DeskMember member,
   ) async {
+    _invalidateInFlightLoads();
     final json = await _client.postJson(
       "/api/v1/admin/events/slots/$slotId/book",
       {"user_id": member.userId},
     );
     final event = LibraryEventItem.fromJson(json);
     _replaceEvent(event);
+    unawaited(refreshAvailability());
     return event;
   }
 
@@ -287,11 +291,13 @@ class EventsController extends ChangeNotifier {
     String slotId,
     String userId,
   ) async {
+    _invalidateInFlightLoads();
     final json = await _client.deleteJson(
       "/api/v1/admin/events/slots/$slotId/book/$userId",
     );
     final event = LibraryEventItem.fromJson(json);
     _replaceEvent(event);
+    unawaited(refreshAvailability());
     return event;
   }
 
