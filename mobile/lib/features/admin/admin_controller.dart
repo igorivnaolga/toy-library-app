@@ -1,7 +1,6 @@
 import "package:flutter/foundation.dart";
 
 import "../../core/api_client.dart";
-import "../../core/api_exception.dart";
 import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 import "../duty/duty_session_models.dart";

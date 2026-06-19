@@ -4,7 +4,6 @@ import "package:flutter/foundation.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "api_client.dart";
-import "api_exception.dart";
 import "push_notifications.dart";
 import "reminder_sync.dart";
 import "user_friendly_error.dart";

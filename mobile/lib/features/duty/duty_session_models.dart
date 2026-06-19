@@ -1,4 +1,3 @@
-import "../../core/api_exception.dart";
 import "../../core/user_friendly_error.dart";
 import "../bookings/booking_models.dart";
 
