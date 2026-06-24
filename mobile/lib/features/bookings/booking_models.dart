@@ -156,6 +156,12 @@ class BookingPickupDateGroup {
   int? get totalRentalCents => totalRentalCentsForBookings(bookings);
 
   int get unpricedBookingCount => unpricedBookingCountForBookings(bookings);
+
+  /// e.g. ``Wednesday 21 May`` from API, or formatted calendar date.
+  String get displayLabel =>
+      pickupLabel?.trim().isNotEmpty == true
+          ? pickupLabel!.trim()
+          : formatDisplayDate(pickupDate);
 }
 
 int? totalRentalCentsForBookings(List<BookingItem> bookings) {

@@ -12,6 +12,7 @@ class DeskReservationTile extends StatelessWidget {
     required this.booking,
     required this.loading,
     this.allowEarlyCheckout = false,
+    this.hidePickupLabel = false,
     this.onOpen,
     this.onCheckOut,
   });
@@ -19,6 +20,7 @@ class DeskReservationTile extends StatelessWidget {
   final BookingItem booking;
   final bool loading;
   final bool allowEarlyCheckout;
+  final bool hidePickupLabel;
   final VoidCallback? onOpen;
   final VoidCallback? onCheckOut;
 
@@ -73,7 +75,8 @@ class DeskReservationTile extends StatelessWidget {
                               style: context.listSubtitle,
                             ),
                           ],
-                          if (booking.pickupLabel != null &&
+                          if (!hidePickupLabel &&
+                              booking.pickupLabel != null &&
                               booking.pickupLabel!.isNotEmpty) ...[
                             const SizedBox(height: 2),
                             Text(

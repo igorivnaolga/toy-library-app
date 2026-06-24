@@ -358,10 +358,6 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
     final deskReloadBusy = widget.loading && !_hasMember;
     final busy = deskReloadBusy || _submitting;
     final canSubmit = _hasMember && _selectedToys.isNotEmpty && !busy;
-    final readyReservations = deskReadyReservations(
-      _memberReservations,
-      allowEarlyForAdmin: widget.allowEarlyReservationCheckout,
-    );
     final canCheckOutReservations =
         widget.onCheckOutReservations != null && !busy;
 
@@ -428,49 +424,13 @@ class _DeskWalkInPanelState extends State<DeskWalkInPanel> {
                       style: context.listSubtitle,
                     )
                   else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (readyReservations.length >= 2) ...[
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: BrandChipButton(
-                              label:
-                                  "Check out all (${readyReservations.length})",
-                              fixedWidth: 168,
-                              onPressed: canCheckOutReservations
-                                  ? () =>
-                                      _checkOutReservations(readyReservations)
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                        for (var i = 0; i < _memberReservations.length; i++) ...[
-                          if (i > 0) const SizedBox(height: 8),
-                          DeskReservationTile(
-                            booking: _memberReservations[i],
-                            loading: busy,
-                            allowEarlyCheckout:
-                                widget.allowEarlyReservationCheckout,
-                            onOpen: widget.onOpenToy == null
-                                ? null
-                                : () => widget.onOpenToy!(
-                                      _memberReservations[i].toyId,
-                                    ),
-                            onCheckOut: canCheckOutReservations &&
-                                    readyReservations.any(
-                                      (item) =>
-                                          item.bookingId ==
-                                          _memberReservations[i].bookingId,
-                                    )
-                                ? () => _checkOutReservations(
-                                      [_memberReservations[i]],
-                                    )
-                                : null,
-                          ),
-                        ],
-                      ],
+                    _MemberReservationsByDate(
+                      reservations: _memberReservations,
+                      loading: busy,
+                      allowEarlyCheckout: widget.allowEarlyReservationCheckout,
+                      canCheckOut: canCheckOutReservations,
+                      onCheckOut: _checkOutReservations,
+                      onOpenToy: widget.onOpenToy,
                     ),
                 ],
               )
@@ -610,4 +570,171 @@ bool _isSearchableToyQuery(String query) {
   if (q.isEmpty) return false;
   if (q.length >= 2) return true;
   return RegExp(r"^\d+$").hasMatch(q);
+}
+
+/// Member reservations grouped by pickup day with per-day checkout.
+class _MemberReservationsByDate extends StatelessWidget {
+  const _MemberReservationsByDate({
+    required this.reservations,
+    required this.loading,
+    required this.allowEarlyCheckout,
+    required this.canCheckOut,
+    required this.onCheckOut,
+    this.onOpenToy,
+  });
+
+  final List<BookingItem> reservations;
+  final bool loading;
+  final bool allowEarlyCheckout;
+  final bool canCheckOut;
+  final Future<void> Function(List<BookingItem> bookings) onCheckOut;
+  final ValueChanged<String>? onOpenToy;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = groupBookingsByPickupDate(reservations);
+    final groupedIds =
+        groups.expand((group) => group.bookings).map((b) => b.bookingId).toSet();
+    final withoutDate = reservations
+        .where((booking) => !groupedIds.contains(booking.bookingId))
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < groups.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _MemberReservationDateGroup(
+            group: groups[i],
+            loading: loading,
+            allowEarlyCheckout: allowEarlyCheckout,
+            canCheckOut: canCheckOut,
+            onCheckOut: onCheckOut,
+            onOpenToy: onOpenToy,
+          ),
+        ],
+        if (withoutDate.isNotEmpty) ...[
+          if (groups.isNotEmpty) const SizedBox(height: 12),
+          Text(
+            "No pickup date",
+            style: context.groupLabel,
+          ),
+          const SizedBox(height: 6),
+          for (var i = 0; i < withoutDate.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            _MemberReservationRow(
+              booking: withoutDate[i],
+              loading: loading,
+              allowEarlyCheckout: allowEarlyCheckout,
+              canCheckOut: canCheckOut,
+              onCheckOut: onCheckOut,
+              onOpenToy: onOpenToy,
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _MemberReservationDateGroup extends StatelessWidget {
+  const _MemberReservationDateGroup({
+    required this.group,
+    required this.loading,
+    required this.allowEarlyCheckout,
+    required this.canCheckOut,
+    required this.onCheckOut,
+    this.onOpenToy,
+  });
+
+  final BookingPickupDateGroup group;
+  final bool loading;
+  final bool allowEarlyCheckout;
+  final bool canCheckOut;
+  final Future<void> Function(List<BookingItem> bookings) onCheckOut;
+  final ValueChanged<String>? onOpenToy;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = deskReadyReservations(
+      group.bookings,
+      allowEarlyForAdmin: allowEarlyCheckout,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Text(
+                group.displayLabel,
+                style: context.groupLabel,
+              ),
+            ),
+            if (ready.length >= 2)
+              BrandChipButton(
+                label: "Check out all (${ready.length})",
+                fixedWidth: 168,
+                onPressed:
+                    canCheckOut ? () => onCheckOut(ready) : null,
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (var i = 0; i < group.bookings.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _MemberReservationRow(
+            booking: group.bookings[i],
+            loading: loading,
+            allowEarlyCheckout: allowEarlyCheckout,
+            canCheckOut: canCheckOut,
+            onCheckOut: onCheckOut,
+            onOpenToy: onOpenToy,
+            hidePickupLabel: true,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MemberReservationRow extends StatelessWidget {
+  const _MemberReservationRow({
+    required this.booking,
+    required this.loading,
+    required this.allowEarlyCheckout,
+    required this.canCheckOut,
+    required this.onCheckOut,
+    this.onOpenToy,
+    this.hidePickupLabel = false,
+  });
+
+  final BookingItem booking;
+  final bool loading;
+  final bool allowEarlyCheckout;
+  final bool canCheckOut;
+  final Future<void> Function(List<BookingItem> bookings) onCheckOut;
+  final ValueChanged<String>? onOpenToy;
+  final bool hidePickupLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = bookingReadyForDeskCheckout(
+      booking,
+      allowEarlyForAdmin: allowEarlyCheckout,
+    );
+
+    return DeskReservationTile(
+      booking: booking,
+      loading: loading,
+      allowEarlyCheckout: allowEarlyCheckout,
+      hidePickupLabel: hidePickupLabel,
+      onOpen: onOpenToy == null ? null : () => onOpenToy!(booking.toyId),
+      onCheckOut: canCheckOut && ready
+          ? () => onCheckOut([booking])
+          : null,
+    );
+  }
 }

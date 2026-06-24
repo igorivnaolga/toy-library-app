@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 import "package:provider/provider.dart";
 
 import "../../core/app_text_styles.dart";
+import "../../core/toy_pieces.dart";
 import "../loans/loans_controller.dart";
 import "catalog_models.dart";
 import "toy_availability_badge.dart";
@@ -69,6 +70,16 @@ class ToyCatalogListTile extends StatelessWidget {
                         style: context.listSubtitle.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
+                      ),
+                    ],
+                    if (hasToyPiecesInfo(
+                      totalPieces: toy.totalPieces,
+                      missingPieces: toy.missingPieces,
+                    )) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        toy.piecesSummary,
+                        style: context.listSecondary(),
                       ),
                     ],
                   ],

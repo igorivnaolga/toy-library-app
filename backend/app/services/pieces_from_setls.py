@@ -9,16 +9,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-_PIECES_CSV = (
-    Path(__file__).resolve().parents[3]
-    / "export_imgs"
-    / "setls_pieces_export.csv"
-)
-_SUMMARY_CSV = (
-    Path(__file__).resolve().parents[3]
-    / "export_imgs"
-    / "toy_pieces_summary.csv"
-)
+from app.core.export_paths import export_imgs_dir
+
+_PIECES_CSV = export_imgs_dir() / "setls_pieces_export.csv"
+_SUMMARY_CSV = export_imgs_dir() / "toy_pieces_summary.csv"
 
 
 def _parse_quantity(raw: str | None) -> int:

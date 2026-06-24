@@ -12,7 +12,7 @@ import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "../../core/combobox_field.dart";
-import "../../core/toy_photo_url.dart";
+import "../../core/toy_pieces.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_photo_placeholder.dart";
@@ -630,6 +630,42 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
                 helperText: "Leave blank if none or unknown",
               ),
             ),
+            if (!widget.isCreate &&
+                widget.toy != null &&
+                widget.toy!.pieceLines.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                "Piece breakdown",
+                style: context.listSecondary().copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              ...widget.toy!.pieceLines.map(
+                (line) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    line.isMissing
+                        ? "${line.displayLabel} (${line.missingBadgeLabel})"
+                        : line.displayLabel,
+                    style: context.listSecondary(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "To add or edit piece names, close this sheet and use "
+                "Pieces on the toy detail screen.",
+                style: context.bodyPlaceholder,
+              ),
+            ] else if (!widget.isCreate) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Piece names (e.g. wheels, instructions) are managed under "
+                "Pieces on the toy detail screen.",
+                style: context.bodyPlaceholder,
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _hireCharge,

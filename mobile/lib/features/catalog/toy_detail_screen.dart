@@ -416,8 +416,7 @@ class _ToyDetailScreenState extends State<ToyDetailScreen> {
                         ToyDetailMetaRow(label: "Category", value: t.category!),
                       if (t.ageRange != null)
                         ToyDetailMetaRow(label: "Age range", value: t.ageRange!),
-                      if (!showPieceBreakdown &&
-                          hasToyPiecesInfo(
+                      if (hasToyPiecesInfo(
                             totalPieces: t.totalPieces,
                             missingPieces: t.missingPieces,
                           ))

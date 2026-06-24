@@ -222,7 +222,8 @@ class _ToyDetailPiecesSectionState extends State<ToyDetailPiecesSection> {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           controller: _tileController,
-          initiallyExpanded: false,
+          initiallyExpanded:
+              widget.pieceLines.isNotEmpty || widget.totalPieces != null,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           title: Row(
