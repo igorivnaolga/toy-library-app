@@ -12,7 +12,7 @@ import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/brand_chip_button.dart";
 import "../../core/combobox_field.dart";
-import "../../core/toy_pieces.dart";
+import "../../core/toy_photo_url.dart";
 import "catalog_models.dart";
 import "catalog_provider.dart";
 import "toy_photo_placeholder.dart";
