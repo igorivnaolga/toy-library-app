@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -242,6 +243,98 @@ def totals_from_piece_lines(lines: list[ToyPieceLine]) -> tuple[int, int]:
     total = sum(line.quantity for line in lines)
     missing = sum(line.missing for line in lines)
     return total, missing
+
+
+def parse_missing_pieces_detail(raw: str | None) -> list[str]:
+    """Split desk check-in detail into piece names (e.g. ``H, L``)."""
+    if raw is None:
+        return []
+    text = raw.strip()
+    if not text:
+        return []
+    return [
+        part.strip()
+        for part in re.split(r"[,;\n]+", text)
+        if part.strip()
+    ]
+
+
+def _find_piece_line_index(lines: list[ToyPieceLine], name: str) -> int | None:
+    target = name.strip().lower()
+    if not target:
+        return None
+    for index, line in enumerate(lines):
+        if line.name.strip().lower() == target:
+            return index
+    return None
+
+
+def apply_check_in_missing_to_piece_lines(
+    lines: list[ToyPieceLine],
+    *,
+    missing_count: int,
+    missing_detail: str | None,
+) -> list[ToyPieceLine]:
+    """Mark named inventory lines missing after desk check-in."""
+    updated = [
+        ToyPieceLine(name=line.name, quantity=line.quantity, missing=0)
+        for line in lines
+    ]
+    if missing_count <= 0 or not updated:
+        return updated
+
+    names = parse_missing_pieces_detail(missing_detail)
+    if not names:
+        return updated
+
+    remaining = missing_count
+
+    def _add_missing(index: int, amount: int) -> int:
+        nonlocal remaining
+        if amount <= 0 or remaining <= 0:
+            return 0
+        line = updated[index]
+        add = min(amount, line.quantity - line.missing, remaining)
+        if add <= 0:
+            return 0
+        updated[index] = ToyPieceLine(
+            name=line.name,
+            quantity=line.quantity,
+            missing=line.missing + add,
+        )
+        remaining -= add
+        return add
+
+    for name in names:
+        if remaining <= 0:
+            break
+        index = _find_piece_line_index(updated, name)
+        if index is not None:
+            _add_missing(index, 1)
+
+    if remaining > 0:
+        unique_names: list[str] = []
+        seen: set[str] = set()
+        for name in names:
+            key = name.strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                unique_names.append(name)
+
+        while remaining > 0 and unique_names:
+            progressed = False
+            for name in unique_names:
+                if remaining <= 0:
+                    break
+                index = _find_piece_line_index(updated, name)
+                if index is None:
+                    continue
+                if _add_missing(index, remaining) > 0:
+                    progressed = True
+            if not progressed:
+                break
+
+    return updated
 
 
 def resolve_piece_lines_for_toy(

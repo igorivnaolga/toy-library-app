@@ -36,6 +36,12 @@ from app.repositories.loan_repo import (
     mark_loan_returned,
 )
 from app.repositories.toy_repo import get_toy_by_id, resolve_toy_orm
+from app.services.pieces_from_setls import (
+    apply_check_in_missing_to_piece_lines,
+    resolve_piece_lines_for_toy,
+    serialize_piece_inventory,
+    totals_from_piece_lines,
+)
 from app.models.payment import PAYMENT_STATUS_PENDING
 from app.services.payment_service import (
     PaymentError,
@@ -397,6 +403,35 @@ def check_in_loan(
         if missing_pieces_detail is not None:
             cleaned = missing_pieces_detail.strip()
             toy.missing_pieces_detail = cleaned or None
+
+        effective_missing = (
+            missing_pieces
+            if missing_pieces is not None
+            else (toy.missing_pieces or 0)
+        )
+        detail_for_inventory = toy.missing_pieces_detail
+        lines = resolve_piece_lines_for_toy(
+            toy.toy_id,
+            piece_inventory=toy.piece_inventory,
+        )
+        detail_text = (detail_for_inventory or "").strip()
+        should_sync_inventory = effective_missing == 0 or bool(detail_text)
+        if lines and should_sync_inventory:
+            updated_lines = apply_check_in_missing_to_piece_lines(
+                lines,
+                missing_count=effective_missing,
+                missing_detail=detail_for_inventory,
+            )
+            toy.piece_inventory = serialize_piece_inventory(updated_lines)
+            computed_total, computed_missing = totals_from_piece_lines(
+                updated_lines
+            )
+            toy.total_pieces = computed_total
+            toy.missing_pieces = (
+                computed_missing if computed_missing > 0 else None
+            )
+            if computed_missing == 0:
+                toy.missing_pieces_detail = None
     mark_loan_returned(session, loan)
     if toy is not None:
         if get_pending_booking_for_toy(session, toy.toy_id) is not None:

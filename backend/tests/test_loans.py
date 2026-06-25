@@ -17,6 +17,7 @@ from app.services.loan_service import (
     renew_loan_for_user,
     renewals_remaining_for_loan,
 )
+from app.services.pieces_from_setls import ToyPieceLine
 
 
 def _loan(
@@ -330,6 +331,53 @@ def test_check_in_raises_when_loan_not_active() -> None:
         with pytest.raises(LoanError) as exc:
             check_in_loan(session, loan_id)
     assert exc.value.code == "loan_not_active"
+
+
+def test_check_in_updates_piece_inventory_for_named_missing() -> None:
+    session = MagicMock()
+    loan_id = uuid.uuid4()
+    toy = SimpleNamespace(
+        toy_id="100",
+        total_pieces=3,
+        missing_pieces=0,
+        missing_pieces_detail=None,
+        piece_inventory=None,
+        status="On loan",
+    )
+    loan = SimpleNamespace(
+        id=loan_id,
+        status=LOAN_STATUS_ACTIVE,
+        toy_id="100",
+        toy=toy,
+    )
+    setls_lines = [
+        ToyPieceLine(name="H", quantity=2, missing=0),
+        ToyPieceLine(name="L", quantity=1, missing=0),
+    ]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.services.loan_service.get_loan_by_id", lambda _s, _id: loan)
+        mp.setattr("app.services.loan_service.mark_loan_returned", lambda _s, _l: None)
+        mp.setattr(
+            "app.services.loan_service.get_pending_booking_for_toy",
+            lambda _s, _id: None,
+        )
+        mp.setattr(
+            "app.services.loan_service.resolve_piece_lines_for_toy",
+            lambda _id, piece_inventory=None: list(setls_lines),
+        )
+        check_in_loan(
+            session,
+            loan_id,
+            missing_pieces=1,
+            missing_pieces_detail="H",
+        )
+
+    assert toy.missing_pieces == 1
+    assert toy.missing_pieces_detail == "H"
+    assert toy.piece_inventory is not None
+    assert '"missing":1' in toy.piece_inventory
+    assert toy.status == "In library"
 
 
 def test_walk_in_allows_stale_on_loan_label_without_active_loan() -> None:
