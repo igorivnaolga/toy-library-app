@@ -43,15 +43,27 @@ class EventError:
 
 
 def _slots_payload(slots) -> list[dict]:
-    return [
-        {
-            "start_time": slot.start_time,
-            "end_time": slot.end_time,
-            "capacity": slot.capacity,
-            "audience": slot.audience,
-        }
-        for slot in slots
-    ]
+    rows: list[dict] = []
+    for slot in slots:
+        if isinstance(slot, dict):
+            rows.append(
+                {
+                    "start_time": slot["start_time"],
+                    "end_time": slot["end_time"],
+                    "capacity": slot["capacity"],
+                    "audience": slot["audience"],
+                }
+            )
+        else:
+            rows.append(
+                {
+                    "start_time": slot.start_time,
+                    "end_time": slot.end_time,
+                    "capacity": slot.capacity,
+                    "audience": slot.audience,
+                }
+            )
+    return rows
 
 
 def _user_display(session: Session, user_id: uuid.UUID) -> tuple[str, str]:

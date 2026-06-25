@@ -692,7 +692,8 @@ def admin_update_event(
     db: Session = Depends(get_db),
 ) -> EventOut:
     payload = body.model_dump(exclude_unset=True)
-    slots = payload.pop("slots", None)
+    payload.pop("slots", None)
+    slots = body.slots if "slots" in body.model_fields_set else None
     try:
         event = update_event_service(db, event_id, slots=slots, **payload)
     except EventError as exc:
