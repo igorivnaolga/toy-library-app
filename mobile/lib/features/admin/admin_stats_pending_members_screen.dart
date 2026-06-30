@@ -125,7 +125,7 @@ class _AdminStatsPendingMembersScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Pending charges"),
+        title: const Text("Outstanding balances"),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -155,12 +155,19 @@ class _AdminStatsPendingMembersScreenState
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     children: [
                       Text(
-                        widget.periodLabel,
+                        result!.periodLabel.trim().isNotEmpty
+                            ? result.periodLabel
+                            : "Outstanding now",
                         style: context.sectionHeader.copyWith(fontSize: 14),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        result!.data.isEmpty
+                        "Not affected by the session, month, or year filter above.",
+                        style: context.listSubtitle.copyWith(fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        result.data.isEmpty
                             ? "No outstanding balances right now."
                             : "${result.data.length} "
                                 "${result.data.length == 1 ? "member owes" : "members owe"} "

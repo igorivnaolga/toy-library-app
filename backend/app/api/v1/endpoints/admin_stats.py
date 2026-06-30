@@ -124,8 +124,8 @@ def admin_stats_pending_members(
 ) -> StatsPendingMembersOut:
     total, rows = pending_members_in_period(db, resolved, limit=limit)
     return StatsPendingMembersOut(
-        period=resolved.kind,
-        period_label=resolved.label,
+        period="snapshot",
+        period_label="Outstanding now",
         total_pending_cents=total,
         data=[
             StatsPendingMemberOut(

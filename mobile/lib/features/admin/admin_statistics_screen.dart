@@ -777,10 +777,10 @@ class _OverviewGrid extends StatelessWidget {
         value: "${overview.catalogToys}",
       ),
       _StatCard(
-        label: "Pending",
+        label: "Owing now",
         value: formatRevenueCents(overview.pendingRevenueCents),
         onTap: () => _openPendingMembers(context),
-        hint: "View members owing",
+        hint: "Current balances",
       ),
     ];
 
