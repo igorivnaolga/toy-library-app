@@ -26,8 +26,12 @@ class Settings(BaseSettings):
     # When true, `app/main.py` will `create_all()` on startup (dev convenience).
     create_tables_on_startup: bool = False
     apply_schema_patches_on_startup: bool = Field(
-        default=True,
-        description="Run idempotent DDL patches on startup (disable if migrations run in Supabase SQL).",
+        default=False,
+        description="Run idempotent DDL on startup. Off by default — use Supabase SQL for production.",
+    )
+    schema_patches_strict: bool = Field(
+        default=False,
+        description="When true, a failed schema patch aborts startup. Keep false on Railway.",
     )
     # Folder containing files named like `ToyOut.photo_file` (e.g. `142928.jpg`). See `GET /api/v1/toys/{id}/photo`.
     toy_images_dir: str | None = Field(

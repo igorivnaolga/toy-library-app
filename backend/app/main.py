@@ -36,6 +36,48 @@ def _database_startup_hint(exc: OperationalError) -> str | None:
     return None
 
 
+def _all_columns_exist(
+    engine: Engine,
+    table: str,
+    columns: tuple[str, ...],
+) -> bool:
+    if not columns:
+        return True
+    placeholders = ", ".join(f":c{i}" for i in range(len(columns)))
+    params = {f"c{i}": name for i, name in enumerate(columns)}
+    params["table"] = table
+    with engine.connect() as conn:
+        count = conn.execute(
+            text(
+                f"""
+                select count(distinct column_name)
+                from information_schema.columns
+                where table_schema = 'public'
+                  and table_name = :table
+                  and column_name in ({placeholders})
+                """
+            ),
+            params,
+        ).scalar_one()
+    return int(count or 0) == len(columns)
+
+
+def _table_exists(engine: Engine, table: str) -> bool:
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text(
+                """
+                select exists (
+                  select 1 from information_schema.tables
+                  where table_schema = 'public' and table_name = :table
+                )
+                """
+            ),
+            {"table": table},
+        ).scalar_one()
+    return bool(exists)
+
+
 def _execute_schema_statement(engine: Engine, sql: str, *, label: str) -> None:
     """Run one DDL/DML patch in its own transaction with a longer timeout."""
     last_error: OperationalError | None = None
@@ -74,18 +116,22 @@ def _execute_schema_statement(engine: Engine, sql: str, *, label: str) -> None:
         raise last_error
 
 
-def _apply_schema_patches(engine: Engine) -> None:
+def _apply_schema_patches(engine: Engine, *, strict: bool = False) -> None:
     """Idempotent DDL for columns added after initial deploy."""
-    patches: list[tuple[str, str]] = [
+    # (label, sql, optional skip-if-already-applied check)
+    Patch = tuple[str, str, tuple[str, tuple[str, ...] | None] | None]
+    patches: list[Patch] = [
         (
             "profiles.admin_notes",
             "ALTER TABLE public.profiles "
             "ADD COLUMN IF NOT EXISTS admin_notes text",
+            ("profiles", ("admin_notes",)),
         ),
         (
             "toys.rental_price_cents",
             "ALTER TABLE public.toys "
             "ADD COLUMN IF NOT EXISTS rental_price_cents integer",
+            ("toys", ("rental_price_cents",)),
         ),
         (
             "toys.cv_learn_columns",
@@ -94,6 +140,15 @@ def _apply_schema_patches(engine: Engine) -> None:
             "ADD COLUMN IF NOT EXISTS cv_learn_fg_pixels integer, "
             "ADD COLUMN IF NOT EXISTS cv_learn_peak_count integer, "
             "ADD COLUMN IF NOT EXISTS cv_learn_samples integer NOT NULL DEFAULT 0",
+            (
+                "toys",
+                (
+                    "cv_learn_piece_count",
+                    "cv_learn_fg_pixels",
+                    "cv_learn_peak_count",
+                    "cv_learn_samples",
+                ),
+            ),
         ),
         (
             "duty_sessions.admin_confirmed",
@@ -101,6 +156,7 @@ def _apply_schema_patches(engine: Engine) -> None:
             "ADD COLUMN IF NOT EXISTS admin_confirmed_at timestamptz, "
             "ADD COLUMN IF NOT EXISTS admin_confirmed_by uuid "
             "REFERENCES public.profiles (id) ON DELETE SET NULL",
+            ("duty_sessions", ("admin_confirmed_at", "admin_confirmed_by")),
         ),
         (
             "profiles.registration_fields",
@@ -118,6 +174,24 @@ def _apply_schema_patches(engine: Engine) -> None:
             "ADD COLUMN IF NOT EXISTS text_reminders_consent boolean, "
             "ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz, "
             "ADD COLUMN IF NOT EXISTS registered_at date",
+            (
+                "profiles",
+                (
+                    "parent_b_name",
+                    "address_line1",
+                    "address_line2",
+                    "suburb",
+                    "mobile_phone",
+                    "alt_contact_name",
+                    "alt_contact_address",
+                    "alt_contact_phone",
+                    "heard_about_us",
+                    "skills",
+                    "text_reminders_consent",
+                    "terms_accepted_at",
+                    "registered_at",
+                ),
+            ),
         ),
         (
             "profiles.home_phone_backfill",
@@ -140,6 +214,7 @@ def _apply_schema_patches(engine: Engine) -> None:
               END IF;
             END $$;
             """,
+            None,
         ),
         (
             "toys.cv_ref_columns",
@@ -151,16 +226,30 @@ def _apply_schema_patches(engine: Engine) -> None:
             "ADD COLUMN IF NOT EXISTS cv_ref_image_area integer, "
             "ADD COLUMN IF NOT EXISTS cv_ref_layout text, "
             "ADD COLUMN IF NOT EXISTS cv_ref_source varchar(16)",
+            (
+                "toys",
+                (
+                    "cv_ref_piece_count",
+                    "cv_ref_fg_pixels",
+                    "cv_ref_peak_count",
+                    "cv_ref_blob_count",
+                    "cv_ref_image_area",
+                    "cv_ref_layout",
+                    "cv_ref_source",
+                ),
+            ),
         ),
         (
             "toys.missing_pieces_detail",
             "ALTER TABLE public.toys "
             "ADD COLUMN IF NOT EXISTS missing_pieces_detail text",
+            ("toys", ("missing_pieces_detail",)),
         ),
         (
             "toys.piece_inventory",
             "ALTER TABLE public.toys "
             "ADD COLUMN IF NOT EXISTS piece_inventory text",
+            ("toys", ("piece_inventory",)),
         ),
         (
             "device_tokens.table",
@@ -173,11 +262,13 @@ def _apply_schema_patches(engine: Engine) -> None:
                 updated_at timestamptz NOT NULL DEFAULT now()
             )
             """,
+            ("device_tokens", None),
         ),
         (
             "device_tokens.user_id_index",
             "CREATE INDEX IF NOT EXISTS ix_device_tokens_user_id "
             "ON public.device_tokens (user_id)",
+            None,
         ),
         (
             "push_notification_logs.table",
@@ -188,11 +279,13 @@ def _apply_schema_patches(engine: Engine) -> None:
                 sent_at timestamptz NOT NULL DEFAULT now()
             )
             """,
+            ("push_notification_logs", None),
         ),
         (
             "push_notification_logs.user_id_index",
             "CREATE INDEX IF NOT EXISTS ix_push_notification_logs_user_id "
             "ON public.push_notification_logs (user_id)",
+            None,
         ),
         (
             "library_events.table",
@@ -208,11 +301,13 @@ def _apply_schema_patches(engine: Engine) -> None:
               updated_at timestamptz DEFAULT now()
             )
             """,
+            ("library_events", None),
         ),
         (
             "library_events.end_date",
             "ALTER TABLE public.library_events "
             "ADD COLUMN IF NOT EXISTS end_date date",
+            ("library_events", ("end_date",)),
         ),
         (
             "library_events.end_date_backfill",
@@ -221,6 +316,7 @@ def _apply_schema_patches(engine: Engine) -> None:
             SET end_date = event_date
             WHERE end_date IS NULL
             """,
+            None,
         ),
         (
             "event_time_slots.table",
@@ -236,6 +332,7 @@ def _apply_schema_patches(engine: Engine) -> None:
               CHECK (end_time > start_time)
             )
             """,
+            ("event_time_slots", None),
         ),
         (
             "event_bookings.table",
@@ -248,12 +345,38 @@ def _apply_schema_patches(engine: Engine) -> None:
               UNIQUE (slot_id, user_id)
             )
             """,
+            ("event_bookings", None),
         ),
     ]
 
-    for label, sql in patches:
+    failed: list[str] = []
+    for label, sql, skip_check in patches:
+        if skip_check is not None:
+            table, columns = skip_check
+            if columns is None:
+                if _table_exists(engine, table):
+                    logger.info("Schema patch already applied: %s", label)
+                    continue
+            elif _all_columns_exist(engine, table, columns):
+                logger.info("Schema patch already applied: %s", label)
+                continue
         logger.info("Applying schema patch: %s", label)
-        _execute_schema_statement(engine, sql, label=label)
+        try:
+            _execute_schema_statement(engine, sql, label=label)
+        except OperationalError as exc:
+            if strict:
+                raise
+            logger.warning(
+                "Schema patch skipped (%s): %s — apply SQL in Supabase if needed.",
+                label,
+                exc,
+            )
+            failed.append(label)
+    if failed:
+        logger.warning(
+            "Some schema patches did not run: %s",
+            ", ".join(failed),
+        )
 
 
 @asynccontextmanager
@@ -263,7 +386,10 @@ async def lifespan(app: FastAPI):
     if settings.database_url and engine is not None:
         try:
             if settings.apply_schema_patches_on_startup:
-                _apply_schema_patches(engine)
+                _apply_schema_patches(
+                    engine,
+                    strict=settings.schema_patches_strict,
+                )
             if settings.create_tables_on_startup:
                 # Dev-only convenience: create ORM tables if they don't exist yet.
                 Base.metadata.create_all(bind=engine)
