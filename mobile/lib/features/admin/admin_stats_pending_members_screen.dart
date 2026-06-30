@@ -121,7 +121,7 @@ class _AdminStatsPendingMembersScreenState
     final result = _result;
     final totalLabel = result == null
         ? ""
-        : formatRevenueCents(result.totalPendingCents);
+        : formatRevenueCents(result.displayTotalCents);
 
     return Scaffold(
       appBar: AppBar(
@@ -161,10 +161,10 @@ class _AdminStatsPendingMembersScreenState
                       const SizedBox(height: 4),
                       Text(
                         result!.data.isEmpty
-                            ? "No pending charges in this period."
+                            ? "No outstanding balances right now."
                             : "${result.data.length} "
                                 "${result.data.length == 1 ? "member owes" : "members owe"} "
-                                "$totalLabel in pending charges.",
+                                "$totalLabel outstanding.",
                         style: context.listSubtitle,
                       ),
                       const SizedBox(height: 12),

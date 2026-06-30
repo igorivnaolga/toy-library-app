@@ -780,7 +780,7 @@ class _OverviewGrid extends StatelessWidget {
         label: "Pending",
         value: formatRevenueCents(overview.pendingRevenueCents),
         onTap: () => _openPendingMembers(context),
-        hint: "View members",
+        hint: "View members owing",
       ),
     ];
 

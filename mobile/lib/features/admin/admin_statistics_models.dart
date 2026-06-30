@@ -48,6 +48,24 @@ class StatsOverview {
       catalogToys: _asInt(json["catalog_toys"]),
     );
   }
+
+  StatsOverview copyWith({int? pendingRevenueCents}) {
+    return StatsOverview(
+      period: period,
+      periodLabel: periodLabel,
+      totalMembers: totalMembers,
+      newMembers: newMembers,
+      bookings: bookings,
+      checkouts: checkouts,
+      returns: returns,
+      revenueCents: revenueCents,
+      revenueCashCents: revenueCashCents,
+      revenueEftposCents: revenueEftposCents,
+      revenueBankCents: revenueBankCents,
+      pendingRevenueCents: pendingRevenueCents ?? this.pendingRevenueCents,
+      catalogToys: catalogToys,
+    );
+  }
 }
 
 class StatsCountRow {
@@ -236,6 +254,12 @@ class StatsPendingMembers {
               .toList()
           : const [],
     );
+  }
+
+  /// Amount to show in UI — sum of listed members so text matches each row.
+  int get displayTotalCents {
+    if (data.isEmpty) return 0;
+    return data.fold<int>(0, (sum, row) => sum + row.pendingCents);
   }
 }
 

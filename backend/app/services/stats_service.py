@@ -139,7 +139,7 @@ def stats_overview(session: Session, period: StatsPeriod) -> StatsOverview:
     paid_filter, paid_params = _date_filter_sql(
         "coalesce(p.paid_at, p.created_at)", period
     )
-    pending_filter, pending_params = _date_filter_sql("p.created_at", period)
+    pending_revenue_cents, _ = pending_members_in_period(session, period, limit=0)
 
     total_members = _count_members(session, period)
 
@@ -229,20 +229,6 @@ def stats_overview(session: Session, period: StatsPeriod) -> StatsOverview:
         paid_params,
     ).all():
         revenue_by_status[str(status)] = int(amount)
-
-    pending_revenue_cents = int(
-        session.execute(
-            text(
-                f"""
-                select coalesce(sum(p.amount_cents), 0) from payments p
-                where p.status = 'pending'
-                {pending_filter}
-                """
-            ),
-            pending_params,
-        ).scalar_one()
-        or 0
-    )
 
     catalog_toys = _count_toys_for_period(session, period)
 
@@ -364,53 +350,58 @@ def pending_members_in_period(
     *,
     limit: int = 100,
 ) -> tuple[int, list[PendingMemberRow]]:
-    """Members with pending payment charges in the stats period."""
-    date_filter, params = _date_filter_sql("p.created_at", period)
-    params["lim"] = limit
+    """Members/volunteers with net balance due on charges (after account credit).
 
-    total_pending_cents = int(
-        session.execute(
+    Uses current outstanding balances, not gross pending charges created in the
+    stats period, so the overview card and member list always match.
+    """
+    del period  # period label only; balances are a current snapshot.
+    from app.repositories.profile_repo import get_user_display_map
+    from app.services.payment_service import balance_summaries_for_users
+
+    user_ids = list(
+        session.scalars(
             text(
-                f"""
-                select coalesce(sum(p.amount_cents), 0) from payments p
-                where p.status = 'pending'
-                {date_filter}
                 """
-            ),
-            params,
-        ).scalar_one()
-        or 0
+                select distinct p.user_id
+                from payments p
+                join profiles prof on prof.id = p.user_id
+                where p.status = 'pending'
+                  and prof.role in ('member', 'volunteer')
+                  and p.payment_type in ('membership', 'bond', 'rental')
+                """
+            )
+        ).all()
     )
 
-    rows = session.execute(
-        text(
-            f"""
-            select prof.id::text as user_id,
-                   coalesce(u.email::text, '') as email,
-                   coalesce(prof.full_name, '') as full_name,
-                   sum(p.amount_cents)::int as pending_cents
-            from payments p
-            join profiles prof on prof.id = p.user_id
-            join auth.users u on u.id = prof.id
-            where p.status = 'pending'
-            {date_filter}
-            group by prof.id, u.email, prof.full_name
-            order by pending_cents desc, prof.full_name asc
-            limit :lim
-            """
-        ),
-        params,
-    ).all()
-    data = [
-        PendingMemberRow(
-            user_id=str(user_id),
-            email=str(email),
-            full_name=str(full_name),
-            pending_cents=int(pending_cents),
+    if not user_ids:
+        return 0, []
+
+    balances = balance_summaries_for_users(session, user_ids)
+    display = get_user_display_map(session, user_ids)
+
+    rows: list[PendingMemberRow] = []
+    for uid in user_ids:
+        summary = balances.get(uid)
+        if summary is None or summary.balance_due_cents <= 0:
+            continue
+        name, email = display.get(uid, ("", ""))
+        rows.append(
+            PendingMemberRow(
+                user_id=str(uid),
+                email=email,
+                full_name=name,
+                pending_cents=summary.balance_due_cents,
+            )
         )
-        for user_id, email, full_name, pending_cents in rows
-    ]
-    return total_pending_cents, data
+
+    rows.sort(
+        key=lambda row: (-row.pending_cents, row.full_name.lower(), row.email.lower())
+    )
+    total_pending_cents = sum(row.pending_cents for row in rows)
+    if limit <= 0:
+        return total_pending_cents, []
+    return total_pending_cents, rows[:limit]
 
 
 def heard_about_us_counts(

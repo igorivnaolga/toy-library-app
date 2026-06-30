@@ -80,17 +80,29 @@ class AdminController extends ChangeNotifier {
     statsError = null;
     notifyListeners();
     try {
-      final json = await _client.getJson(
-        "/api/v1/admin/stats/overview",
-        _statsQuery(
-          period: period,
-          sessionDate: sessionDate,
-          year: year,
-          month: month,
-        ),
+      final query = _statsQuery(
+        period: period,
+        sessionDate: sessionDate,
+        year: year,
+        month: month,
       );
+      final results = await Future.wait<Object?>([
+        _client.getJson("/api/v1/admin/stats/overview", query),
+        _client.getJson(
+          "/api/v1/admin/stats/payments/pending-members",
+          {...query, "limit": "200"},
+        ),
+      ]);
       if (requestId != _overviewRequestId) return;
-      statsOverview = StatsOverview.fromJson(json);
+      final overview = StatsOverview.fromJson(
+        Map<String, dynamic>.from(results[0] as Map),
+      );
+      final pending = StatsPendingMembers.fromJson(
+        Map<String, dynamic>.from(results[1] as Map),
+      );
+      statsOverview = overview.copyWith(
+        pendingRevenueCents: pending.displayTotalCents,
+      );
       statsError = null;
     } catch (e) {
       if (requestId != _overviewRequestId) return;
