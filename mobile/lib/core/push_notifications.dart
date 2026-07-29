@@ -44,6 +44,10 @@ class PushNotificationService {
 
   Future<bool> initialize() async {
     if (_initialized) return true;
+    if (kIsWeb) {
+      debugPrint("Firebase push skipped on web.");
+      return false;
+    }
     if (!_enabledFlag) {
       debugPrint("Firebase push disabled (FIREBASE_ENABLED=false).");
       return false;

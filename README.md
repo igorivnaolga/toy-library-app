@@ -10,7 +10,7 @@ Mobile-first platform for **Church Corner Toy Library** (Christchurch, New Zeala
 
 | Component | Technology |
 |-----------|------------|
-| [`mobile/`](mobile/) | Flutter (Android pilot APK; iOS-capable) |
+| [`mobile/`](mobile/) | Flutter (Android pilot APK; web via Chrome; iOS-capable) |
 | [`backend/`](backend/) | FastAPI, SQLAlchemy, Postgres via Supabase |
 | Auth & storage | Supabase Auth, JWT, Storage (toy photos) |
 | Hosted API | Docker / [Railway](docs/DEPLOY.md) |
@@ -43,6 +43,19 @@ flutter run --dart-define-from-file=env/dev.json
 ```
 
 See [`mobile/README.md`](mobile/README.md) for production builds and `--dart-define` keys (`API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`).
+
+### Web (Chrome)
+
+With the backend running on port 8000:
+
+```powershell
+cd mobile
+.\run_web.ps1
+```
+
+Or: `flutter run -d chrome --dart-define-from-file=env/dev.json --dart-define=API_BASE=http://localhost:8000 --dart-define=FIREBASE_ENABLED=false`
+
+The API allows browser CORS by default (`CORS_ORIGINS=*`). Mobile-only features (ML Kit OCR, FCM) are skipped on web.
 
 ## Pilot deployment
 

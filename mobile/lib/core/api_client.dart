@@ -1,10 +1,10 @@
 import "dart:convert";
-import "dart:io";
 
 import "package:http/http.dart" as http;
 
 import "api_base_url.dart";
 import "api_exception.dart";
+import "read_local_bytes.dart";
 
 /// Minimal contract for backend JSON calls.
 abstract class BackendClient {
@@ -149,13 +149,11 @@ class ApiClient implements BackendClient {
     Map<String, String>? fields,
     Duration? timeout,
   }) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      throw ApiException("Photo file not found on device.", statusCode: 0);
-    }
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      throw ApiException("Photo file is empty.", statusCode: 0);
+    final List<int> bytes;
+    try {
+      bytes = await readLocalBytes(filePath);
+    } catch (e) {
+      throw ApiException(e.toString(), statusCode: 0);
     }
     return postMultipartBytes(
       path,

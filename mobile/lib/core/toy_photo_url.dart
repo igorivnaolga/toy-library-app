@@ -1,6 +1,7 @@
-import "api_base_url.dart";
-
 import "package:supabase_flutter/supabase_flutter.dart";
+
+import "api_base_url.dart";
+import "supabase_ready.dart";
 
 /// Public HTTP URL for `GET /api/v1/toys/{toy_id}/photo` (same host as the JSON API).
 String toyPhotoHttpUrl(String toyId) {
@@ -15,6 +16,10 @@ String? toyPhotoUrl(String toyId, {String? photoFile}) {
   if (name == null || name.isEmpty) return null;
   if (name.startsWith("http://") || name.startsWith("https://")) {
     return name;
+  }
+
+  if (!supabaseInitialized) {
+    return toyPhotoHttpUrl(toyId);
   }
 
   try {

@@ -70,6 +70,7 @@ Optional:
 |----------|---------|
 | `TOY_IMAGES_DIR` | Local folder of image files (legacy). Used when `SUPABASE_SERVICE_ROLE_KEY` is unset, and as the source folder for `python -m app.scripts.migrate_toy_photos_to_supabase`. |
 | `TOY_PHOTOS_BUCKET` | Supabase Storage bucket for catalog photos (default: `toy-photos`) |
+| `CORS_ORIGINS` | Comma-separated browser Origins for Flutter web (default `*`). Set explicit origins in production. |
 
 Settings are loaded from **`backend/.env`** (and also **`./.env`** at repo root if present).
 

@@ -1,6 +1,8 @@
 import "package:flutter/material.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
+import "../../core/supabase_ready.dart";
+
 String memberFirstName(String? fullName) {
   final trimmed = fullName?.trim() ?? "";
   if (trimmed.isEmpty) return "";
@@ -55,6 +57,7 @@ class ProfileAvatar extends StatelessWidget {
     if (path.startsWith("http://") || path.startsWith("https://")) {
       return path;
     }
+    if (!supabaseInitialized) return null;
     try {
       return Supabase.instance.client.storage.from("avatars").getPublicUrl(path);
     } catch (_) {

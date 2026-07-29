@@ -1,12 +1,12 @@
 {
-    "name": "toy_library_mobile",
-    "short_name": "toy_library_mobile",
+    "name": "Toy Library",
+    "short_name": "Toy Library",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FDC435",
     "theme_color": "#FDC435",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "description": "Toy Library — catalog, bookings, and loans.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

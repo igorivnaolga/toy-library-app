@@ -8,6 +8,9 @@ import "../features/loans/loan_models.dart";
 import "reminder_scheduler.dart";
 
 /// Schedules booking pickup and loan return/overdue alerts on the device.
+///
+/// No-op on web — `flutter_local_notifications` / timezone local scheduling
+/// are not supported in the browser and throw [LateInitializationError].
 class ReminderNotificationService {
   ReminderNotificationService._();
 
@@ -26,7 +29,13 @@ class ReminderNotificationService {
   static const _channelDescription =
       "Pickup, return, and overdue reminders for your toys.";
 
+  bool get _supported => !kIsWeb;
+
   Future<void> initialize() async {
+    if (!_supported) {
+      _available = false;
+      return;
+    }
     if (_initialized || !_available) return;
 
     try {
@@ -60,6 +69,7 @@ class ReminderNotificationService {
   }
 
   Future<bool> ensurePermission() async {
+    if (!_supported) return false;
     await initialize();
     if (_permissionRequested) return true;
     _permissionRequested = true;
@@ -87,6 +97,7 @@ class ReminderNotificationService {
   }
 
   Future<void> cancelAll() async {
+    if (!_supported) return;
     await initialize();
     if (!_initialized) return;
     await _plugin.cancelAll();
@@ -97,6 +108,7 @@ class ReminderNotificationService {
     required List<LoanItem> loans,
     required bool enabled,
   }) async {
+    if (!_supported) return;
     await initialize();
     if (!_initialized) return;
     await cancelAll();

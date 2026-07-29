@@ -11,6 +11,26 @@ flutter run --dart-define-from-file=env/dev.json
 
 For USB debugging with a local backend, see `run_android.sh` / `run_android.ps1` (`USE_ADB_REVERSE`).
 
+### Web (Chrome)
+
+1. Start the backend on port 8000 (`uvicorn` with `--host 0.0.0.0` or `127.0.0.1`).
+2. From `mobile/`:
+
+```powershell
+.\run_web.ps1
+```
+
+Or:
+
+```bash
+flutter run -d chrome --dart-define-from-file=env/dev.json --dart-define=API_BASE=http://localhost:8000 --dart-define=FIREBASE_ENABLED=false
+```
+
+Notes:
+- Browser calls need CORS on the API (enabled by default via `CORS_ORIGINS=*`).
+- On-device OCR / ML Kit and local push notifications are mobile-only; web skips them.
+- Release build: `flutter build web --dart-define-from-file=env/production.json`
+
 Configure API and Supabase with `--dart-define` or `env/production.json` (`API_BASE`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`).
 
 ## Install on a phone (pilot)

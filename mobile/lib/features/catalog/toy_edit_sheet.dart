@@ -1,5 +1,5 @@
 import "dart:async";
-import "dart:io";
+import "dart:typed_data";
 
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
@@ -95,7 +95,7 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
   late final TextEditingController _missingPieces;
   late final TextEditingController _hireCharge;
   final ImagePicker _picker = ImagePicker();
-  String? _pickedPhotoPath;
+  Uint8List? _pickedPhotoBytes;
   bool _saving = false;
   bool _deleting = false;
   bool _renamingCategory = false;
@@ -339,7 +339,9 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
       imageQuality: 88,
     );
     if (picked == null || !mounted) return;
-    setState(() => _pickedPhotoPath = picked.path);
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() => _pickedPhotoBytes = Uint8List.fromList(bytes));
   }
 
   int? _parseHireChargeCents() {
@@ -427,8 +429,8 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
           rentalPriceCents: rentalPriceCents,
         );
       }
-      if (_pickedPhotoPath != null) {
-        saved = await catalog.uploadToyPhoto(saved.toyId, _pickedPhotoPath!);
+      if (_pickedPhotoBytes != null) {
+        saved = await catalog.uploadToyPhoto(saved.toyId, _pickedPhotoBytes!);
       }
       if (!mounted) return;
       Navigator.pop(context, ToyFormSaved(saved));
@@ -518,15 +520,15 @@ class _ToyFormSheetState extends State<_ToyFormSheet> {
             ],
             const SizedBox(height: 16),
             _ToyPhotoPicker(
-              pickedPath: _pickedPhotoPath,
+              pickedBytes: _pickedPhotoBytes,
               existingToyId: widget.toy?.toyId,
               existingPhotoFile: widget.toy?.photoFile,
               hasExistingPhoto: widget.toy?.photoFile != null &&
                   widget.toy!.photoFile!.isNotEmpty,
               onPick: _pickPhoto,
-              onClear: _pickedPhotoPath == null
+              onClear: _pickedPhotoBytes == null
                   ? null
-                  : () => setState(() => _pickedPhotoPath = null),
+                  : () => setState(() => _pickedPhotoBytes = null),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -808,7 +810,7 @@ class _DeleteToyConfirmDialogState extends State<_DeleteToyConfirmDialog> {
 
 class _ToyPhotoPicker extends StatelessWidget {
   const _ToyPhotoPicker({
-    required this.pickedPath,
+    required this.pickedBytes,
     required this.onPick,
     this.existingToyId,
     this.existingPhotoFile,
@@ -816,7 +818,7 @@ class _ToyPhotoPicker extends StatelessWidget {
     this.onClear,
   });
 
-  final String? pickedPath;
+  final Uint8List? pickedBytes;
   final String? existingToyId;
   final String? existingPhotoFile;
   final bool hasExistingPhoto;
@@ -825,7 +827,7 @@ class _ToyPhotoPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPicked = pickedPath != null && pickedPath!.isNotEmpty;
+    final hasPicked = pickedBytes != null && pickedBytes!.isNotEmpty;
     final showNetwork = !hasPicked && hasExistingPhoto && existingToyId != null;
     final photoCacheSize =
         (160 * MediaQuery.of(context).devicePixelRatio).round();
@@ -842,8 +844,8 @@ class _ToyPhotoPicker extends StatelessWidget {
               width: 160,
               height: 160,
               child: hasPicked
-                  ? Image.file(
-                      File(pickedPath!),
+                  ? Image.memory(
+                      pickedBytes!,
                       fit: BoxFit.cover,
                     )
                   : showNetwork

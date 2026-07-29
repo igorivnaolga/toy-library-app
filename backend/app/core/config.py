@@ -69,6 +69,13 @@ class Settings(BaseSettings):
         default=None,
         description="Shared secret for scheduled jobs (X-Cron-Secret header).",
     )
+    cors_origins: str = Field(
+        default="*",
+        description=(
+            "Comma-separated allowed Origins for Flutter web / browsers. "
+            "Use * for local dev; set explicit origins in production."
+        ),
+    )
 
 
 @lru_cache

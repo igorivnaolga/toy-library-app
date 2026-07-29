@@ -297,11 +297,11 @@ class CatalogController extends ChangeNotifier {
     return ToyItem.fromJson(json);
   }
 
-  Future<ToyItem> uploadToyPhoto(String toyId, String filePath) async {
-    final json = await _client.postMultipartImage(
+  Future<ToyItem> uploadToyPhoto(String toyId, List<int> imageBytes) async {
+    final json = await _client.postMultipartBytes(
       "/api/v1/admin/toys/$toyId/photo",
       fileField: "image",
-      filePath: filePath,
+      bytes: imageBytes,
     );
     return ToyItem.fromJson(json);
   }

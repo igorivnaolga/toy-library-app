@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
@@ -403,4 +404,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Toy Library API", version="0.1.0", lifespan=lifespan)
+
+# Browser (Flutter web) needs CORS; Bearer tokens don't require credentials cookies.
+_settings = get_settings()
+_cors_origins = [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
+if not _cors_origins:
+    _cors_origins = ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(api_router, prefix="/api/v1")

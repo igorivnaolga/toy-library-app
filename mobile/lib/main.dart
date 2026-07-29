@@ -3,35 +3,50 @@ library;
 
 import "dart:async";
 
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "app.dart";
 import "core/push_notifications.dart";
 import "core/reminder_notifications.dart";
+import "core/supabase_ready.dart";
 
 Future<void> main() async {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Never block first frame on optional services — cap init time on slow emulators.
-    try {
-      await ReminderNotificationService.instance
-          .initialize()
-          .timeout(const Duration(seconds: 5));
-    } catch (_) {}
-    try {
-      await PushNotificationService.instance
-          .initialize()
-          .timeout(const Duration(seconds: 8));
-    } catch (_) {}
+    // Optional on mobile; skip noisy init paths on web.
+    if (!kIsWeb) {
+      try {
+        await ReminderNotificationService.instance
+            .initialize()
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      try {
+        await PushNotificationService.instance
+            .initialize()
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {}
+    }
 
     const supabaseUrl = String.fromEnvironment("SUPABASE_URL", defaultValue: "");
     const supabaseAnonKey =
         String.fromEnvironment("SUPABASE_ANON_KEY", defaultValue: "");
 
     if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
-      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+      try {
+        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+        supabaseInitialized = true;
+      } catch (e, stack) {
+        supabaseInitialized = false;
+        debugPrint("Supabase.initialize failed: $e\n$stack");
+      }
+    } else {
+      debugPrint(
+        "Supabase keys missing — guest mode. "
+        "Pass --dart-define-from-file=env/dev.json",
+      );
     }
 
     runApp(const ToyLibraryApp());
@@ -49,6 +64,7 @@ Future<void> _onUnhandledAsyncError(Object error, StackTrace stack) async {
   }
 
   debugPrint("Supabase session refresh failed (offline?): $error");
+  if (!supabaseInitialized) return;
   try {
     await Supabase.instance.client.auth.signOut();
   } catch (_) {}
@@ -60,5 +76,7 @@ bool _isRecoverableSupabaseNetworkError(Object error) {
   final text = error.toString();
   return text.contains("Failed host lookup") ||
       text.contains("SocketException") ||
-      text.contains("Network is unreachable");
+      text.contains("Network is unreachable") ||
+      text.contains("ClientException") ||
+      text.contains("XMLHttpRequest");
 }

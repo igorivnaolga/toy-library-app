@@ -1,5 +1,5 @@
 import "dart:async";
-import "dart:io";
+import "dart:typed_data";
 
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
@@ -112,7 +112,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
   String? _validationError;
   String? _estimateMessage;
   bool _estimating = false;
-  String? _lastPhotoPath;
+  Uint8List? _lastPhotoBytes;
 
   @override
   void initState() {
@@ -240,18 +240,13 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
       imageQuality: 75,
     );
     if (shot == null || !mounted) return;
-    // Keep a stable copy — the camera temp file can disappear before upload.
-    try {
-      final cached = File("${shot.path}.desk_learn.jpg");
-      await File(shot.path).copy(cached.path);
-      _lastPhotoPath = cached.path;
-    } catch (_) {
-      _lastPhotoPath = shot.path;
-    }
+    final bytes = await shot.readAsBytes();
+    if (!mounted) return;
+    _lastPhotoBytes = Uint8List.fromList(bytes);
 
     if (!mounted) return;
     final controller = context.read<LoansController>();
-    final photoPath = _lastPhotoPath!;
+    final photoBytes = _lastPhotoBytes!;
     setState(() {
       _estimating = true;
       _estimateMessage = null;
@@ -259,7 +254,7 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
     try {
       final estimate = await controller.estimatePieces(
         toyId: widget.loan.toyId,
-        imagePath: photoPath,
+        imageBytes: photoBytes,
       );
       if (!mounted) return;
       setState(() {
@@ -324,21 +319,18 @@ class _DeskCheckInDialogState extends State<_DeskCheckInDialog> {
 
     DeskCheckInPhotoLearn? photoLearn;
     if (kDeskCheckInCvEnabled) {
-      final photoPath = _lastPhotoPath;
+      final photoBytes = _lastPhotoBytes;
       final missing = _missingFromStepper;
-      final shouldLearn = photoPath != null &&
+      final shouldLearn = photoBytes != null &&
+          photoBytes.isNotEmpty &&
           total != null &&
           missing == 0 &&
           _piecesReturned >= total;
 
-      List<int>? learnBytes;
-      if (shouldLearn && File(photoPath).existsSync()) {
-        learnBytes = await File(photoPath).readAsBytes();
-      }
-      if (learnBytes != null && learnBytes.isNotEmpty) {
+      if (shouldLearn) {
         photoLearn = DeskCheckInPhotoLearn(
           toyId: loan.toyId,
-          imageBytes: learnBytes,
+          imageBytes: photoBytes,
           confirmedPieceCount: _piecesReturned,
         );
       }

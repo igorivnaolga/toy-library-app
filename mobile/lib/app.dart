@@ -13,13 +13,14 @@ import "core/reminder_sync.dart";
 import "core/library_app_bar_title.dart";
 import "core/main_tab_navigation.dart";
 import "core/notification_bell_ack.dart";
+import "core/supabase_ready.dart";
+import "core/toy_loading_indicator.dart";
 import "features/admin/admin_bookings_screen.dart";
 import "features/admin/admin_controller.dart";
 import "features/admin/admin_loans_screen.dart";
 import "features/admin/admin_members_screen.dart";
 import "features/admin/admin_statistics_screen.dart";
 import "features/admin/admin_notifications_sheet.dart";
-import "core/toy_loading_indicator.dart";
 import "features/auth/login_screen.dart";
 import "features/auth/registration_welcome_screen.dart";
 import "features/bookings/bookings_controller.dart";
@@ -56,13 +57,9 @@ class ToyLibraryApp extends StatelessWidget {
     late final AuthStore auth;
     final client = backend ?? ApiClient(tokenProvider: () => auth.accessToken);
 
-    const supabaseUrl = String.fromEnvironment("SUPABASE_URL", defaultValue: "");
-    const supabaseAnonKey =
-        String.fromEnvironment("SUPABASE_ANON_KEY", defaultValue: "");
-
     if (authStore != null) {
       auth = authStore!;
-    } else if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+    } else if (supabaseInitialized) {
       auth = AuthStore.supabase(client);
     } else {
       auth = AuthStore.guest();
@@ -375,9 +372,16 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                     ],
                   ],
                   bottom: TabBar(
-                    isScrollable: false,
-                    tabAlignment: TabAlignment.fill,
-                    labelPadding: EdgeInsets.zero,
+                    isScrollable: MediaQuery.sizeOf(context).width < 720 ||
+                        tabs.length > 5,
+                    tabAlignment:
+                        (MediaQuery.sizeOf(context).width < 720 || tabs.length > 5)
+                            ? TabAlignment.start
+                            : TabAlignment.fill,
+                    labelPadding: (MediaQuery.sizeOf(context).width < 720 ||
+                            tabs.length > 5)
+                        ? const EdgeInsets.symmetric(horizontal: 12)
+                        : EdgeInsets.zero,
                     tabs: tabs
                         .map((t) => Tab(
                               height: 56,

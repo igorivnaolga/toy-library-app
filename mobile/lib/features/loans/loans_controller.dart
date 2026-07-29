@@ -208,12 +208,12 @@ class LoansController extends ChangeNotifier {
 
   Future<PieceEstimate> estimatePieces({
     required String toyId,
-    required String imagePath,
+    required List<int> imageBytes,
   }) async {
-    final json = await _client.postMultipartImage(
+    final json = await _client.postMultipartBytes(
       "/api/v1/desk/identify-pieces",
       fileField: "image",
-      filePath: imagePath,
+      bytes: imageBytes,
       fields: {"toy_id": toyId},
       timeout: const Duration(seconds: 90),
     );
