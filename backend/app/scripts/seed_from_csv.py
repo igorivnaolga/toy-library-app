@@ -3,11 +3,11 @@ CLI entrypoint: import seed CSVs into Postgres.
 
 This is intentionally separate from FastAPI request handling:
 - it can be run in CI / locally without starting a web server
-- it performs DDL (`create_all`) for early development convenience
+
+Run `alembic upgrade head` first; this script never creates tables.
 """
 
 from app.core.config import get_settings
-from app.db.base import Base
 from app.db.session import get_engine, session_scope
 from app.services.seed_from_csv import seed_catalog
 
@@ -17,10 +17,7 @@ def main() -> None:
     if not settings.database_url:
         raise SystemExit("DATABASE_URL is not set. Copy backend/.env.example to backend/.env.")
 
-    engine = get_engine()
-    assert engine is not None
-    # Dev convenience: create tables if missing. For production, prefer Alembic migrations.
-    Base.metadata.create_all(bind=engine)
+    assert get_engine() is not None
 
     session = session_scope()
     try:

@@ -1,11 +1,11 @@
-"""Payment ledger rows (see `backend/supabase/snippets/015_payments.sql`)."""
+"""Payment ledger rows (see `backend/migrations/sql/baseline/015_payments.sql`)."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -56,6 +56,23 @@ MEMBERSHIP_PAYMENT_TYPES = frozenset({PAYMENT_TYPE_MEMBERSHIP, PAYMENT_TYPE_BOND
 
 class Payment(Base):
     __tablename__ = "payments"
+    __table_args__ = (
+        Index(
+            "idx_payments_volunteer_duty_session",
+            "duty_session_id",
+            unique=True,
+            postgresql_where=text(
+                "payment_type = 'volunteer_credit' and duty_session_id is not null"
+            ),
+        ),
+        Index(
+            "idx_payments_user_idempotency_key",
+            "user_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key is not null"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -64,7 +81,8 @@ class Payment(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        # RESTRICT: the payment ledger must not vanish when an account is deleted.
+        ForeignKey("profiles.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
@@ -111,6 +129,8 @@ class Payment(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # Client-supplied key so a retried top-up is recorded once (unique per user).
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

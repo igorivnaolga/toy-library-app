@@ -45,9 +45,20 @@ class MarkPaymentsPaidIn(BaseModel):
     payment_ids: list[uuid.UUID] = Field(min_length=1)
 
 
+# Largest single top-up staff may record ($1,000); bigger amounts are almost certainly typos.
+MAX_TOP_UP_CENTS = 100_000
+
+
 class RecordTopUpIn(BaseModel):
-    amount_cents: int = Field(ge=1, le=10_000_000)
+    amount_cents: int = Field(ge=1, le=MAX_TOP_UP_CENTS)
     method: Literal["cash", "eftpos", "bank"]
+    idempotency_key: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Client-generated key; retrying with the same key returns the original top-up.",
+    )
 
 
 class MemberBalanceSummaryOut(BaseModel):

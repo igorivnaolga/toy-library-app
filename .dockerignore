@@ -1,0 +1,10 @@
+# Repo-root build context: only backend/ is needed by the root Dockerfile.
+*
+!backend/requirements.txt
+!backend/requirements-prod.txt
+!backend/app
+!backend/export_imgs
+!backend/alembic.ini
+!backend/migrations
+**/__pycache__
+**/*.pyc

@@ -9,6 +9,7 @@ import "../../core/app_input_field.dart";
 import "../../core/app_text_styles.dart";
 import "../../core/app_theme.dart";
 import "../../core/brand_chip_button.dart";
+import "../../core/idempotency_key.dart";
 import "../../core/section_header.dart";
 import "../catalog/toy_detail_screen.dart";
 import "../loans/loan_due_date_section.dart";
@@ -59,6 +60,9 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
   String? _payingPaymentId;
   bool _recordingMembership = false;
   bool _recordingTopUp = false;
+
+  /// Reused when retrying a failed top-up with the same amount and method.
+  ({String key, int amountCents, String method})? _pendingTopUp;
   bool _markingSelectedPayments = false;
   String? _loansLoadError;
   int _loadToken = 0;
@@ -507,11 +511,20 @@ class _AdminMemberProfileScreenState extends State<AdminMemberProfileScreen> {
     });
     try {
       final admin = context.read<AdminController>();
+      final pending = _pendingTopUp;
+      final key = pending != null &&
+              pending.amountCents == amountCents &&
+              pending.method == method
+          ? pending.key
+          : newIdempotencyKey();
+      _pendingTopUp = (key: key, amountCents: amountCents, method: method);
       await admin.recordMemberTopUp(
         widget.userId,
         amountCents: amountCents,
         method: method,
+        idempotencyKey: key,
       );
+      _pendingTopUp = null;
       final member = await admin.loadMemberDetail(widget.userId);
       final payments = await admin.loadMemberPayments(widget.userId);
       if (!mounted) return;

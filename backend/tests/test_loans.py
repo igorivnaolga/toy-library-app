@@ -387,6 +387,10 @@ def test_walk_in_allows_stale_on_loan_label_without_active_loan() -> None:
     loan = SimpleNamespace(id=uuid.uuid4(), toy_id="T1")
 
     with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_profile_by_id",
+            lambda _s, _id: SimpleNamespace(role="member"),
+        )
         mp.setattr("app.services.loan_service._get_toy_row", lambda _s, _id: toy)
         mp.setattr("app.services.loan_service.get_toy_by_id", lambda _id: toy)
         mp.setattr(
@@ -423,6 +427,10 @@ def test_walk_in_blocks_when_reserved_for_another_member() -> None:
     pending = SimpleNamespace(user_id=other_id)
 
     with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_profile_by_id",
+            lambda _s, _id: SimpleNamespace(role="member"),
+        )
         mp.setattr("app.services.loan_service._get_toy_row", lambda _s, _id: toy)
         mp.setattr("app.services.loan_service.get_toy_by_id", lambda _id: toy)
         mp.setattr(
@@ -436,3 +444,45 @@ def test_walk_in_blocks_when_reserved_for_another_member() -> None:
         with pytest.raises(LoanError) as exc:
             check_out_walk_in(session, user_id=user_id, toy_id="T1")
     assert exc.value.code == "toy_booked_by_other"
+
+
+def test_walk_in_rejects_unknown_member() -> None:
+    session = MagicMock()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_profile_by_id",
+            lambda _s, _id: None,
+        )
+        with pytest.raises(LoanError) as exc:
+            check_out_walk_in(session, user_id=uuid.uuid4(), toy_id="T1")
+    assert exc.value.code == "member_not_found"
+
+
+def test_walk_in_rejects_guest_profile() -> None:
+    session = MagicMock()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            "app.services.loan_service.get_profile_by_id",
+            lambda _s, _id: SimpleNamespace(role="guest"),
+        )
+        with pytest.raises(LoanError) as exc:
+            check_out_walk_in(session, user_id=uuid.uuid4(), toy_id="T1")
+    assert exc.value.code == "member_not_eligible"
+
+
+def test_check_out_maps_active_loan_conflict_to_toy_on_loan() -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    from app.services.loan_service import _create_loan_or_conflict
+
+    session = MagicMock()
+
+    def _raise(_s, **_kwargs):
+        raise IntegrityError("insert", {}, Exception("idx_loans_one_active_per_toy"))
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.services.loan_service.create_loan", _raise)
+        with pytest.raises(LoanError) as exc:
+            _create_loan_or_conflict(session, user_id=uuid.uuid4(), toy_id="T1")
+    assert exc.value.code == "toy_on_loan"
+    session.rollback.assert_called_once()

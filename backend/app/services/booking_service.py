@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import date, datetime
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -46,8 +46,9 @@ from app.repositories.booking_repo import (
     list_pending_bookings_for_user,
     list_pending_bookings_ready_for_checkout,
     list_pending_bookings_with_pickup,
+    lock_booking_row,
+    lock_toy_row,
     mark_booking_cancelled,
-    purge_expired_cancelled_bookings,
 )
 from app.repositories.toy_repo import _db_toy_count, get_toy_by_id, resolve_toy_orm
 
@@ -217,7 +218,11 @@ def _pickup_dates_for_toy(
 
 
 def _run_booking_maintenance(session: Session) -> None:
-    purge_expired_cancelled_bookings(session)
+    expire_missed_pickup_bookings(session)
+
+
+def run_booking_maintenance(session: Session) -> None:
+    """Public entry point for the scheduled job (caller commits)."""
     expire_missed_pickup_bookings(session)
 
 
@@ -301,10 +306,19 @@ def create_booking_for_user(
     user_id: uuid.UUID,
     toy_id: str,
     pickup_date: date,
+    *,
+    on_superseded: Callable[[Booking], None] | None = None,
 ) -> Booking:
-    """Reserve an available toy for the member; updates toy status to reserved."""
+    """
+    Reserve an available toy for the member; updates toy status to reserved.
+
+    When another member's reservation is past its two-week hold, it is cancelled
+    and passed to ``on_superseded`` so the caller can notify that member.
+    """
     _run_booking_maintenance(session)
 
+    # Serialize concurrent bookings/check-outs for this toy until commit.
+    lock_toy_row(session, toy_id)
     toy = _get_toy_row(session, toy_id)
     if toy is None:
         if _db_toy_count() == 0 and get_toy_by_id(toy_id) is not None:
@@ -334,6 +348,8 @@ def create_booking_for_user(
         superseded_hold_end = hold_end
         mark_booking_cancelled(session, pending)
         _release_toy_if_reserved(session, toy.toy_id)
+        if on_superseded is not None:
+            on_superseded(pending)
         pending = None
 
     availability = member_availability(
@@ -398,6 +414,7 @@ def cancel_booking_for_user(
     session: Session, user_id: uuid.UUID, booking_id: uuid.UUID
 ) -> Booking:
     """Cancel a pending booking owned by the user; restore toy availability when reserved."""
+    lock_booking_row(session, booking_id)
     booking = get_booking_for_user(session, booking_id, user_id)
     if booking is None:
         raise BookingError("booking_not_found", "Booking not found.")
@@ -425,6 +442,7 @@ def reschedule_booking_for_user(
     """Change pickup day on a pending booking owned by the member."""
     _run_booking_maintenance(session)
 
+    lock_booking_row(session, booking_id)
     booking = get_booking_for_user(session, booking_id, user_id)
     if booking is None:
         raise BookingError("booking_not_found", "Booking not found.")

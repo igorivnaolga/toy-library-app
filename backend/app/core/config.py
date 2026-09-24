@@ -23,16 +23,7 @@ class Settings(BaseSettings):
         default=None,
         description="Async/sync SQLAlchemy URL, e.g. postgresql+psycopg://...",
     )
-    # When true, `app/main.py` will `create_all()` on startup (dev convenience).
-    create_tables_on_startup: bool = False
-    apply_schema_patches_on_startup: bool = Field(
-        default=False,
-        description="Run idempotent DDL on startup. Off by default — use Supabase SQL for production.",
-    )
-    schema_patches_strict: bool = Field(
-        default=False,
-        description="When true, a failed schema patch aborts startup. Keep false on Railway.",
-    )
+    # Schema changes are Alembic migrations (`alembic upgrade head`); the API never runs DDL.
     # Folder containing files named like `ToyOut.photo_file` (e.g. `142928.jpg`). See `GET /api/v1/toys/{id}/photo`.
     toy_images_dir: str | None = Field(
         default=None,
@@ -46,6 +37,13 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str | None = Field(
         default=None,
         description="Supabase JWT Secret (not the anon key). Used to verify Bearer tokens.",
+    )
+    supabase_jwt_allow_hs256: bool = Field(
+        default=True,
+        description=(
+            "Accept legacy HS256 access tokens signed with SUPABASE_JWT_SECRET. "
+            "Set false once the project only issues asymmetric (RS256/ES256) tokens."
+        ),
     )
     supabase_jwt_leeway_seconds: int = Field(
         default=120,
@@ -70,11 +68,16 @@ class Settings(BaseSettings):
         description="Shared secret for scheduled jobs (X-Cron-Secret header).",
     )
     cors_origins: str = Field(
-        default="*",
+        default="",
         description=(
-            "Comma-separated allowed Origins for Flutter web / browsers. "
-            "Use * for local dev; set explicit origins in production."
+            "Comma-separated allowed Origins for Flutter web / browsers. Empty (default) "
+            "disables browser CORS. `*` allows any origin (local dev only); entries such "
+            "as `http://localhost:*` allow any port on that host."
         ),
+    )
+    expose_api_docs: bool = Field(
+        default=False,
+        description="Serve /docs, /redoc and /openapi.json (enable for local development).",
     )
 
 

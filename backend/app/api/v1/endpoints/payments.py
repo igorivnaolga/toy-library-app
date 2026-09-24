@@ -40,8 +40,15 @@ def _http_error(exc: PaymentError) -> HTTPException:
     status = 400
     if exc.code == "payment_not_found":
         status = 404
-    elif exc.code in {"payment_not_pending", "no_pending_membership", "no_payments_selected"}:
+    elif exc.code in {
+        "payment_not_pending",
+        "no_pending_membership",
+        "no_payments_selected",
+        "idempotency_conflict",
+    }:
         status = 409
+    elif exc.code == "self_payment_forbidden":
+        status = 403
     return HTTPException(status_code=status, detail=exc.message)
 
 
@@ -180,6 +187,7 @@ def record_top_up_endpoint(
             amount_cents=body.amount_cents,
             method=body.method,
             recorded_by=principal.id,
+            idempotency_key=body.idempotency_key,
         )
     except PaymentError as exc:
         raise _http_error(exc) from exc

@@ -1,11 +1,11 @@
-"""Volunteer duty roster slots (see `backend/supabase/snippets/008_duty_sessions.sql`)."""
+"""Volunteer duty roster slots (see `backend/migrations/sql/baseline/008_duty_sessions.sql`)."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Date, DateTime, ForeignKey, Time, text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -15,6 +15,16 @@ from app.db.base import Base
 
 class DutySession(Base):
     __tablename__ = "duty_sessions"
+    __table_args__ = (
+        # Roster generation relies on this for ON CONFLICT DO NOTHING.
+        Index(
+            "idx_duty_sessions_slot",
+            "session_date",
+            "start_time",
+            "end_time",
+            unique=True,
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

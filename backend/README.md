@@ -59,7 +59,6 @@ Fill at least:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql+psycopg://postgres.[ref]:PASSWORD@...pooler.supabase.com:6543/postgres` |
-| `CREATE_TABLES_ON_STARTUP` | Set `true` in development so tables are created on startup (use migrations in production) |
 | `SUPABASE_URL` | Project URL from Supabase → Settings → API |
 | `SUPABASE_JWT_SECRET` | **JWT Secret** from the same page (not the anon key) — required when Supabase signs access tokens with **HS256**. Newer projects may use **asymmetric** signing (RS256/ES256); the API then verifies using **JWKS** and only needs `SUPABASE_URL`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Service role** key (same API page) — enables toy photo uploads to Supabase Storage |
@@ -70,18 +69,33 @@ Optional:
 |----------|---------|
 | `TOY_IMAGES_DIR` | Local folder of image files (legacy). Used when `SUPABASE_SERVICE_ROLE_KEY` is unset, and as the source folder for `python -m app.scripts.migrate_toy_photos_to_supabase`. |
 | `TOY_PHOTOS_BUCKET` | Supabase Storage bucket for catalog photos (default: `toy-photos`) |
-| `CORS_ORIGINS` | Comma-separated browser Origins for Flutter web (default `*`). Set explicit origins in production. |
+| `CORS_ORIGINS` | Comma-separated browser Origins for Flutter web. Empty by default (browser CORS off). `http://localhost:*` allows any port; `*` allows any site (dev only). |
+| `EXPOSE_API_DOCS` | `true` to serve `/docs` and `/openapi.json` (default `false`). |
+| `SUPABASE_JWT_ALLOW_HS256` | Default `true`. Set `false` once Supabase only issues RS256/ES256 tokens. |
 
 Settings are loaded from **`backend/.env`** (and also **`./.env`** at repo root if present).
 
-Apply Supabase SQL for user profiles (signup → `public.profiles`) when you use Auth:
+### Database schema (Alembic)
 
-- `backend/supabase/snippets/001_profiles.sql`
+The schema is managed with Alembic migrations in `backend/migrations/`; the API never runs DDL.
 
-For toy catalog photos in Supabase Storage:
+```bash
+# New (empty) Supabase database:
+alembic upgrade head
 
-1. Run `backend/supabase/snippets/017_toy_photos_storage.sql` in the Supabase SQL editor.
-2. Set `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
+# Existing database already built from the old supabase/snippets/*.sql files — run ONCE:
+alembic stamp 0001_baseline
+alembic upgrade head
+```
+
+To change the schema: edit the models, then add a migration with
+`alembic revision -m "describe change"` and write `upgrade()`/`downgrade()` by hand
+(autogenerate also reports cosmetic `text`/`varchar` and index-name differences
+inherited from the SQL baseline, so review anything it produces).
+
+For toy catalog photos in Supabase Storage (bucket is created by the baseline migration):
+
+1. Set `SUPABASE_SERVICE_ROLE_KEY` in `.env`.
 3. Upload existing files: `python -m app.scripts.migrate_toy_photos_to_supabase`
 
 ## 5. Seed the database (optional)
@@ -92,7 +106,7 @@ After `DATABASE_URL` is set in `.env`:
 python -m app.scripts.seed_from_csv
 ```
 
-This creates tables if needed and imports CSV seed data (paths are defined in the seed service). Requires CSV assets under the repo as expected by the script.
+Run `alembic upgrade head` first. The script imports CSV seed data (paths are defined in the seed service). Requires CSV assets under the repo as expected by the script.
 
 ## 6. Run the API
 
@@ -126,7 +140,8 @@ Protected routes need a valid Supabase **access token** in the header: `Authoriz
 
 ## Project layout (short)
 
-- `app/main.py` — FastAPI app and lifespan (optional `create_all` in dev)
+- `app/main.py` — FastAPI app factory (CORS, docs toggle, routers)
+- `migrations/` — Alembic migrations (`sql/baseline/` holds the original Supabase SQL)
 - `app/api/v1/` — HTTP routers (toys, categories, auth, health)
 - `app/core/` — settings, JWT helpers, RBAC dependencies
 - `app/models/`, `app/repositories/`, `app/schemas/` — data layer

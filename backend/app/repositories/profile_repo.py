@@ -8,6 +8,8 @@ from datetime import date, datetime, timezone
 from sqlalchemy import bindparam, select, text
 from sqlalchemy.orm import Session
 
+from app.core.library_sessions import library_now
+from app.utils.text import like_contains
 from app.models.profile import Profile
 from app.schemas.principal import KidProfile
 
@@ -252,7 +254,7 @@ def complete_registration(
         heard_about_us=heard_about_us,
         skills=skills,
         text_reminders_consent=text_reminders_consent,
-        registered_at=registered_at or date.today(),
+        registered_at=registered_at or library_now().date(),
         kids=kids,
         parent_b_name_set=True,
         address_line1_set=True,
@@ -300,7 +302,7 @@ def approve_duty_volunteer(session: Session, profile: Profile) -> None:
 
 def _recent_members_sql_extra() -> str:
     """Members with a chosen tier in the last week (duty-pending listed separately)."""
-    return f"""
+    return """
           and p.membership_tier is not null
           and p.role in ('member', 'volunteer')
           and u.created_at >= (now() at time zone 'utc') - make_interval(days => :days)
@@ -379,7 +381,8 @@ def list_members_for_admin(
 ) -> list[dict[str, str | bool | None]]:
     """Members/volunteers for admin panel with optional filters."""
     filters = ["p.role in ('member', 'volunteer')"]
-    params: dict[str, object] = {"limit": limit}
+    # Library (NZ) date, not the database server's UTC current_date.
+    params: dict[str, object] = {"limit": limit, "library_today": library_now().date()}
 
     if membership_tier:
         filters.append("p.membership_tier = :membership_tier")
@@ -402,7 +405,7 @@ def list_members_for_admin(
         params["ending_to"] = ending_to
 
     if q:
-        pattern = f"%{q.strip()}%"
+        pattern = like_contains(q.strip())
         filters.append(
             """(
               coalesce(p.full_name, '') ilike :pattern
@@ -427,7 +430,7 @@ def list_members_for_admin(
                  select count(*)::int
                  from public.duty_sessions ds
                  where ds.volunteer_id = p.id
-                   and ds.session_date < current_date
+                   and ds.session_date < :library_today
                ) as duty_sessions_completed
         from public.profiles p
         join auth.users u on u.id = p.id
@@ -487,7 +490,7 @@ def search_members_for_desk(
     cleaned = query.strip()
     if not cleaned:
         return []
-    pattern = f"%{cleaned}%"
+    pattern = like_contains(cleaned)
     stmt = text(
         """
         select p.id::text as user_id,
@@ -554,7 +557,7 @@ def search_event_assignees(
     if not cleaned:
         return list_event_assignees(session, audience=audience, limit=limit)
     roles_sql = ", ".join(f"'{role}'" for role in roles)
-    pattern = f"%{cleaned}%"
+    pattern = like_contains(cleaned)
     stmt = text(
         f"""
         select p.id::text as user_id,

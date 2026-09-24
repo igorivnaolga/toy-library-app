@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time
+from datetime import date, time
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload
@@ -266,3 +266,10 @@ def availability_counts_for_user(
     available_slots = len(event_ids)
     bookable_events = len(set(event_ids))
     return available_slots, bookable_events
+
+
+def lock_slot_row(session: Session, slot_id: uuid.UUID) -> None:
+    """``SELECT … FOR UPDATE`` so concurrent bookings of one slot respect capacity."""
+    session.execute(
+        select(EventTimeSlot.id).where(EventTimeSlot.id == slot_id).with_for_update()
+    )

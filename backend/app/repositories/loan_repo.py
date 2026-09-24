@@ -122,3 +122,8 @@ def extend_loan_due_date(session: Session, loan: Loan, new_due_date: date) -> Lo
     loan.renewal_count += 1
     session.flush()
     return loan
+
+
+def lock_loan_row(session: Session, loan_id: uuid.UUID) -> None:
+    """``SELECT … FOR UPDATE`` so concurrent check-ins/renewals of one loan serialize."""
+    session.execute(select(Loan.id).where(Loan.id == loan_id).with_for_update())

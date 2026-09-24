@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_booking_member, require_on_duty_desk
@@ -18,6 +18,7 @@ from app.schemas.booking import (
     PickupDatesResponse,
     booking_out_from_model,
 )
+from app.models.booking import Booking
 from app.schemas.principal import Principal
 from app.services.booking_service import (
     BookingError,
@@ -29,6 +30,7 @@ from app.services.booking_service import (
     list_pickup_date_options,
     reschedule_booking_for_user,
 )
+from app.services.member_push_reminders import notify_reservation_superseded
 
 router = APIRouter()
 
@@ -77,20 +79,27 @@ def list_pickup_dates(
 @router.post("", response_model=BookingOut)
 def create_booking(
     body: BookingCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     principal: Principal = Depends(_require_member),
 ) -> BookingOut:
     """Create a pending reservation for an available toy."""
+    superseded: list[Booking] = []
     try:
         booking = create_booking_for_user(
             db,
             principal.id,
             body.toy_id,
             body.pickup_date,
+            on_superseded=superseded.append,
         )
     except BookingError as e:
         raise _http_error(e) from e
     db.commit()
+    # Notify only after commit so a rolled-back booking never sends a push.
+    for old in superseded:
+        toy_label = (booking.toy.name if booking.toy is not None else None) or booking.toy_id
+        background_tasks.add_task(notify_reservation_superseded, old.user_id, toy_label)
     return booking_out_from_model(booking)
 
 
@@ -101,6 +110,8 @@ def list_my_bookings(
 ) -> BookingsListResponse:
     """List the current user's bookings (newest first)."""
     rows = list_bookings_for_user_service(db, principal.id)
+    # Persist missed-pickup cancellations done by booking maintenance.
+    db.commit()
     return BookingsListResponse(
         data=[booking_out_from_model(row) for row in rows],
     )
@@ -120,6 +131,8 @@ def list_pending_for_checkout(
         rows = list_pending_bookings_for_user_service(db, user_id)
     else:
         rows = list_pending_bookings_for_checkout_service(db)
+    # Persist missed-pickup cancellations done by booking maintenance.
+    db.commit()
     return BookingsListResponse(
         data=[booking_out_from_model(row) for row in rows],
     )

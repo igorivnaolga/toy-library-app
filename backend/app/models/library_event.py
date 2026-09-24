@@ -1,11 +1,11 @@
-"""Library events (see `backend/supabase/snippets/020_library_events.sql`)."""
+"""Library events (see `backend/migrations/sql/baseline/020_library_events.sql`)."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Time, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Time, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -87,6 +87,7 @@ class EventTimeSlot(Base):
 
 class EventBooking(Base):
     __tablename__ = "event_bookings"
+    __table_args__ = (UniqueConstraint("slot_id", "user_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

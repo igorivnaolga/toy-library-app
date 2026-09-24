@@ -4,18 +4,23 @@ name: Member push reminders
 #   PRODUCTION_API_URL  e.g. https://your-api.up.railway.app
 #   CRON_SECRET         same value as backend CRON_SECRET
 #
-# Times below are UTC approximations for Pacific/Auckland:
-#   05:00 UTC ≈ 5:00 pm NZDT (duty + event eve reminders)
-#   18:00 UTC ≈ 6:00 am NZST next calendar day
-#   21:00 UTC ≈ 9:00 am NZST next calendar day
-# Adjust after daylight-saving changes if needed.
+# The API sends reminders only during its Pacific/Auckland slot hours
+# (17:00 duty/event eve, 18:00 pickup/return eve, 09:00 morning; first 45 min)
+# and de-duplicates sends, so we call at every UTC hour that maps to a slot in
+# either NZST (UTC+12) or NZDT (UTC+13). Off-slot calls are no-ops; this stays
+# correct across daylight-saving changes. Each call also runs missed-pickup cleanup.
+#
+#   NZ slot   NZST (UTC+12)   NZDT (UTC+13)
+#   17:00     05:00 UTC       04:00 UTC
+#   18:00     06:00 UTC       05:00 UTC
+#   09:00     21:00 UTC       20:00 UTC
 
 on:
   schedule:
-    - cron: "0 5 * * *"
-    - cron: "0 18 * * *"
-    - cron: "0 21 * * *"
+    - cron: "5 4,5,6,20,21 * * *"
   workflow_dispatch:
+
+permissions: {}
 
 jobs:
   send-reminders:

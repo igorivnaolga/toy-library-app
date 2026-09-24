@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -19,6 +20,8 @@ from app.models.push_notification_log import PushNotificationLog
 from app.repositories.device_token_repo import list_tokens_for_user
 from app.services.fcm_client import firebase_configured, send_push_notification
 from app.services.loan_service import loan_is_overdue
+
+logger = logging.getLogger(__name__)
 
 EVE_REMINDER_HOUR = 18
 DUTY_EVE_REMINDER_HOUR = 17
@@ -388,3 +391,34 @@ def send_due_member_push_reminders(
         "failed": failed,
         "firebase_configured": firebase_configured(),
     }
+
+
+def notify_reservation_superseded(
+    user_id: uuid.UUID,
+    toy_label: str,
+) -> None:
+    """
+    Tell a member their reservation was released after the two-week hold.
+
+    Transactional notice (not a reminder), so it ignores reminder consent.
+    Runs after the request commits, in its own session; failures are logged only.
+    """
+    from app.db.session import session_scope
+
+    session = session_scope()
+    try:
+        tokens = list_tokens_for_user(session, user_id)
+        if not tokens:
+            return
+        send_push_notification(
+            tokens,
+            title="Reservation released",
+            body=(
+                f"Your reservation for {toy_label} passed its two-week hold and "
+                "another member has booked it. You can book it again from the catalog."
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send reservation-superseded push")
+    finally:
+        session.close()

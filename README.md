@@ -20,7 +20,7 @@ Mobile-first platform for **Church Corner Toy Library** (Christchurch, New Zeala
 
 ### Backend
 
-Full setup: [`backend/README.md`](backend/README.md) (`.env`, SQL snippets, seeding, LAN access for device testing).
+Full setup: [`backend/README.md`](backend/README.md) (`.env`, Alembic migrations, seeding, LAN access for device testing).
 
 ```bash
 cd backend
@@ -55,7 +55,7 @@ cd mobile
 
 Or: `flutter run -d chrome --dart-define-from-file=env/dev.json --dart-define=API_BASE=http://localhost:8000 --dart-define=FIREBASE_ENABLED=false`
 
-The API allows browser CORS by default (`CORS_ORIGINS=*`). Mobile-only features (ML Kit OCR, FCM) are skipped on web.
+Browser calls need `CORS_ORIGINS` on the API (the dev `.env.example` allows `http://localhost:*`; production must list the web app's origin). Mobile-only features (ML Kit OCR, FCM) are skipped on web.
 
 ## Pilot deployment
 
@@ -71,7 +71,7 @@ Railway redeploys the API automatically when you push to `main` (if the repo is 
 ## Repository layout
 
 ```text
-backend/          FastAPI app, SQL snippets, Docker/Railway config
+backend/          FastAPI app, Alembic migrations, Docker/Railway config
 mobile/           Flutter client
 docs/DEPLOY.md       Production deployment (maintainers)
 docs/TRY_THE_APP.md  Install guide for pilot testers

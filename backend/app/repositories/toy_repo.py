@@ -17,6 +17,7 @@ from pathlib import Path
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.utils.text import like_contains
 from app.core.availability import member_availability, normalize_availability
 from app.core.reservation_hold import (
     format_queue_opens_label,
@@ -227,7 +228,7 @@ def _list_toys_db(
         filters = []
 
         if q:
-            q_norm = f"%{q.strip().lower()}%"
+            q_norm = like_contains(q.strip().lower())
             filters.append(
                 or_(
                     func.lower(ToyORM.toy_id).like(q_norm),

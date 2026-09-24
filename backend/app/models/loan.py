@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -23,6 +23,16 @@ DEFAULT_LOAN_DAYS = 14
 
 class Loan(Base):
     __tablename__ = "loans"
+    __table_args__ = (
+        # One active loan per toy at a time.
+        Index(
+            "idx_loans_one_active_per_toy",
+            "toy_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+        CheckConstraint("renewal_count >= 0", name="loans_renewal_count_check"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -31,7 +41,8 @@ class Loan(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        # RESTRICT: loan history must not vanish when an account is deleted.
+        ForeignKey("profiles.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

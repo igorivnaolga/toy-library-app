@@ -41,8 +41,18 @@ _require_on_duty = require_on_duty_desk()
 
 def _http_error(exc: LoanError) -> HTTPException:
     status = 400
-    if exc.code in {"booking_not_found", "loan_not_found", "toy_not_found", "catalog_not_seeded"}:
+    if exc.code in {
+        "booking_not_found",
+        "loan_not_found",
+        "toy_not_found",
+        "catalog_not_seeded",
+        "member_not_found",
+    }:
         status = 404
+    elif exc.code == "member_not_eligible":
+        status = 422
+    elif exc.code == "self_payment_forbidden":
+        status = 403
     elif exc.code in {
         "toy_not_available",
         "toy_on_loan",

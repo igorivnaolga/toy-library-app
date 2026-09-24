@@ -45,6 +45,6 @@ app.*.map.json
 /android/app/release
 
 
-mobile/env/dev.json
+env/dev.json
 android/app/google-services.json
 

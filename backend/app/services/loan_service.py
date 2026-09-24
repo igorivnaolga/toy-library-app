@@ -6,6 +6,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.availability import AVAILABLE, RESERVED, UNAVAILABLE, normalize_availability
@@ -24,6 +25,8 @@ from app.repositories.booking_repo import (
     get_booking_by_id,
     get_pending_booking_for_toy,
     get_pending_bookings_for_toys,
+    lock_booking_row,
+    lock_toy_row,
     mark_booking_completed,
 )
 from app.repositories.loan_repo import (
@@ -33,8 +36,10 @@ from app.repositories.loan_repo import (
     get_loan_by_id,
     list_active_loans,
     list_loans_for_user,
+    lock_loan_row,
     mark_loan_returned,
 )
+from app.repositories.profile_repo import get_profile_by_id
 from app.repositories.toy_repo import get_toy_by_id, resolve_toy_orm
 from app.services.pieces_from_setls import (
     apply_check_in_missing_to_piece_lines,
@@ -225,6 +230,27 @@ def _ensure_toy_ready_for_booking_checkout(toy: Toy) -> None:
     )
 
 
+def _ensure_borrower_can_check_out(session: Session, user_id: uuid.UUID) -> None:
+    """Walk-in borrower must be an existing member or volunteer."""
+    profile = get_profile_by_id(session, user_id)
+    if profile is None:
+        raise LoanError("member_not_found", "Member not found.")
+    if profile.role not in {"member", "volunteer"}:
+        raise LoanError(
+            "member_not_eligible",
+            "Only members and volunteers can borrow toys.",
+        )
+
+
+def _create_loan_or_conflict(session: Session, **kwargs) -> Loan:
+    """Insert the loan; a concurrent check-out of the same toy becomes a 409, not a 500."""
+    try:
+        return create_loan(session, **kwargs)
+    except IntegrityError as exc:
+        session.rollback()
+        raise LoanError("toy_on_loan", "This toy already has an active loan.") from exc
+
+
 def check_out_from_booking(
     session: Session,
     booking_id: uuid.UUID,
@@ -235,6 +261,7 @@ def check_out_from_booking(
     allow_early_pickup: bool = False,
 ) -> Loan:
     """Volunteer check-out: pending booking → active loan."""
+    lock_booking_row(session, booking_id)
     booking = get_booking_by_id(session, booking_id)
     if booking is None:
         raise LoanError("booking_not_found", "Booking not found.")
@@ -253,6 +280,7 @@ def check_out_from_booking(
                 "Pickup day has not arrived yet for this booking.",
             )
 
+    lock_toy_row(session, booking.toy_id)
     toy = booking.toy or _get_toy_row(session, booking.toy_id)
     if toy is None:
         raise LoanError("toy_not_found", "Toy not found.")
@@ -263,7 +291,7 @@ def check_out_from_booking(
     _ensure_toy_ready_for_booking_checkout(toy)
 
     checkout_day = library_now().date()
-    loan = create_loan(
+    loan = _create_loan_or_conflict(
         session,
         user_id=booking.user_id,
         toy_id=toy.toy_id,
@@ -297,6 +325,8 @@ def check_out_walk_in(
     recorded_by: uuid.UUID | None = None,
 ) -> Loan:
     """Volunteer check-out without a prior booking."""
+    _ensure_borrower_can_check_out(session, user_id)
+    lock_toy_row(session, toy_id)
     toy = _get_toy_row(session, toy_id)
     if toy is None:
         if get_toy_by_id(toy_id) is not None:
@@ -312,7 +342,7 @@ def check_out_walk_in(
     _ensure_toy_available_for_walk_in(session, toy, user_id=user_id)
 
     checkout_day = library_now().date()
-    loan = create_loan(
+    loan = _create_loan_or_conflict(
         session,
         user_id=user_id,
         toy_id=toy.toy_id,
@@ -377,6 +407,7 @@ def check_in_loan(
     missing_pieces_detail: str | None = None,
 ) -> Loan:
     """Volunteer check-in: return toy and close the loan."""
+    lock_loan_row(session, loan_id)
     loan = get_loan_by_id(session, loan_id)
     if loan is None:
         raise LoanError("loan_not_found", "Loan not found.")
@@ -450,6 +481,7 @@ def renew_loan_for_user(
     loan_id: uuid.UUID,
 ) -> Loan:
     """Member renews an active loan if category allows."""
+    lock_loan_row(session, loan_id)
     loan = get_loan_by_id(session, loan_id)
     if loan is None:
         raise LoanError("loan_not_found", "Loan not found.")

@@ -63,6 +63,7 @@ def create_recorded_payment(
     toy_id: str | None = None,
     duty_session_id: uuid.UUID | None = None,
     paid_at: datetime | None = None,
+    idempotency_key: str | None = None,
 ) -> Payment:
     payment = Payment(
         user_id=user_id,
@@ -76,6 +77,7 @@ def create_recorded_payment(
         status=status,
         recorded_by=recorded_by,
         paid_at=paid_at or datetime.now(timezone.utc),
+        idempotency_key=idempotency_key,
     )
     session.add(payment)
     session.flush()
@@ -84,6 +86,19 @@ def create_recorded_payment(
 
 def get_payment_by_id(session: Session, payment_id: uuid.UUID) -> Payment | None:
     return session.get(Payment, payment_id)
+
+
+def get_payment_by_idempotency_key(
+    session: Session,
+    user_id: uuid.UUID,
+    idempotency_key: str,
+) -> Payment | None:
+    return session.scalar(
+        select(Payment).where(
+            Payment.user_id == user_id,
+            Payment.idempotency_key == idempotency_key,
+        )
+    )
 
 
 def sum_credit_grant_cents(session: Session, user_id: uuid.UUID) -> int:

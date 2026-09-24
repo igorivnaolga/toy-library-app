@@ -351,15 +351,19 @@ def test_create_booking_after_hold_replaces_existing_pending() -> None:
             "app.services.booking_service.get_booking_by_id",
             lambda _s, _id: booking,
         )
+        superseded: list[object] = []
         result = create_booking_for_user(
             session,
             user_id,
             "1000",
             date(2026, 6, 24),
+            on_superseded=superseded.append,
         )
 
     assert result is booking
     assert cancelled == [pending]
+    # The displaced member is reported so the endpoint can notify them after commit.
+    assert superseded == [pending]
     assert toy.status == "Reserved"
 
 

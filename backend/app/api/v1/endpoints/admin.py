@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import hmac
 import logging
 import uuid
 from datetime import date, timedelta
@@ -14,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_admin
 from app.core.config import get_settings
+from app.core.date_ranges import require_bounded_range
 from app.db.session import get_db
 from app.repositories.category_repo import update_category_label
 from app.repositories.duty_repo import (
@@ -60,7 +63,6 @@ from app.schemas.category import CategoryOut, CategoryUpdateIn
 from app.schemas.duty import (
     DutySessionOut,
     VolunteerDutyProfileOut,
-    duty_session_out_from_model,
     duty_sessions_out_from_models,
 )
 from app.schemas.notification import MemberPushRemindersResult
@@ -69,7 +71,10 @@ from app.models.toy import Toy
 from app.schemas.loan import LoanOut, LoansListResponse, loan_out_from_model
 from app.schemas.principal import Principal, ProfileContactOut
 from app.schemas.toy import ToyCreate, ToyOut, ToyUpdate
-from app.services.booking_service import list_bookings_for_admin_service
+from app.services.booking_service import (
+    list_bookings_for_admin_service,
+    run_booking_maintenance,
+)
 from app.services.duty_service import split_volunteer_duty_sessions
 from app.services.loan_service import list_my_loans_service, renewals_remaining_for_loan
 from app.services.payment_service import (
@@ -93,6 +98,8 @@ from app.services.member_push_reminders import send_due_member_push_reminders
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_MAX_PHOTO_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
 class PendingDutyVolunteerOut(BaseModel):
@@ -139,16 +146,21 @@ def send_member_push_reminders_cron(
 ) -> MemberPushRemindersResult:
     """Cron entry point protected by ``CRON_SECRET`` env."""
     expected = get_settings().cron_secret
-    if not expected or cron_secret != expected:
+    if not expected or not cron_secret or not hmac.compare_digest(
+        cron_secret.encode(), expected.encode()
+    ):
         raise HTTPException(status_code=403, detail="Invalid cron secret")
     try:
+        # Missed-pickup cleanup also runs here so it happens even with no app traffic.
+        run_booking_maintenance(db)
+        db.commit()
         result = send_due_member_push_reminders(db)
         return MemberPushRemindersResult(**result)
     except Exception as exc:
         logger.exception("Member push reminder cron failed")
         raise HTTPException(
             status_code=500,
-            detail=f"Member push reminder cron failed: {exc}",
+            detail="Member push reminder cron failed; see server logs.",
         ) from exc
 
 
@@ -247,6 +259,8 @@ def list_all_bookings(
         q=q,
         limit=limit,
     )
+    # Persist missed-pickup cancellations done by booking maintenance.
+    db.commit()
     return AdminBookingsListResponse(
         data=[
             booking_out_from_model(booking, member_email=email)
@@ -549,9 +563,14 @@ async def upload_toy_photo(
     _: Principal = Depends(require_admin),
 ) -> ToyOut:
     """Upload or replace the catalog photo for a toy."""
-    data = await image.read()
+    # Read one byte past the limit so oversize uploads fail without buffering them fully.
+    data = await image.read(_MAX_PHOTO_UPLOAD_BYTES + 1)
+    if len(data) > _MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large.")
     try:
-        updated = upload_toy_photo_service(
+        # Blocking DB + Supabase Storage I/O: keep it off the event loop.
+        updated = await asyncio.to_thread(
+            upload_toy_photo_service,
             toy_id,
             data,
             content_type=image.content_type,
@@ -574,8 +593,7 @@ def admin_list_events(
     _: Principal = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> EventsListResponse:
-    if to_date < from_date:
-        raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
+    require_bounded_range(from_date, to_date)
     rows = list_events_in_range(
         db, from_date=from_date, to_date=to_date, published_only=False
     )

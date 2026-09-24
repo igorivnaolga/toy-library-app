@@ -18,3 +18,9 @@ def visible_member_name(
     if email and email.strip():
         return email.strip()
     return None
+
+
+def like_contains(value: str) -> str:
+    """``%value%`` for LIKE/ILIKE with backslash, ``%`` and ``_`` escaped (Postgres default escape)."""
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"

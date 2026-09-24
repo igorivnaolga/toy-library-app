@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from datetime import date, datetime
@@ -12,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.core.roles import Role
 from app.schemas.registration_validation import (
     validate_address_line,
-    validate_email,
     validate_free_text,
     validate_full_name,
     validate_nz_mobile,
@@ -24,6 +24,9 @@ from app.schemas.registration_validation import (
     validate_person_name,
     validate_suburb,
 )
+
+
+_AVATAR_NAME_RE = re.compile(r"[A-Za-z0-9._-]{1,120}")
 
 
 class KidProfile(BaseModel):
@@ -96,9 +99,95 @@ class MeOut(ProfileContactOut):
     )
 
 
-class ProfileUpdateIn(ProfileContactOut):
+class ProfileUpdateIn(BaseModel):
+    """Member self-service edits; same rules as the registration form, but every field optional."""
+
+    model_config = ConfigDict(extra="forbid")
+
     kids: list[KidProfile] | None = None
-    avatar_path: str | None = None
+    # Storage object path inside the `avatars` bucket; ownership checked in the endpoint.
+    avatar_path: str | None = Field(default=None, max_length=200)
+    parent_b_name: str | None = Field(default=None, max_length=100)
+    address_line1: str | None = Field(default=None, max_length=120)
+    address_line2: str | None = Field(default=None, max_length=120)
+    suburb: str | None = Field(default=None, max_length=80)
+    mobile_phone: str | None = Field(default=None, max_length=20)
+    alt_contact_name: str | None = Field(default=None, max_length=100)
+    alt_contact_address: str | None = Field(default=None, max_length=120)
+    alt_contact_phone: str | None = Field(default=None, max_length=20)
+    heard_about_us: str | None = Field(default=None, max_length=500)
+    skills: str | None = Field(default=None, max_length=500)
+    text_reminders_consent: bool | None = None
+    registered_at: date | None = None
+
+    @field_validator("parent_b_name", "alt_contact_name")
+    @classmethod
+    def _validate_optional_names(cls, value: str | None) -> str | None:
+        return validate_optional_full_name(value)
+
+    @field_validator("address_line1", "address_line2", "alt_contact_address")
+    @classmethod
+    def _validate_optional_addresses(cls, value: str | None) -> str | None:
+        return validate_optional_address_line(value)
+
+    @field_validator("suburb")
+    @classmethod
+    def _validate_optional_suburb(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return validate_suburb(value)
+
+    @field_validator("mobile_phone")
+    @classmethod
+    def _validate_optional_mobile(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        return validate_nz_mobile(value)
+
+    @field_validator("alt_contact_phone")
+    @classmethod
+    def _validate_optional_alt_phone(cls, value: str | None) -> str | None:
+        return validate_optional_nz_phone(value)
+
+    @field_validator("heard_about_us", "skills")
+    @classmethod
+    def _validate_optional_text(cls, value: str | None) -> str | None:
+        return validate_optional_free_text(value)
+
+    @field_validator("kids")
+    @classmethod
+    def _validate_kids(cls, value: list[KidProfile] | None) -> list[KidProfile] | None:
+        if value is None:
+            return None
+        if len(value) > 4:
+            raise ValueError("You can add up to 4 children on the form.")
+        for kid in value:
+            validate_person_name(kid.name)
+        return value
+
+    @field_validator("registered_at")
+    @classmethod
+    def _validate_registered_at(cls, value: date | None) -> date | None:
+        if value is None:
+            return None
+        # Local import avoids a schemas → core import cycle at module load.
+        from app.core.library_sessions import library_now
+
+        if value > library_now().date() or value < date(2000, 1, 1):
+            raise ValueError("Registration date must be between 2000 and today.")
+        return value
+
+
+def validate_avatar_path(value: str, user_id: uuid.UUID) -> str | None:
+    """Only ``<user_id>/<filename>`` objects in the avatars bucket (no URLs, no traversal)."""
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    prefix = f"{user_id}/"
+    name = cleaned[len(prefix):] if cleaned.startswith(prefix) else ""
+    if not name or "/" in name or name in {".", ".."} or not _AVATAR_NAME_RE.fullmatch(name):
+        raise ValueError("Invalid avatar path.")
+    return cleaned
 
 
 class RegistrationCompleteIn(BaseModel):

@@ -5,7 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.library_sessions import is_within_duty_desk_window, library_now
@@ -151,14 +152,45 @@ def delete_duty_session(session: Session, row: DutySession) -> None:
     session.flush()
 
 
-def book_duty_session(
+def claim_duty_session(
     session: Session,
-    row: DutySession,
+    session_id: uuid.UUID,
     volunteer_id: uuid.UUID,
-) -> DutySession:
-    row.volunteer_id = volunteer_id
+) -> bool:
+    """
+    Atomically book an open slot. Returns False when someone else holds it.
+
+    A single conditional UPDATE, so two volunteers booking at once cannot both win.
+    """
+    result = session.execute(
+        update(DutySession)
+        .where(DutySession.id == session_id, DutySession.volunteer_id.is_(None))
+        .values(volunteer_id=volunteer_id)
+        .execution_options(synchronize_session=False)
+    )
+    return (result.rowcount or 0) == 1
+
+
+def insert_missing_duty_sessions(
+    session: Session,
+    slots: list[tuple[date, time, time]],
+) -> None:
+    """Create open roster rows, ignoring ones another request created concurrently."""
+    if not slots:
+        return
+    session.execute(
+        pg_insert(DutySession)
+        .values(
+            [
+                {"session_date": day, "start_time": start, "end_time": end}
+                for day, start, end in slots
+            ]
+        )
+        .on_conflict_do_nothing(
+            index_elements=["session_date", "start_time", "end_time"]
+        )
+    )
     session.flush()
-    return row
 
 
 def cancel_duty_booking(session: Session, row: DutySession) -> DutySession:

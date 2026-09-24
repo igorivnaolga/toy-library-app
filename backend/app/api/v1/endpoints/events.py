@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_roles
+from app.core.date_ranges import require_bounded_range
 from app.core.library_sessions import library_now
 from app.core.roles import Role
 from app.db.session import get_db
@@ -16,7 +17,6 @@ from app.schemas.event import (
     EventAvailabilityOut,
     EventBookResponse,
     EventDatesResponse,
-    EventOut,
     EventsListResponse,
 )
 from app.schemas.principal import Principal
@@ -55,8 +55,7 @@ def list_events(
     principal: Principal = Depends(_require_member),
     db: Session = Depends(get_db),
 ) -> EventsListResponse:
-    if to_date < from_date:
-        raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
+    require_bounded_range(from_date, to_date)
     rows = list_events_for_user(
         db,
         from_date=from_date,
@@ -95,8 +94,7 @@ def schedule_dates(
     principal: Principal = Depends(_require_member),
     db: Session = Depends(get_db),
 ) -> EventDatesResponse:
-    if to_date < from_date:
-        raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
+    require_bounded_range(from_date, to_date)
     duty_dates, event_dates = schedule_dates_in_range(
         db,
         from_date=from_date,

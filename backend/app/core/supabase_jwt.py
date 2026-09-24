@@ -10,6 +10,7 @@ See: https://supabase.com/docs/guides/auth/signing-keys
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Any
 
@@ -18,6 +19,8 @@ from fastapi import HTTPException
 from jwt import PyJWKClient
 
 from app.core.config import Settings
+
+logger = logging.getLogger(__name__)
 
 # Asymmetric algorithms Supabase may use (verify only the token's declared alg).
 _ASYM_ALGS = frozenset({"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"})
@@ -48,7 +51,8 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
     try:
         header = jwt.get_unverified_header(token)
     except jwt.exceptions.PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {e}") from e
+        logger.info("Rejected access token: %s", e)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from e
 
     alg = header.get("alg")
     if not isinstance(alg, str) or not alg:
@@ -58,6 +62,8 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
 
     try:
         if alg == "HS256":
+            if not settings.supabase_jwt_allow_hs256:
+                raise HTTPException(status_code=401, detail="Invalid or expired token")
             if not settings.supabase_jwt_secret:
                 raise HTTPException(
                     status_code=503,
@@ -92,4 +98,5 @@ def decode_supabase_access_token(token: str, settings: Settings) -> dict[str, An
             detail=f"Unsupported JWT algorithm: {alg}",
         )
     except jwt.exceptions.PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {e}") from e
+        logger.info("Rejected access token: %s", e)
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from e

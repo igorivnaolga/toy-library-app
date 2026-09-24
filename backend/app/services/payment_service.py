@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from collections.abc import Iterable
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.membership_fees import charges_for_tier
@@ -36,6 +37,7 @@ from app.repositories.payment_repo import (
     create_payment,
     create_recorded_payment,
     get_payment_by_id,
+    get_payment_by_idempotency_key,
     get_volunteer_credit_for_duty_session,
     list_pending_membership_payments,
     list_pending_payments,
@@ -237,6 +239,15 @@ def apply_rental_payment_action(
     )
 
 
+def _ensure_not_self_recorded(user_id: uuid.UUID, recorded_by: uuid.UUID) -> None:
+    """Staff may not record cash/EFTPOS/bank payments or top-ups on their own account."""
+    if user_id == recorded_by:
+        raise PaymentError(
+            "self_payment_forbidden",
+            "Another volunteer or an admin must record payments on your own account.",
+        )
+
+
 def mark_payment_paid(
     session: Session,
     payment_id: uuid.UUID,
@@ -247,6 +258,7 @@ def mark_payment_paid(
     payment = get_payment_by_id(session, payment_id)
     if payment is None:
         raise PaymentError("payment_not_found", "Payment not found.")
+    _ensure_not_self_recorded(payment.user_id, recorded_by)
     if payment.status != PAYMENT_STATUS_PENDING:
         raise PaymentError(
             "payment_not_pending",
@@ -294,6 +306,7 @@ def mark_payments_paid(
     recorded_by: uuid.UUID,
 ) -> list[Payment]:
     """Mark one or more pending payments as paid for a member."""
+    _ensure_not_self_recorded(user_id, recorded_by)
     if not payment_ids:
         raise PaymentError(
             "no_payments_selected",
@@ -374,23 +387,52 @@ def record_top_up(
     amount_cents: int,
     method: str,
     recorded_by: uuid.UUID,
+    idempotency_key: str | None = None,
 ) -> Payment:
-    """Record a member top-up and apply credit to pending charges (oldest first)."""
+    """
+    Record a member top-up and apply credit to pending charges (oldest first).
+
+    With ``idempotency_key``, a retry returns the original top-up instead of
+    crediting the account twice.
+    """
+    _ensure_not_self_recorded(user_id, recorded_by)
     if amount_cents <= 0:
         raise PaymentError("invalid_amount", "Top-up amount must be greater than zero.")
     status = _METHOD_TO_STATUS.get(method)
     if status is None:
         raise PaymentError("invalid_method", "Payment method must be cash, eftpos, or bank.")
 
-    top_up = create_recorded_payment(
-        session,
-        user_id=user_id,
-        payment_type=PAYMENT_TYPE_TOP_UP,
-        amount_cents=amount_cents,
-        description="Account top-up",
-        status=status,
-        recorded_by=recorded_by,
-    )
+    if idempotency_key:
+        existing = _existing_top_up_for_key(
+            session, user_id, idempotency_key, amount_cents=amount_cents, status=status
+        )
+        if existing is not None:
+            return existing
+
+    try:
+        top_up = create_recorded_payment(
+            session,
+            user_id=user_id,
+            payment_type=PAYMENT_TYPE_TOP_UP,
+            amount_cents=amount_cents,
+            description="Account top-up",
+            status=status,
+            recorded_by=recorded_by,
+            idempotency_key=idempotency_key,
+        )
+    except IntegrityError:
+        # A concurrent retry with the same key won the insert.
+        session.rollback()
+        existing = (
+            _existing_top_up_for_key(
+                session, user_id, idempotency_key, amount_cents=amount_cents, status=status
+            )
+            if idempotency_key
+            else None
+        )
+        if existing is None:
+            raise
+        return existing
 
     _apply_account_credit_to_pending(
         session,
@@ -400,6 +442,29 @@ def record_top_up(
     )
 
     return top_up
+
+
+def _existing_top_up_for_key(
+    session: Session,
+    user_id: uuid.UUID,
+    idempotency_key: str,
+    *,
+    amount_cents: int,
+    status: str,
+) -> Payment | None:
+    existing = get_payment_by_idempotency_key(session, user_id, idempotency_key)
+    if existing is None:
+        return None
+    if (
+        existing.payment_type != PAYMENT_TYPE_TOP_UP
+        or existing.amount_cents != amount_cents
+        or existing.status != status
+    ):
+        raise PaymentError(
+            "idempotency_conflict",
+            "This request key was already used for a different payment.",
+        )
+    return existing
 
 
 def grant_volunteer_duty_credit(

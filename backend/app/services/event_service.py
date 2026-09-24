@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 from datetime import date
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.library_sessions import library_now
@@ -15,6 +15,7 @@ from app.repositories.duty_repo import (
 )
 from app.core.roles import Role, parse_role
 from app.repositories.event_repo import (
+    lock_slot_row,
     availability_counts_for_user,
     count_bookings_for_slot,
     create_booking,
@@ -36,10 +37,13 @@ from app.repositories.profile_repo import (
 )
 
 
-@dataclass(frozen=True)
-class EventError:
-    code: str
-    message: str
+class EventError(Exception):
+    """Raised when an event action violates domain rules."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(message)
 
 
 def _slots_payload(slots) -> list[dict]:
@@ -305,6 +309,16 @@ def delete_event_service(session: Session, event_id: uuid.UUID) -> None:
     delete_event(session, event)
 
 
+def _create_booking_or_conflict(session: Session, *, slot, user_id: uuid.UUID) -> None:
+    """Insert; a double-tap hitting ``UNIQUE(slot_id, user_id)`` becomes a 409."""
+    try:
+        create_booking(session, slot=slot, user_id=user_id)
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise EventError("already_booked", "This slot is already booked for this user.") from exc
+
+
 def book_slot_service(
     session: Session,
     *,
@@ -312,6 +326,7 @@ def book_slot_service(
     user_id: uuid.UUID,
     role: Role,
 ) -> tuple[uuid.UUID, uuid.UUID]:
+    lock_slot_row(session, slot_id)
     slot = get_slot_by_id(session, slot_id)
     if slot is None or slot.event is None:
         raise EventError("not_found", "Time slot not found.")
@@ -327,16 +342,14 @@ def book_slot_service(
             "This slot is not available for your account type.",
         )
 
-    booked_count = len(slot.bookings) if slot.bookings else count_bookings_for_slot(
-        session, slot.id
-    )
+    # Fresh count under the slot lock (the loaded relationship may be stale).
+    booked_count = count_bookings_for_slot(session, slot.id)
     if booked_count >= slot.capacity:
         raise EventError("full", "This time slot is fully booked.")
     if find_booking(session, slot_id=slot.id, user_id=user_id) is not None:
         raise EventError("already_booked", "You have already booked this slot.")
 
-    create_booking(session, slot=slot, user_id=user_id)
-    session.flush()
+    _create_booking_or_conflict(session, slot=slot, user_id=user_id)
     return slot.id, event.id
 
 
@@ -376,6 +389,7 @@ def admin_book_slot_service(
     slot_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> uuid.UUID:
+    lock_slot_row(session, slot_id)
     slot = get_slot_by_id(session, slot_id)
     if slot is None or slot.event is None:
         raise EventError("not_found", "Time slot not found.")
@@ -395,16 +409,14 @@ def admin_book_slot_service(
             f"Only {label} can be booked on this slot.",
         )
 
-    booked_count = len(slot.bookings) if slot.bookings else count_bookings_for_slot(
-        session, slot.id
-    )
+    # Fresh count under the slot lock (the loaded relationship may be stale).
+    booked_count = count_bookings_for_slot(session, slot.id)
     if booked_count >= slot.capacity:
         raise EventError("full", "This time slot is fully booked.")
     if find_booking(session, slot_id=slot.id, user_id=user_id) is not None:
         raise EventError("already_booked", "This user is already booked on this slot.")
 
-    create_booking(session, slot=slot, user_id=user_id)
-    session.flush()
+    _create_booking_or_conflict(session, slot=slot, user_id=user_id)
     return event.id
 
 

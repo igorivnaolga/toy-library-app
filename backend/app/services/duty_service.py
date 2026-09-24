@@ -11,8 +11,9 @@ from app.core.library_sessions import SESSION_END, SESSION_START, is_library_ses
 from app.models.duty_session import DutySession
 from app.core.library_sessions import library_now
 from app.repositories.duty_repo import (
+    claim_duty_session,
     confirm_duty_session,
-    create_duty_session,
+    insert_missing_duty_sessions,
     list_duty_sessions,
 )
 from app.repositories.profile_repo import get_profile_by_id
@@ -48,30 +49,39 @@ def duty_booking_milestone_message(booked_count: int) -> str | None:
     )
 
 
+# Auto-created roster window (matches the mobile roster's scroll limits).
+ROSTER_PAST_DAYS = 365
+ROSTER_FUTURE_DAYS = 365 * 2
+
+
 def ensure_roster_sessions(
     session: Session,
     *,
     from_date: date,
     to_date: date,
-) -> list[DutySession]:
-    """Return Wed/Sat slots in range, creating open rows for missing session days."""
-    existing = list_duty_sessions(session, from_date=from_date, to_date=to_date)
-    by_date = {row.session_date: row for row in existing}
-    roster: list[DutySession] = []
-    for day in iter_library_session_dates(from_date, to_date):
-        row = by_date.get(day)
-        if row is None:
-            weekday = day.weekday()
-            row = create_duty_session(
-                session,
-                session_date=day,
-                start_time=SESSION_START[weekday],
-                end_time=SESSION_END[weekday],
-            )
-        roster.append(row)
-    session.flush()
-    roster.sort(key=lambda item: (item.session_date, item.start_time))
-    return roster
+    today: date | None = None,
+) -> None:
+    """
+    Create open Wed/Sat rows for missing session days in range.
+
+    Only days within ``ROSTER_PAST_DAYS``/``ROSTER_FUTURE_DAYS`` of today are
+    created, so callers cannot make the roster grow without bound.
+    """
+    today = today or library_now().date()
+    start = max(from_date, today - timedelta(days=ROSTER_PAST_DAYS))
+    end = min(to_date, today + timedelta(days=ROSTER_FUTURE_DAYS))
+    if end < start:
+        return
+    existing_days = {
+        row.session_date
+        for row in list_duty_sessions(session, from_date=start, to_date=end)
+    }
+    missing = [
+        (day, SESSION_START[day.weekday()], SESSION_END[day.weekday()])
+        for day in iter_library_session_dates(start, end)
+        if day not in existing_days
+    ]
+    insert_missing_duty_sessions(session, missing)
 
 
 def assign_volunteer_to_session(
@@ -87,13 +97,12 @@ def assign_volunteer_to_session(
             "invalid_assignee",
             "Only members or volunteers can be assigned to duty.",
         )
-    if row.volunteer_id is not None:
+    if row.volunteer_id is not None or not claim_duty_session(session, row.id, user_id):
         raise DutyError(
             "slot_already_assigned",
             "This slot already has a volunteer assigned.",
         )
-    row.volunteer_id = user_id
-    session.flush()
+    session.refresh(row)
     return row
 
 
@@ -110,6 +119,8 @@ def confirm_duty_session_for_admin(
     row: DutySession,
     admin_id: uuid.UUID,
 ) -> DutySession:
+    # Lock the slot so two admins confirming at once grant the credit only once.
+    session.refresh(row, with_for_update=True)
     if row.volunteer_id is None:
         raise DutyError("slot_unbooked", "No volunteer is booked for this duty slot.")
     if row.session_date != library_now().date():

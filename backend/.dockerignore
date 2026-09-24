@@ -7,3 +7,7 @@ __pycache__
 .env
 firebase-service-account.json
 tests
+.ruff_cache
+.env.*
+!.env.example
+!.env.production.example

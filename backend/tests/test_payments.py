@@ -14,7 +14,6 @@ from app.services.payment_service import (
     assert_membership_paid_for_booking,
     balance_summary,
     create_membership_payments_for_tier,
-    credit_balance_cents,
     grant_volunteer_duty_credit,
     apply_existing_credit_to_pending_charges,
     mark_payments_paid,

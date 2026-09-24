@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 from app.schemas.toy import ToyOut
 from app.services.supabase_storage import (

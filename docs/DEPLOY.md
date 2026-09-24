@@ -7,12 +7,14 @@ Pilot-ready deployment path: **Supabase** (database, auth, storage) + **hosted F
 ### 1. Supabase (production project)
 
 1. Create a **production** Supabase project (separate from dev).
-2. Run SQL snippets **in numeric order** in the SQL editor (`backend/supabase/snippets/`):
-   - `001_profiles.sql` through `021_push_notifications.sql`
-   - Run `002_catalog.sql` after `001_profiles.sql` (before bookings that reference toys).
-   - Apply both `007_kids_birth_dates.sql` and `007_registration_fields.sql`.
+2. Apply the schema with Alembic from `backend/` (with `DATABASE_URL` pointing at the project):
+   - **New database:** `alembic upgrade head`
+   - **Database already built from the old `supabase/snippets/*.sql`:** run once
+     `alembic stamp 0001_baseline`, then `alembic upgrade head`.
+   - Every later deploy that adds a migration: `alembic upgrade head` **before** the new API
+     version starts (e.g. `railway run alembic upgrade head`, or a Railway pre-deploy command).
 3. Enable Auth (email) and configure redirect URLs if needed.
-4. Run `017_toy_photos_storage.sql` and set `SUPABASE_SERVICE_ROLE_KEY` on the API.
+4. Set `SUPABASE_SERVICE_ROLE_KEY` on the API (the toy-photos bucket comes from the baseline migration).
 5. Upload catalog photos: `python -m app.scripts.migrate_toy_photos_to_supabase` (from `backend/`).
 6. Seed toys if needed: `python -m app.scripts.seed_from_csv`.
 
@@ -38,7 +40,7 @@ docker run --rm -p 8000:8000 --env-file .env.production toy-library-api
 | Variable | Value |
 |----------|--------|
 | `DATABASE_URL` | Supabase **Session pooler** URI (`postgresql+psycopg://…pooler…`) |
-| `CREATE_TABLES_ON_STARTUP` | `false` |
+| `CORS_ORIGINS` | Only for Flutter web: the web app's origin(s). Leave unset for mobile-only. |
 | `SUPABASE_URL` | Project URL |
 | `SUPABASE_JWT_SECRET` or JWKS | From Supabase → Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role (photo uploads) |
@@ -144,6 +146,6 @@ Or, after `flutter build apk`, run `adb install -r build/app/outputs/flutter-apk
 |------|-----------|--------|
 | Tests on push | GitHub Actions CI | — |
 | API container build | Dockerfile / Railway | First-time host setup |
-| DB schema | SQL snippets | Run once in Supabase |
-| Push reminders | Cron workflow | Set secrets + tune UTC times |
+| DB schema | Alembic migrations (CI applies them to a test DB) | `alembic upgrade head` per release |
+| Push reminders | Cron workflow (DST-proof schedule) | Set secrets |
 | Play Store | — | Signing, listing, upload |

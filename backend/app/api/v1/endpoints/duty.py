@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import require_admin, require_on_duty_desk, require_roles
+from app.core.date_ranges import require_bounded_range
 from app.core.library_sessions import library_now
 from app.core.roles import Role
 from app.db.session import get_db
 from app.repositories.duty_repo import (
-    book_duty_session,
+    claim_duty_session,
     cancel_duty_booking,
     count_volunteer_duty_bookings,
     create_duty_session,
@@ -84,9 +85,8 @@ def list_sessions(
     _: Principal = Depends(_require_volunteer),
     db: Session = Depends(get_db),
 ) -> DutySessionsListResponse:
-    if to_date < from_date:
-        raise HTTPException(status_code=422, detail="`to` must be on or after `from`.")
-    rows = ensure_roster_sessions(db, from_date=from_date, to_date=to_date)
+    require_bounded_range(from_date, to_date)
+    ensure_roster_sessions(db, from_date=from_date, to_date=to_date)
     db.commit()
     rows = list_duty_sessions(db, from_date=from_date, to_date=to_date)
     return DutySessionsListResponse(
@@ -123,7 +123,7 @@ def my_duty_sessions(
 @router.get("/members", response_model=DeskMembersResponse)
 def search_desk_members(
     q: str = Query("", description="Member name, email, or id."),
-    _: Principal = Depends(_require_volunteer),
+    _: Principal = Depends(_require_on_duty),
     db: Session = Depends(get_db),
 ) -> DeskMembersResponse:
     rows = (
@@ -242,12 +242,13 @@ def book_session(
     row = get_duty_session_by_id(db, session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Duty session not found.")
-    if row.volunteer_id is not None:
-        raise HTTPException(status_code=409, detail="This slot is already booked.")
     if row.session_date < library_now().date():
         raise HTTPException(status_code=409, detail="Past duty slots cannot be booked.")
-    book_duty_session(db, row, principal.id)
+    if row.volunteer_id is not None or not claim_duty_session(db, row.id, principal.id):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This slot is already booked.")
     db.commit()
+    db.expire(row)
     row = get_duty_session_by_id(db, session_id) or row
     booked_count = count_volunteer_duty_bookings(db, principal.id)
     return DutyBookResponse(

@@ -5,9 +5,10 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import case, delete, func, or_, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
+from app.utils.text import like_contains
 from app.models.booking import (
     BOOKING_STATUS_CANCELLED,
     BOOKING_STATUS_COMPLETED,
@@ -18,21 +19,38 @@ from app.repositories.profile_repo import get_user_display_map
 from app.models.profile import Profile
 from app.models.toy import Toy
 
-# Cancelled rows stay visible briefly, then are removed by ``purge_expired_cancelled_bookings``.
+# Cancelled rows stay in list views briefly; they are kept in the table for history.
 CANCELLED_BOOKING_RETENTION = timedelta(minutes=10)
 
 
-def purge_expired_cancelled_bookings(session: Session) -> None:
-    """Delete cancelled bookings older than ``CANCELLED_BOOKING_RETENTION``."""
+def _hide_expired_cancelled(stmt):
+    """Drop cancelled bookings older than ``CANCELLED_BOOKING_RETENTION`` from list views."""
     cutoff = datetime.now(timezone.utc) - CANCELLED_BOOKING_RETENTION
-    session.execute(
-        delete(Booking).where(
-            Booking.status == BOOKING_STATUS_CANCELLED,
-            Booking.cancelled_at.is_not(None),
-            Booking.cancelled_at < cutoff,
+    return stmt.where(
+        or_(
+            Booking.status != BOOKING_STATUS_CANCELLED,
+            Booking.cancelled_at.is_(None),
+            Booking.cancelled_at >= cutoff,
         )
     )
-    session.flush()
+
+
+def lock_toy_row(session: Session, toy_id: str) -> None:
+    """Serialize booking/loan changes for one toy (``SELECT … FOR UPDATE``)."""
+    toy_id_norm = toy_id.strip()
+    if not toy_id_norm:
+        return
+    session.execute(
+        select(Toy.toy_id)
+        .where(func.lower(Toy.toy_id) == toy_id_norm.lower())
+        .with_for_update()
+    )
+
+
+def lock_booking_row(session: Session, booking_id: uuid.UUID) -> None:
+    session.execute(
+        select(Booking.id).where(Booking.id == booking_id).with_for_update()
+    )
 
 
 def create_booking(
@@ -99,6 +117,7 @@ def list_bookings_for_user(
     )
     if status is not None:
         stmt = stmt.where(Booking.status == status)
+    stmt = _hide_expired_cancelled(stmt)
     return list(session.scalars(stmt).unique().all())
 
 
@@ -241,6 +260,7 @@ def list_bookings_for_admin(
             Booking.created_at.desc(),
         )
     )
+    stmt = _hide_expired_cancelled(stmt)
     if pickup_from is not None:
         stmt = stmt.where(Booking.pickup_date >= pickup_from)
     if pickup_to is not None:
@@ -248,7 +268,7 @@ def list_bookings_for_admin(
     if user_id is not None:
         stmt = stmt.where(Booking.user_id == user_id)
     if q:
-        pattern = f"%{q.strip().lower()}%"
+        pattern = like_contains(q.strip().lower())
         email_subq = text(
             """
             exists (

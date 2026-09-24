@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
@@ -13,6 +14,8 @@ from app.schemas.toy import ToyOut, ToyPiecesUpdate
 from app.services.desk_cv_service import estimate_pieces_service
 from app.services.toy_cv_learner import learn_from_photo_service
 from app.services.toy_service import update_toy_pieces_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -52,7 +55,7 @@ async def identify_pieces(
     _: Principal = Depends(_require_on_duty),
 ) -> PieceCountEstimate:
     """Advisory piece-count estimate from a returned-toy photo."""
-    data = await image.read()
+    data = await image.read(_MAX_UPLOAD_BYTES + 1)
     if not data:
         raise HTTPException(status_code=422, detail="Empty image upload.")
     if len(data) > _MAX_UPLOAD_BYTES:
@@ -60,9 +63,10 @@ async def identify_pieces(
     try:
         estimate = await asyncio.to_thread(estimate_pieces_service, toy_id, data)
     except Exception as exc:
+        logger.exception("Piece estimate failed for toy %s", toy_id)
         raise HTTPException(
             status_code=500,
-            detail=f"Photo analysis error: {exc}",
+            detail="Photo analysis failed. Try another photo.",
         ) from exc
     if estimate is None:
         raise HTTPException(
@@ -83,7 +87,7 @@ async def learn_from_photo_endpoint(
     """Train per-toy baseline from a volunteer-confirmed check-in photo."""
     if confirmed_piece_count <= 0:
         raise HTTPException(status_code=422, detail="confirmed_piece_count must be positive.")
-    data = await image.read()
+    data = await image.read(_MAX_UPLOAD_BYTES + 1)
     if not data:
         raise HTTPException(status_code=422, detail="Empty image upload.")
     if len(data) > _MAX_UPLOAD_BYTES:
@@ -98,9 +102,10 @@ async def learn_from_photo_endpoint(
             volunteer_complete=volunteer_complete,
         )
     except Exception as exc:
+        logger.exception("Photo learning failed for toy %s", toy_id)
         raise HTTPException(
             status_code=500,
-            detail=f"Photo learning error: {exc}",
+            detail="Photo learning failed. Try another photo.",
         ) from exc
     if result is None:
         raise HTTPException(

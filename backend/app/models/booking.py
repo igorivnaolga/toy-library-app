@@ -1,11 +1,11 @@
-"""Member toy reservations (see `backend/supabase/snippets/003_bookings.sql`)."""
+"""Member toy reservations (see `backend/migrations/sql/baseline/003_bookings.sql`)."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -28,6 +28,22 @@ BOOKING_STATUSES = frozenset(
 
 class Booking(Base):
     __tablename__ = "bookings"
+    __table_args__ = (
+        # At most one pending booking per toy (and per member + toy).
+        Index(
+            "idx_bookings_one_pending_per_toy",
+            "toy_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index(
+            "idx_bookings_one_pending_per_user_toy",
+            "user_id",
+            "toy_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -36,7 +52,8 @@ class Booking(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("profiles.id", ondelete="CASCADE"),
+        # RESTRICT: booking history must not vanish when an account is deleted.
+        ForeignKey("profiles.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

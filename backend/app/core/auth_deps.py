@@ -77,8 +77,14 @@ def get_optional_principal(
     if credentials is None or not credentials.credentials:
         return None
     settings = get_settings()
-    payload = decode_supabase_access_token(credentials.credentials.strip(), settings)
-    user_id = _parse_uuid_sub(payload.get("sub"))
+    try:
+        payload = decode_supabase_access_token(credentials.credentials.strip(), settings)
+        user_id = _parse_uuid_sub(payload.get("sub"))
+    except HTTPException as exc:
+        # Expired/invalid token on a public endpoint: fall back to guest view.
+        if exc.status_code == 401:
+            return None
+        raise
     profile = get_profile_by_id(db, user_id)
     if profile is None:
         return None

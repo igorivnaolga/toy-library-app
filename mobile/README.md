@@ -27,7 +27,8 @@ flutter run -d chrome --dart-define-from-file=env/dev.json --dart-define=API_BAS
 ```
 
 Notes:
-- Browser calls need CORS on the API (enabled by default via `CORS_ORIGINS=*`).
+- Browser calls need CORS on the API: set `CORS_ORIGINS` (the backend dev `.env.example` allows `http://localhost:*`).
+- Release builds require an `https://` `API_BASE`; the app throws at startup otherwise.
 - On-device OCR / ML Kit and local push notifications are mobile-only; web skips them.
 - Release build: `flutter build web --dart-define-from-file=env/production.json`
 

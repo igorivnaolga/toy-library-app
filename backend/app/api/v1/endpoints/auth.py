@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.auth_deps import get_current_principal
+from app.core.rate_limit import RateLimiter
 from app.db.session import get_db
 from app.core.roles import parse_role
 from app.repositories.profile_repo import (
@@ -17,16 +18,24 @@ from app.repositories.profile_repo import (
     kids_from_profile,
     update_profile,
 )
-from app.schemas.principal import MeOut, Principal, ProfileUpdateIn, RegistrationCompleteIn
+from app.schemas.principal import (
+    MeOut,
+    Principal,
+    ProfileUpdateIn,
+    RegistrationCompleteIn,
+    validate_avatar_path,
+)
 from app.schemas.registration_validation import validate_email
 from app.services.payment_service import (
     balance_summary,
     create_membership_payments_for_tier,
     membership_payment_summary,
-    refresh_membership_payments_for_tier,
 )
 
 router = APIRouter()
+
+# Public account lookup: throttle to slow down email enumeration.
+_email_lookup_limiter = RateLimiter(max_calls=10, window_seconds=60)
 
 
 class EmailRegisteredOut(BaseModel):
@@ -37,6 +46,7 @@ class EmailRegisteredOut(BaseModel):
 def email_registered(
     email: str = Query(..., min_length=3, max_length=254, description="Email address to look up."),
     db: Session = Depends(get_db),
+    _: None = Depends(_email_lookup_limiter.dependency()),
 ) -> EmailRegisteredOut:
     """Public check used by the sign-in screen after invalid credentials."""
     try:
@@ -207,11 +217,18 @@ def patch_my_profile(
     payload = body.model_dump(exclude_unset=True)
     if not payload:
         raise HTTPException(status_code=422, detail="No fields to update.")
+    avatar_path = body.avatar_path
+    if avatar_path is not None:
+        try:
+            # Empty string clears the avatar (update_profile stores None).
+            avatar_path = validate_avatar_path(avatar_path, principal.id) or ""
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     update_profile(
         db,
         profile,
         kids=body.kids,
-        avatar_path=body.avatar_path,
+        avatar_path=avatar_path,
         parent_b_name=body.parent_b_name,
         address_line1=body.address_line1,
         address_line2=body.address_line2,

@@ -511,10 +511,15 @@ class AdminController extends ChangeNotifier {
     String userId, {
     required int amountCents,
     required String method,
+    String? idempotencyKey,
   }) async {
     final json = await _client.postJson(
       "/api/v1/payments/users/$userId/top-up",
-      {"amount_cents": amountCents, "method": method},
+      {
+        "amount_cents": amountCents,
+        "method": method,
+        if (idempotencyKey != null) "idempotency_key": idempotencyKey,
+      },
     );
     return PaymentItem.fromJson(json);
   }

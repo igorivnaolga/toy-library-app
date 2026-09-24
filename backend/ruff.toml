@@ -1,0 +1,10 @@
+# Lint baseline enforced in CI: syntax errors and pyflakes (unused/undefined names).
+target-version = "py312"
+extend-exclude = ["app/scripts"]
+
+[lint]
+select = ["E9", "F"]
+
+[lint.per-file-ignores]
+# Relationship annotations use string forward refs resolved by SQLAlchemy.
+"app/models/*.py" = ["F821"]
