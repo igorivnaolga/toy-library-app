@@ -372,16 +372,9 @@ class _RoleHomeState extends State<_RoleHome> with WidgetsBindingObserver {
                     ],
                   ],
                   bottom: TabBar(
-                    isScrollable: MediaQuery.sizeOf(context).width < 720 ||
-                        tabs.length > 5,
-                    tabAlignment:
-                        (MediaQuery.sizeOf(context).width < 720 || tabs.length > 5)
-                            ? TabAlignment.start
-                            : TabAlignment.fill,
-                    labelPadding: (MediaQuery.sizeOf(context).width < 720 ||
-                            tabs.length > 5)
-                        ? const EdgeInsets.symmetric(horizontal: 12)
-                        : EdgeInsets.zero,
+                    isScrollable: false,
+                    tabAlignment: TabAlignment.fill,
+                    labelPadding: EdgeInsets.zero,
                     tabs: tabs
                         .map((t) => Tab(
                               height: 56,
