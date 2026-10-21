@@ -1,4 +1,4 @@
-package com.example.toy_library_mobile
+package nz.churchcorner.toylibrary
 
 import io.flutter.embedding.android.FlutterActivity
 

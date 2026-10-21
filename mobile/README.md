@@ -48,3 +48,5 @@ Configure API and Supabase with `--dart-define` or `env/production.json` (`API_B
 3. Install `build/app/outputs/flutter-apk/app-release.apk` on the device.
 
 Full sideload steps: [`../docs/DEPLOY.md` §5](../docs/DEPLOY.md#5-install-the-apk-on-a-phone-pilot-sideload). Share [`../docs/TRY_THE_APP.md`](../docs/TRY_THE_APP.md) with testers.
+
+Release signing, application ID and Firebase setup: [`../docs/ANDROID_RELEASE.md`](../docs/ANDROID_RELEASE.md).

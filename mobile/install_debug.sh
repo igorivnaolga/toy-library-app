@@ -43,7 +43,7 @@ _install_apk() {
   fi
 
   echo "Emulator storage full — uninstalling old build and trimming caches..."
-  "$ADB" -s "$DEVICE" uninstall com.example.toy_library_mobile >/dev/null 2>&1 || true
+  "$ADB" -s "$DEVICE" uninstall nz.churchcorner.toylibrary >/dev/null 2>&1 || true
   "$ADB" -s "$DEVICE" shell pm trim-caches 999999M >/dev/null 2>&1 || true
   "$ADB" -s "$DEVICE" install -r "$APK"
 }
@@ -54,6 +54,6 @@ echo "Installed on $DEVICE (API via adb reverse -> host :8000)"
 
 if [[ "$DEVICE" == emulator-* ]]; then
   echo "Launching app (first emulator start can take ~30s)..."
-  "$ADB" -s "$DEVICE" shell am start -n com.example.toy_library_mobile/.MainActivity >/dev/null
+  "$ADB" -s "$DEVICE" shell am start -n nz.churchcorner.toylibrary/.MainActivity >/dev/null
   echo "App drawer name: toy_library_mobile — swipe up and search 'toy' if you don't see it."
 fi

@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_HASH",
         "android_client_info": {
-          "package_name": "com.example.toy_library_mobile"
+          "package_name": "nz.churchcorner.toylibrary"
         }
       },
       "oauth_client": [],
