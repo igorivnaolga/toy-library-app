@@ -1,0 +1,6 @@
+# Copy to android/key.properties (git-ignored) and fill in.
+# storeFile is relative to android/app/ — or use an absolute path, e.g. C:/Users/you/keys/toy-library-upload.jks
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=C:/Users/YOU/keys/toy-library-upload.jks
